@@ -101,7 +101,7 @@ ZAB 协议需要一个高效且可靠的 Leader 选举算法，从而确保能�
 
 当集群中已经有过半的 Follower 服务器完成了和 Leader 服务器的状态同步，那么整个服务框架就可以进入消息广播模式了。
 
-![](images/ZAB协议消息广播流程示意图.jpg)
+![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/ZAB%E5%8D%8F%E8%AE%AE%E6%B6%88%E6%81%AF%E5%B9%BF%E6%92%AD%E6%B5%81%E7%A8%8B%E7%A4%BA%E6%84%8F%E5%9B%BE.jpg)
 
 大消息广播过程中，Leader 服务器会为每一个 Follower 服务器都各自分配一个单独的队列，然后将需要广播的事务 Proposal 依次放入到这些队列中去，并且根据 FIFO 策略进行消息发送。
 
@@ -409,11 +409,11 @@ public class FastLeaderElection implements Election {
 
 下图展示了 Leader 选举算法实现的流程示意图。
 
-<img src="images/FastLeaderElection实现选举.jpg" style="zoom:80%;" />
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/FastLeaderElection%E5%AE%9E%E7%8E%B0%E9%80%89%E4%B8%BE.jpg" style="zoom:80%;" />
 
 流程图如下：
 
-![](images/选举算法实现的流程示意图.jpg)
+![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/%E9%80%89%E4%B8%BE%E7%AE%97%E6%B3%95%E5%AE%9E%E7%8E%B0%E7%9A%84%E6%B5%81%E7%A8%8B%E7%A4%BA%E6%84%8F%E5%9B%BE.jpg)
 
 当 ZooKeeper 服务器检测到当前服务器状态变成 LOOKING 时，就会触发 Leader 选举，即调用 lookForLeader方法来进行 Leader 选举。
 

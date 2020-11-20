@@ -236,7 +236,7 @@ ZooKeeper 集群中的所有机器通过一个 Leader 选举过程来选定一�
 
 **数据发布/订阅**
 
-<img src="images/e89bbce820f.webp" style="zoom: 80%;" />
+![image-20201120162105017](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201120162105017.png)
 
  
 
@@ -285,13 +285,13 @@ ZooKeeper 集群中的所有机器通过一个 Leader 选举过程来选定一�
 
  入队：
 
-<img src="images/089fe791aa7.jpeg" style="zoom: 67%;" />
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/089fe791aa7.jpeg" style="zoom: 67%;" />
 
  
 
 出队： 
 
-<img src="images/08ed523bc8c.webp" style="zoom:67%;" />
+![image-20201120162144471](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201120162144471.png)
 
  
 
@@ -515,7 +515,7 @@ CREATE(c) 可以创建子节点 READ(r) 可以读取节点数据及显示子节�
 
 在zkServer.sh脚本里查找到start关键字，在如下图所示的地方增加上面的代码，如何重启Zookeeper即可。
 
-![](images/07-726473363.png)
+![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/07-726473363.png)
 
 # **参考资料**
 
