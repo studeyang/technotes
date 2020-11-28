@@ -239,6 +239,128 @@ Consumer：
 
 # 12 | Kafka 拦截器
 
+**什么是拦截器？**
+
+拦截器的基本思想就是允许应用程序在不修改逻辑的情况下，动态地实现一组可插拔的事件处理逻辑链。
+
+它们插入的逻辑可以是修改待发送的消息，也可以是创建新的消息，甚至是丢弃消息。这些功能都是以配置拦截器类的方式动态插入到应用程序中的，故可以快速地切换不同的拦截器而不影响主程序逻辑。
+
+作为一个非常小众的功能，Kafka 拦截器自 0.10.0.0 版本被引入后并未得到太多的实际应用。
+
+**Kafka 拦截器**
+
+Kafka 拦截器分为生产者拦截器和消费者拦截器。
+
+生产者拦截器允许你在发送消息前以及消息提交成功后植入你的拦截器逻辑；
+
+而消费者拦截器支持在消费消息前以及提交位移后编写特定逻辑。
+
+添加拦截器的代码如下：
+
+```java
+Properties props = new Properties();
+List<String> interceptors = new ArrayList<>();
+interceptors.add("com.yourcompany.kafkaproject.interceptors.AddTimestampInterceptor"); // 拦截器 1
+interceptors.add("com.yourcompany.kafkaproject.interceptors.UpdateCounterInterceptor"); // 拦截器 2
+props.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, interceptors);
+```
+
+其中 `AddTimestampInterceptor`和`UpdateCounterInterceptor`要继承`org.apache.kafka.clients.producer.ProducerInterceptor `接口。
+
+```java
+/** 方法中省略入参和出参类型 */
+public interface ProducerInterceptor {
+  /** 该方法会在消息发送之前被调用 */
+  void onSend();
+  /** 该方法会在消息成功提交或发送失败之后被调用，且要早于callback的调用 */
+  void onAcknowledgement();
+}
+```
+
+> 注意：
+>
+> 1. `onAcknowledgement`方法和`onSend`不是在同一个线程中被调用的，因此如果你在这两个方法中调用了某个共享可变对象，一定要保证线程安全；
+> 2. `onAcknowledgement`这个方法处在 Producer 发送的主路径中，所以最好别放一些太重的逻辑进去，否则你会发现你的 Producer TPS 直线下降；
+
+指定消费者拦截器也是同样的方法，具体的实现类要实现`org.apache.kafka.clients.consumer.ConsumerInterceptor`接口。
+
+```java
+/** 方法中省略入参和出参类型 */
+public interface ConsumerInterceptor {
+  /** 该方法在消息返回给Consumer程序之前调用 */
+  void onConsume();
+  /** Consumer在提交位移之后调用该方法 */
+  void onCommit();
+}
+```
+
+**典型使用场景**
+
+Kafka 拦截器可以应用于包括客户端监控、端到端系统性能检测、消息审计等多种功能在内的场景。
+
+**使用案例**
+
+某公司的某个业务只有一个 Producer 和一个 Consumer，他们想知道该业务消息从被生产出来到最后被消费的平均总时长是多少。了解了拦截器后，可以用拦截器来满足这个需求。
+
+既然是要计算总延时，那么一定要有个公共的地方来保存它，并且这个公共的地方还是要让生产者和消费者程序都能访问的。在这个例子中，我们假设数据被保存在 Redis 中。
+
+我们先来实现生产者拦截器：
+
+```java
+public class AvgLatencyProducerInterceptor implements ProducerInterceptor<String, String> {
+ 
+    private Jedis jedis; // 省略 Jedis 初始化
+ 
+    @Override
+    public ProducerRecord<String, String> onSend(ProducerRecord<String, String> record) {
+        jedis.incr("totalSentMessage");
+        return record;
+    }
+    @Override
+    public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
+    }
+    @Override
+    public void close() {
+    }
+    @Override
+    public void configure(Map<java.lang.String, ?> configs) {
+    }
+}
+```
+
+再来实现消费者端的拦截器：
+
+```java
+public class AvgLatencyConsumerInterceptor implements ConsumerInterceptor<String, String> {
+
+    private Jedis jedis; // 省略 Jedis 初始化
+
+    @Override
+    public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
+        long lantency = 0L;
+        for (ConsumerRecord<String, String> record : records) {
+            lantency += (System.currentTimeMillis() - record.timestamp());
+        }
+        jedis.incrBy("totalLatency", lantency);
+        long totalLatency = Long.parseLong(jedis.get("totalLatency"));
+        long totalSentMsgs = Long.parseLong(jedis.get("totalSentMessage"));
+        jedis.set("avgLatency", String.valueOf(totalLatency / totalSentMsgs));
+        return records;
+    }
+    @Override
+    public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    }
+    @Override
+    public void close() {
+    }
+    @Override
+    public void configure(Map<String, ?> configs) {
+    }
+}
+```
+
+# 13 | Java生产者是如何管理TCP连接的？
+
 
 
 
