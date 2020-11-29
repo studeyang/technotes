@@ -361,25 +361,95 @@ public class AvgLatencyConsumerInterceptor implements ConsumerInterceptor<String
 
 # 13 | Java生产者是如何管理TCP连接的？
 
+Apache Kafka 的所有通信都是基于 TCP 的，而不是基于 HTTP 或其他协议。无论是生产者、消费者，还是 Broker 之间的通信都是如此。
 
+**为何采用 TCP?**
 
+从社区的角度来看，在开发客户端时，人们能够利用 TCP 本身提供的一些高级功能，比如多路复用请求以及同时轮询多个连接的能力。
 
+> 所谓的多路复用请求，即 multiplexing request，是指将两个或多个数据流合并到底层单一物理连接中的过程。TCP 的多路复用请求会在一条物理连接上创建若干个虚拟连接，每个虚拟连接负责流转各自对应的数据流。其实严格来说，TCP 并不能多路复用，它只是提供可靠的消息交付语义保证，比如自动重传丢失的报文。
+>
 
+除了 TCP 提供的这些高级功能有可能被 Kafka 客户端的开发人员使用之外，社区还发现，目前已知的 HTTP 库在很多编程语言中都略显简陋。
 
+基于这两个原因，Kafka 社区决定采用 TCP 协议作为所有请求通信的底层协议。
 
+**Kafka 生产者程序概览**
 
+Kafka 的 Java 生产者 API 主要的对象就是 KafkaProducer。通常我们开发一个生产者的步骤有 4 步。
 
+```java
+// 第 1 步：构造生产者对象所需的参数对象。
+Properties props = new Properties ();
+props.put(“参数 1”, “参数 1 的值”)；
+props.put(“参数 2”, “参数 2 的值”)；
+// ……
+// 第 2 步：利用第 1 步的参数对象，创建 KafkaProducer 对象实例。
+try (Producer<String, String> producer = new KafkaProducer<>(props)) {
+    // 第 3 步：使用 KafkaProducer 的 send 方法发送消息。
+    producer.send(new ProducerRecord<String, String>(……), callback);
+    // ……
+}
+// 第 4 步：调用 KafkaProducer 的 close 方法关闭生产者并释放各种系统资源。
+```
 
+当我们开发一个 Producer 应用时，生产者会向 Kafka 集群中指定的主题（Topic）发送消息，这必然涉及与 Kafka Broker 创建 TCP 连接。那么，Kafka 的 Producer 客户端是如何管理这些 TCP 连接的呢？
 
+要回答这个问题，我们首先要弄明白生产者代码是什么时候创建 TCP 连接的。
 
+**何时创建 TCP 连接？**
 
+在创建 KafkaProducer 实例时，生产者应用会在后台创建并启动一个名为 Sender 的线程，该 Sender 线程开始运行时首先会创建与 Broker 的连接。
 
+为了说明这一点，测试环境中我为 bootstrap.servers 配置了 localhost:9092、localhost:9093 来模拟不同的 Broker。下面是测试环境的日志：
 
+```
+[2018-12-09 09:35:45,620] DEBUG [Producer clientId=producer-1] Initialize connection to node localhost:9093 (id: -2 rack: null) for sending metadata request (org.apache.kafka.clients.NetworkClient:1084)
+```
 
+```
+[2018-12-09 09:35:45,622] DEBUG [Producer clientId=producer-1] Initiating connection to node localhost:9093 (id: -2 rack: null) using address localhost/127.0.0.1 (org.apache.kafka.clients.NetworkClient:914)
+```
 
+```
+[2018-12-09 09:35:45,814] DEBUG [Producer clientId=producer-1] Initialize connection to node localhost:9092 (id: -1 rack: null) for sending metadata request (org.apache.kafka.clients.NetworkClient:1084)
+```
 
+```
+[2018-12-09 09:35:45,815] DEBUG [Producer clientId=producer-1] Initiating connection to node localhost:9092 (id: -1 rack: null) using address localhost/127.0.0.1 (org.apache.kafka.clients.NetworkClient:914)
+```
 
+```
+[2018-12-09 09:35:45,828] DEBUG [Producer clientId=producer-1] Sending metadata request (type=MetadataRequest, topics=) to node localhost:9093 (id: -2 rack: null) (org.apache.kafka.clients.NetworkClient:1068)
+```
 
+Producer 会连接 bootstrap.servers 参数指定的所有 Broker。
 
+> bootstrap.servers 参数：指定了这个 Producer 启动时要连接的 Broker 地址。如果你为这个参数指定了 1000 个 Broker 连接信息，你的 Producer 启动时会首先创建与这 1000 个 Broker 的 TCP 连接。
+>
+> 因引在实际使用过程中，通常你指定 3～4 台就足以了。因为 Producer 一旦连接到集群中的任一台 Broker，就能拿到整个集群的 Broker 信息，故没必要为 bootstrap.servers 指定所有的 Broker。
 
+日志输出中的最后一行表明 Producer 向某一台 Broker 发送了 METADATA 请求，尝试获取集群的元数据信息。
+
+目前我们的结论是这样的：TCP 连接是在创建 KafkaProducer 实例时建立的。
+
+TCP 连接还可能在两个地方被创建：一个是在更新元数据后，另一个是在消息发送时。当 Producer 更新了集群的元数据信息之后，如果发现与某些 Broker 当前没有连接，那么它就会创建一个 TCP 连接。同样地，当要发送消息时，Producer 发现尚不存在与目标 Broker 的连接，也会创建一个。
+
+> 为什么说是可能？因为这两个地方并非总是创建 TCP 连接。
+
+接下来，我们来看看 Producer 更新集群元数据信息的两个场景。
+
+场景一：当 Producer 尝试给一个不存在的主题发送消息时，Broker 会告诉 Producer 说这个主题不存在。此时 Producer 会发送 METADATA 请求给 Kafka 集群，去尝试获取最新的元数据信息。
+
+场景二：Producer 通过 metadata.max.age.ms 参数定期地去更新元数据信息。该参数的默认值是 300000，即 5 分钟，也就是说不管集群那边是否有变化，Producer 每 5 分钟都会强制刷新一次元数据以保证它是最及时的数据。
+
+**何时关闭 TCP 连接？**
+
+Producer 端关闭 TCP 连接的方式有两种：一种是用户主动关闭；一种是 Kafka 自动关闭。
+
+先说第一种。这里的主动关闭实际上是广义的主动关闭，甚至包括用户调用 kill -9 主动“杀掉”Producer 应用。当然最推荐的方式还是调用 producer.close() 方法来关闭。
+
+第二种是 Kafka 帮你关闭，这与 Producer 端参数 connections.max.idle.ms 的值有关。默认情况下该参数值是 9 分钟，即如果在 9 分钟内没有任何请求“流过”某个 TCP 连接，那么 Kafka 会主动帮你把该 TCP 连接关闭。用户可以在 Producer 端设置 connections.max.idle.ms=-1 禁掉这种机制。一旦被设置成 -1，TCP 连接将成为永久长连接。当然这只是软件层面的“长连接”机制，由于 Kafka 创建的这些 Socket 连接都开启了 keepalive，因此 keepalive 探活机制还是会遵守的。
+
+值得注意的是，在第二种方式中，TCP 连接是在 Broker 端被关闭的，但其实这个 TCP 连接的发起方是客户端，因此在 TCP 看来，这属于被动关闭的场景，即 passive close。被动关闭的后果就是会产生大量的 CLOSE_WAIT 连接，因此 Producer 端或 Client 端没有机会显式地观测到此连接已被中断。
 
