@@ -453,3 +453,86 @@ Producer 端关闭 TCP 连接的方式有两种：一种是用户主动关闭；
 
 值得注意的是，在第二种方式中，TCP 连接是在 Broker 端被关闭的，但其实这个 TCP 连接的发起方是客户端，因此在 TCP 看来，这属于被动关闭的场景，即 passive close。被动关闭的后果就是会产生大量的 CLOSE_WAIT 连接，因此 Producer 端或 Client 端没有机会显式地观测到此连接已被中断。
 
+# 14 | 幂等生产者和事务生产者是一回事吗？
+
+消息交付可靠性保障有以下三种：
+
+- 最多一次（at most once）：消息可能会丢失，但绝不会被重复发送。
+- 至少一次（at least once）：消息不会丢失，但有可能被重复发送。
+- 精确一次（exactly once）：消息不会丢失，也不会被重复发送。
+
+目前，Kafka 默认提供的交付可靠性保障是第二种。
+
+什么情况下 Kafka 发送至少一次消息？如果 Broker 的应答没有成功发送回 Producer 端，比如网络出现瞬时抖动，那么 Producer 就无法确定消息是否真的提交成功了。因此，它只能选择重试。
+
+Kafka 也可以提供最多一次交付保障，只需要让 Producer 禁止重试即可。这样一来，消息要么写入成功，要么写入失败，但绝不会重复发送。
+
+不过大部分用户还是希望消息只会被交付一次，这样的话，消息既不会丢失，也不会被重复处理。或者说，即使 Producer 端重复发送了相同的消息，Broker 端也能做到自动去重。在下游 Consumer 看来，消息依然只有一条。
+
+那么 Kafka 是怎么做到精确一次的呢？简单来说，是通过两种机制：幂等性（Idempotence）和事务（Transaction）。
+
+**什么是幂等性（Idempotence）？**
+
+幂等指的是某些操作或函数能够被执行多次，但每次得到的结果都是不变的。
+
+幂等性最大的优势在于我们可以安全地重试任何幂等性操作，反正它们也不会破坏我们的系统状态。
+
+**幂等性 Producer**
+
+在 Kafka 中，Producer 默认不是幂等性的。在 0.11.0.0 版本引入了幂等性功能。使用方法如下：
+
+```
+props.put("enable.idempotence", ture)
+或 props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true)
+```
+
+具体的原理很简单，就是经典的用空间去换时间的优化思路，即在 Broker 端多保存一些字段。当 Producer 发送了具有相同字段值的消息后，Broker 能够自动知晓这些消息已经重复了，于是可以在后台默默地把它们“丢弃”掉。
+
+> 当然，实际的实现原理并没有这么简单，但你大致可以这么理解。
+
+实际上，我们必须要了解幂等性 Producer 的作用范围。
+
+首先，它只能保证单分区上的幂等性，即一个幂等性 Producer 能够保证某个主题的一个分区上不出现重复消息，它无法实现多个分区的幂等性。
+
+其次，它只能实现单会话上的幂等性，不能实现跨会话的幂等性。当你重启了 Producer 进程之后，这种幂等性保证就丧失了。
+
+那如果我想实现多分区以及多会话上的消息无重复，应该怎么做呢？答案就是事务（transaction）或者依赖事务型 Producer。
+
+**事务（transaction）**
+
+Kafka 自 0.11 版本开始也提供了对事务的支持，目前主要是在 read committed 隔离级别上做事情。它能保证多条消息原子性地写入到目标分区，同时也能保证 Consumer 只能看到事务成功提交的消息。
+
+**事务型 Producer**
+
+事务型 Producer 能够保证将消息原子性地写入到多个分区中。这批消息要么全部写入成功，要么全部失败。另外，事务型 Producer 也不惧进程的重启。Producer 重启回来后，Kafka 依然保证它们发送消息的精确一次处理。
+
+使用事务型 Producer 的配置如下：
+
+- 开启 enable.idempotence = true
+- 设置 Producer 端参数 transctional.id。最好为其设置一个有意义的名字
+
+此外，你还需要在 Producer 代码中做一些调整，如这段代码所示：
+
+```java
+producer.initTransactions();
+try {
+    producer.beginTransaction();
+    producer.send(record1);
+    producer.send(record2);
+    producer.commitTransaction();
+} catch (KafkaException e) {
+    producer.abortTransaction();
+}
+```
+
+这段代码能够保证 Record1 和 Record2 被当作一个事务统一提交到 Kafka，要么它们全部提交成功，要么全部写入失败。
+
+实际上即使写入失败，Kafka 也会把它们写入到底层的日志中，也就是说 Consumer 还是会看到这些消息。因此在 Consumer 端，读取事务型 Producer 发送的消息也是需要一些变更的。修改起来也很简单，设置 isolation.level 参数的值即可。当前这个参数有两个取值：
+
+- read_uncommitted：这是默认值，表明 Consumer 能够读取到 Kafka 写入的任何消息，不论事务型 Producer 提交事务还是终止事务，其写入的消息都可以读取。很显然，如果你用了事务型 Producer，那么对应的 Consumer 就不要使用这个值。
+- read_committed：表明 Consumer 只会读取事务型 Producer 成功提交事务写入的消息。当然了，它也能看到非事务型 Producer 写入的所有消息。
+
+
+
+
+
