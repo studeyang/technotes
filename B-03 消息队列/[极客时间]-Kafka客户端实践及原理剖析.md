@@ -532,7 +532,69 @@ try {
 - read_uncommitted：这是默认值，表明 Consumer 能够读取到 Kafka 写入的任何消息，不论事务型 Producer 提交事务还是终止事务，其写入的消息都可以读取。很显然，如果你用了事务型 Producer，那么对应的 Consumer 就不要使用这个值。
 - read_committed：表明 Consumer 只会读取事务型 Producer 成功提交事务写入的消息。当然了，它也能看到非事务型 Producer 写入的所有消息。
 
+# 15 | 消费者组到底是什么？
 
+**消费者组（Consumer Group）特性**
 
+消费者组，即 Consumer Group，是 Kafka 提供的可扩展且具有容错性的消费者机制。
 
+组内可以有多个消费者或消费者实例（Consumer Instance），它们共享一个公共的 ID，这个 ID 被称为 Group ID。组内的所有消费者协调在一起来消费订阅主题（Subscribed Topics）的所有分区（Partition）。当然，每个分区只能由同一个消费者组内的一个 Consumer 实例来消费。
+
+Consumer Group 有下面这三个特性：
+
+1. Consumer Group 下可以有一个或多个 Consumer 实例。这里的实例可以是一个单独的进程，也可以是同一进程下的线程。
+2. Group ID 是一个字符串，在一个 Kafka 集群中是唯一的。
+3. 主题的单个分区只能分配给 Consumer Group 的某个 Consumer 实例消费。当然也可以被其他的 Group 消费。
+
+**Consumer Group 与传统的消息引擎模型**
+
+传统的消息引擎模型有两大类，分别是点对点模型（即消息队列模型）和发布 / 订阅模型。
+
+消息队列模型的特性在于消息一旦被消费，就会从队列中被删除，而且只能被下游的一个 Consumer 消费。很显然，这种模型的伸缩性（scalability）很差，因为下游的多个 Consumer 都要“抢”这个共享消息队列的消息。
+
+发布 / 订阅模型倒是允许消息被多个 Consumer 消费，但它的问题也是伸缩性不高，因为每个订阅者都必须要订阅主题的所有分区。这种全量订阅的方式既不灵活，也会影响消息的真实投递效果。
+
+Kafka 的 Consumer Group 避开了这两种模型的缺陷，同时又兼具它们的优点。如果所有实例都属于同一个 Group，那么它实现的就是消息队列模型；如果所有实例分别属于不同的 Group，那么它实现的就是发布 / 订阅模型。
+
+当 Consumer Group 订阅了多个主题后，组内的每个实例不要求一定要订阅主题的所有分区，它只会消费部分分区中的消息。
+
+**Group 里多少个 Consumer 合适？**
+
+那么在实际使用场景中，我怎么知道一个 Group 下该有多少个 Consumer 实例呢？理想情况下，Consumer 实例的数量应该等于该 Group 订阅主题的分区总数。
+
+举个简单的例子，假设一个 Consumer Group 订阅了 3 个主题，分别是 A、B、C，它们的分区数依次是 1、2、3，那么通常情况下，为该 Group 设置 6 个 Consumer 实例是比较理想的情形，因为它能最大限度地实现高伸缩性。
+
+> 这里理论描述值与举例值矛盾啊！
+
+你可能会问，我能设置小于或大于 6 的实例吗？当然可以！如果你有 3 个实例，那么平均下来每个实例大约消费 2 个分区（6 / 3 = 2）；如果你设置了 8 个实例，那么很遗憾，有 2 个实例（8 – 6 = 2）将不会被分配任何分区，它们永远处于空闲状态。因此，在实际使用过程中一般不推荐设置大于总分区数的 Consumer 实例。设置多余的实例只会浪费资源，而没有任何好处。
+
+**Kafka 是怎么管理位移的？**
+
+消费者在消费的过程中需要记录自己消费了多少数据，即消费位置信息。在 Kafka 中，这个位置信息有个专门的术语：位移（Offset）。
+
+其实对于 Consumer Group 而言，它是一组 KV 对，Key 是分区，V 对应 Consumer 消费该分区的最新位移。
+
+在新版本的 Consumer Group 中，Kafka 社区重新设计了 Consumer Group 的位移管理方式，采用了将位移保存在 Kafka 内部主题的方法。这个内部主题就是 __consumer_offsets。
+
+**Consumer Group 端重平衡**
+
+Rebalance 本质上是一种协议，规定了一个 Consumer Group 下的所有 Consumer 如何达成一致，来分配订阅 Topic 的每个分区。比如某个 Group 下有 20 个 Consumer 实例，它订阅了一个具有 100 个分区的 Topic。正常情况下，Kafka 平均会为每个 Consumer 分配 5 个分区。这个分配的过程就叫 Rebalance。
+
+Rebalance 的触发条件有 3 个。
+
+1. 组成员数发生变更。
+2. 订阅主题数发生变更。
+3. 订阅主题的分区数发生变更。
+
+举个例子，假设目前某个 Consumer Group 下有两个 Consumer，比如 A 和 B，当第三个成员 C 加入时，Kafka 会触发 Rebalance，并根据默认的分配策略重新为 A、B 和 C 分配分区，如下图所示：
+
+![image-20201203230433441](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201203230433.png)
+
+Rebalance 之后的分配依然是公平的。
+
+不过，Rebalance 也有一些缺陷。在 Rebalance 过程中，所有 Consumer 实例都会停止消费，等待 Rebalance 完成，这跟 JVM 垃圾回收的 stop the world 很类似。
+
+其次，目前 Rebalance 的设计是所有 Consumer 实例共同参与，全部重新分配所有分区。其实更高效的做法是尽量减少分配方案的变动。这样的话，就不用重新创建连接其他 Broker 的 Socket 资源。
+
+最后，Rebalance 实在是太慢了。曾经，有个国外用户的 Group 内有几百个 Consumer 实例，成功 Rebalance 一次要几个小时！这完全是不能忍受的。最悲剧的是，目前社区对此无能为力，至少现在还没有特别好的解决方案。所谓“本事大不如不摊上”，也许最好的解决方案就是避免 Rebalance 的发生吧。
 
