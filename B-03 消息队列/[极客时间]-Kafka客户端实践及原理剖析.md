@@ -701,7 +701,151 @@ Group 下实例数减少是我们要关注的。Coordinator 会在什么情况�
 
 如果你按照上面的推荐数值恰当地设置了这几个参数，却发现还是出现了 Rebalance，那么我建议你去排查一下 Consumer 端的 GC 表现，比如是否出现了频繁的 Full GC 导致的长时间停顿，从而引发了 Rebalance。为什么特意说 GC？那是因为在实际场景中，我见过太多因为 GC 设置不合理导致程序频发 Full GC 而引发的非预期 Rebalance 了。
 
+# 18 | Kafka中位移提交那些事儿
 
+今天我们要聊的位移是 Consumer 的消费位移，它记录了 Consumer 要消费的下一条消息的位移。
+
+> 切记是下一条消息的位移，而不是目前最新消费消息的位移。
+
+因为 Consumer 能够同时消费多个分区的数据，所以位移的提交实际上是在分区粒度上进行的，即 Consumer 需要为分配给它的每个分区提交各自的位移数据。
+
+**自动提交位移**
+
+Consumer 端有个参数 enable.auto.commit，它的默认值是 true。即 Java Consumer 默认就是自动提交位移的。如果启用了自动提交，Consumer 端还有个参数就派上用场了：auto.commit.interval.ms。它的默认值是 5 秒，表明 Kafka 每 5 秒会为你自动提交一次位移。
+
+下面代码展示了设置自动提交位移的方法。
+
+```java
+Properties props = new Properties();
+props.put("bootstrap.servers", "localhost:9092");
+props.put("group.id", "test");
+props.put("enable.auto.commit", "true");
+props.put("auto.commit.interval.ms", "2000");
+props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+consumer.subscribe(Arrays.asList("foo", "bar"));
+while (true) {
+  ConsumerRecords<String, String> records = consumer.poll(100);
+  for (ConsumerRecord<String, String> record : records)
+    System.out.printf("offset = %d, key = %s, value = %s%n", record.offset(), record.key(), record.value());
+}
+```
+
+在默认情况下，Consumer 每 5 秒自动提交一次位移。现在，我们假设提交位移之后的 3 秒发生了 Rebalance 操作。在 Rebalance 之后，所有 Consumer 从上一次提交的位移处继续消费，但该位移已经是 3 秒前的位移数据了，故在 Rebalance 发生前 3 秒消费的所有数据都要重新再消费一次。
+
+虽然你能够通过减少 auto.commit.interval.ms 的值来提高提交频率，但这么做只能缩小重复消费的时间窗口，不可能完全消除它。这是自动提交机制的一个缺陷。
+
+**手动同步提交**
+
+开启手动提交位移的方法就是设置 enable.auto.commit 为 false。可以调用`KafkaConsumer#commitSync()`同步提交位移。
+
+下面这段代码展示了 commitSync() 的使用方法。
+
+```java
+while (true) {
+    ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+    process(records); // 处理消息
+    try {
+        consumer.commitSync();
+    } catch (CommitFailedException e) {
+        handle(e); // 处理提交失败异常
+    }
+}
+```
+
+手动提交位移的好处就在于更加灵活，你完全能够把控位移提交的时机和频率。
+
+但是，它也有一个缺陷，就是在调用 commitSync() 时，Consumer 程序会处于阻塞状态，直到远端的 Broker 返回提交结果，这个状态才会结束。在任何系统中，因为程序而非资源限制而导致的阻塞都可能是系统的瓶颈，会影响整个应用程序的 TPS。
+
+**手动异步提交**
+
+鉴于上面这个问题，Kafka 社区为手动提交位移提供了另一个 API 方法：KafkaConsumer#commitAsync()。调用 commitAsync() 之后，它会立即返回，不会阻塞，因此不会影响 Consumer 应用的 TPS。
+
+由于它是异步的，Kafka 提供了回调函数（callback），供你实现提交之后的逻辑，比如记录日志或处理异常等。下面这段代码展示了调用 commitAsync() 的方法。
+
+```java
+while (true) {
+    ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+    process(records); // 处理消息
+    consumer.commitAsync((offsets, exception) -> {
+        if (exception != null) {
+            handle(exception);
+        }
+    });
+}
+```
+
+commitAsync 是否能够替代 commitSync 呢？
+
+答案是不能。commitAsync 的问题在于，出现问题时它不会自动重试。因为它是异步操作，倘若提交失败后自动重试，那么它重试时提交的位移值可能早已经“过期”或不是最新值了。因此，异步提交的重试其实没有意义，所以 commitAsync 是不会重试的。
+
+**手动同异步结合提交**
+
+显然，如果是手动提交，我们需要将 commitSync 和 commitAsync 组合使用才能到达最理想的效果，原因有两个：
+
+1. 我们可以利用 commitSync 的自动重试来规避那些瞬时错误，比如网络的瞬时抖动，Broker 端 GC 等。因为这些问题都是短暂的，自动重试通常都会成功，因此，我们不想自己重试，而是希望 Kafka Consumer 帮我们做这件事。
+2. 我们不希望程序总处于阻塞状态，影响 TPS。
+
+下面这段代码，将两个 API 方法结合使用进行手动提交。
+
+```java
+try {
+    while (true) {
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+        process(records); // 处理消息
+        consumer.commitAysnc(); // 使用异步提交规避阻塞
+    }
+} catch (Exception e) {
+    handle(e); // 处理异常
+} finally {
+    try {
+        consumer.commitSync(); // 最后一次提交使用同步阻塞式提交
+    } finally {
+        consumer.close();
+    }
+}
+```
+
+对于常规性、阶段性的手动提交，我们调用 commitAsync() 避免程序阻塞，而在 Consumer 要关闭前，我们调用 commitSync() 方法执行同步阻塞式的位移提交，以确保 Consumer 关闭前能够保存正确的位移数据。将两者结合后，我们既实现了异步无阻塞式的位移管理，也确保了 Consumer 位移的正确性。
+
+所以，如果你需要自行编写代码开发一套 Kafka Consumer 应用，那么我推荐你使用上面的代码范例来实现手动的位移提交。
+
+**更精细化的位移提交**
+
+我们说了自动提交和手动提交，也说了同步提交和异步提交，这些就是 Kafka 位移提交的全部了吗？其实，我们还差一部分。实际上，Kafka Consumer API 还提供了一组更为方便的方法，可以帮助你实现更精细化的位移管理功能。
+
+设想这样一个场景：你的 poll 方法返回的不是 500 条消息，而是 5000 条。那么，你肯定不想把这 5000 条消息都处理完之后再提交位移，因为一旦中间出现差错，之前处理的全部都要重来一遍。这类似于我们数据库中的事务处理。很多时候，我们希望将一个大事务分割成若干个小事务分别提交，这能够有效减少错误恢复的时间。
+
+在 Kafka 中也是相同的道理。对于一次要处理很多消息的 Consumer 而言，它会关心社区有没有方法允许它在消费的中间进行位移提交。比如前面这个 5000 条消息的例子，你可能希望每处理完 100 条消息就提交一次位移，这样能够避免大批量的消息重新消费。
+
+Kafka Consumer API 为手动提交提供了这样的方法：commitSync(Map<TopicPartition, OffsetAndMetadata>) 和 commitAsync(Map<TopicPartition, OffsetAndMetadata>)。它们的参数是一个 Map 对象，键就是 TopicPartition，即消费的分区，而值是一个 OffsetAndMetadata 对象，保存的主要是位移数据。
+
+就拿刚刚提过的那个例子来说，如何每处理 100 条消息就提交一次位移呢？在这里，我以 commitAsync 为例，展示一段代码，实际上，commitSync 的调用方法和它是一模一样的。
+
+```java
+private Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+int count = 0;
+……
+while (true) {
+    ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+    for (ConsumerRecord<String, String> record: records) {
+        process(record);  // 处理消息
+        offsets.put(new TopicPartition(record.topic(), record.partition()), 
+                    new OffsetAndMetadata(record.offset() + 1)；
+        if（count % 100 == 0）{
+            consumer.commitAsync(offsets, null); // 回调处理逻辑是 null
+        }
+        count++;
+    }
+}
+```
+
+程序先是创建了一个 Map 对象，用于保存 Consumer 消费处理过程中要提交的分区位移，之后开始逐条处理消息，并构造要提交的位移值。
+
+> 还记得之前我说过要提交下一条消息的位移吗？就是这里构造 OffsetAndMetadata 对象时，使用当前消息位移加 1 的原因。
+
+代码的最后部分是做位移的提交。我在这里设置了一个计数器，每累计 100 条消息就统一提交一次位移。与调用无参的 commitAsync 不同，这里调用了带 Map 对象参数的 commitAsync 进行细粒度的位移提交。这样，这段代码就能够实现每处理 100 条消息就提交一次位移，不用再受 poll 方法返回的消息总数的限制了。
 
 
 
