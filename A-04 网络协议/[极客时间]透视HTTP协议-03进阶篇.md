@@ -8,7 +8,7 @@ HTTP 报文是由“header+body”组成的。所以，“进阶篇”的第一�
 >
 > 而 HTTP 协议则不同，它是应用层的协议，数据到达之后工作只能说是完成了一半，还必须要告诉上层应用这是什么数据才行，否则上层应用就会“不知所措”。
 
-怎么告诉HTTP传输过来的数据是什么数据类型呢？
+怎么告诉 HTTP 传输过来的数据是什么数据类型呢？
 
 多用途互联网邮件扩展（Multipurpose Internet Mail Extensions），简称为 MIME，是一个很大的标准规范。HTTP 只“顺手牵羊”取了其中的一部分，用来标记 body 的数据类型，这就是我们平常总能听到的“MIME type”。
 
@@ -31,7 +31,7 @@ HTTP 在传输时为了节约带宽，有时候还会压缩数据，有一个“
 
 HTTP 协议为此定义了两个 Accept 请求头字段和两个 Content 实体头字段，用于客户端和服务器进行内容协商。也就是说，客户端用 Accept 头告诉服务器希望接收什么样的数据，而服务器用 Content 头告诉客户端实际发送了什么样的数据。
 
-![image-20201031230439956](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201031230440.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201031230440.png" alt="image-20201031230439956" style="zoom: 67%;" />
 
 **语言类型与编码**
 
@@ -45,7 +45,7 @@ HTTP 协议为此定义了两个 Accept 请求头字段和两个 Content 实体�
 
 HTTP 协议也使用 Accept 请求头字段和 Content 实体头字段，用于客户端和服务器就语言与编码进行“**内容协商**”。
 
-**Accept-Language**字段标记了客户端可理解的自然语言，也允许用“,”做分隔符列出多个类型，例如：
+Accept-Language 字段标记了客户端可理解的自然语言，也允许用“,”做分隔符列出多个类型，例如：
 
 ```text
 Accept-Language: zh-CN, zh, en
@@ -53,13 +53,13 @@ Accept-Language: zh-CN, zh, en
 
 > 这个请求头会告诉服务器：“最好给我 zh-CN 的汉语文字，如果没有就用其他的汉语方言，如果还没有就给英文”。
 
-相应的，服务器应该在响应报文里用头字段**Content-Language**告诉客户端实体数据使用的实际语言类型：
+相应的，服务器应该在响应报文里用头字段 Content-Language 告诉客户端实体数据使用的实际语言类型：
 
 ```text
 Content-Language: zh-CN
 ```
 
-> 字符集在 HTTP 里使用的请求头字段是**Accept-Charset**，但响应头里却没有对应的 Content-Charset，而是在**Content-Type**字段的数据类型后面用“charset=xxx”来表示，这点需要特别注意。
+> 字符集在 HTTP 里使用的请求头字段是 Accept-Charset，但响应头里却没有对应的 Content-Charset，而是在 Content-Type 字段的数据类型后面用“charset=xxx”来表示，这点需要特别注意。
 >
 > 例如，浏览器请求 GBK 或 UTF-8 的字符集，然后服务器返回的是 UTF-8 编码，就是下面这样：
 >
@@ -86,7 +86,7 @@ Accept: text/html,application/xml;q=0.9,*/*;q=0.8
 
 **内容协商的结果**
 
-内容协商的过程是不透明的，每个 Web 服务器使用的算法都不一样。但有的时候，服务器会在响应头里多加一个**Vary**字段，记录服务器在内容协商时参考的请求头字段，给出一点信息，例如：
+内容协商的过程是不透明的，每个 Web 服务器使用的算法都不一样。但有的时候，服务器会在响应头里多加一个 Vary 字段，记录服务器在内容协商时参考的请求头字段，给出一点信息，例如：
 
 ```text
 Vary: Accept-Encoding,User-Agent,Accept
@@ -98,7 +98,7 @@ Vary 字段可以认为是响应报文的一个特殊的“版本标记”。每
 
 **小结**
 
-![image-20201023172238292](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201023172238292.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201023172238292.png" alt="image-20201023172238292" style="zoom: 67%;" />
 
 **课下作业**
 
