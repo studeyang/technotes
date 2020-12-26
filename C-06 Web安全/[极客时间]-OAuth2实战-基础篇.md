@@ -38,7 +38,7 @@ OAuth 2.0 这种授权协议，就是保证第三方（软件）只有在获得�
 
 **OAuth 2.0 是怎样运转的？**
 
-![image-20201219233700427](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201219233700.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201219233700.png" alt="image-20201219233700427" style="zoom:50%;" />
 
 OAuth 2.0 授权的核心就是颁发访问令牌、使用访问令牌，而且不管是哪种类型的授权流程都是这样。
 
@@ -59,13 +59,13 @@ OAuth 2.0 授权的核心就是颁发访问令牌、使用访问令牌，而且�
 
 OAuth 诞生之初就是为了解决 Web 浏览器场景下的授权问题，所以我基于浏览 器的场景，在上一讲的小明使用小兔软件打印订单的整体流程的基础上，画了一个授权码 许可类型的序列图。
 
-![image-20201220121243904](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220121243.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220121243.png" alt="image-20201220121243904" style="zoom: 67%;" />
 
 从图中看到，在第 4 步授权服务生成了授权码 code，按照一开始我们提出来的问题，如果不要授权码，这一步实际上就可以直接返回访问令牌 access_token 了。
 
 如果没有授权码的话，我们就只能把访问令牌发送给第三方软件小兔的后端服务。因为使用重定向的方式，会把安全保密性要求极高的访问令牌暴露在浏览器上，从而将会面临访问令牌失窃的安全风险。显然，这是不能被允许的。上面的流程图就会变成下面这样：
 
-![image-20201220123102175](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220123102.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220123102.png" alt="image-20201220123102175" style="zoom:67%;" />
 
 这样，问题就来了。当小明被浏览器重定向到授权服务上之后，小明跟小兔软件之间的 “连接” 就断了，相当于此时此刻小明跟授权服务建立了“连接”后，将一 直“停留在授权服务的页面上”。你会看到图 2 中问号处的时序上，小明再也没有重新“连接”到小兔软件。
 
@@ -87,13 +87,13 @@ OAuth 诞生之初就是为了解决 Web 浏览器场景下的授权问题，所
 
 - 间接通信（通过授权码换取访问令牌的交互）
 
-  ![image-20201220135304992](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220135349.png)
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220135349.png" alt="image-20201220135304992" style="zoom:67%;" />
 
   第三方软件小兔和授权服务之间，并没有发生直接的通信，而是通过浏览器这个“中间人” 来 “搭线”的。因此，我们说这是一个间接通信的方式。
 
 - 直接通信（获取授权码的交互）
 
-  ![image-20201220135443932](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220135443.png)
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220135443.png" alt="image-20201220135443932" style="zoom:50%;" />
 
   第三方软件小兔获取到授权码 code 值后，向授权服务发起获取访问令牌 access_token 通信请求。这个请求是第三方软件服务器跟授权服务的服务器之间的通信，都是在后端服务器之间的请求和响应，因此也叫作后端通信。
 
@@ -101,7 +101,7 @@ OAuth 诞生之初就是为了解决 Web 浏览器场景下的授权问题，所
 
 OAuth 2.0 中的 4 个角色是 “两两 站队” 的：资源拥有者和第三方软件“站在一起”，因为第三方软件要代表资源拥有者去访问受保护资源；授权服务和受保护资源“站在一起”，因为授权服务负责颁发访问令牌，受保护资源负责接收并验证访问令牌。
 
-![image-20201220221358951](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220221358.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201220221358.png" alt="image-20201220221358951" style="zoom: 67%;" />
 
 介绍授权码流程的时候我都是以浏览器参与的场景来讲的，那么浏览器一定要参与到这个流程中吗？
 
@@ -456,7 +456,7 @@ JWT 令牌是如何被使用的呢？在讲如何使用之前呢，我先和你�
 
 有时候授权服务依赖一个数据库，然后受保护资源服务也依赖这个数据库，也就是我们说的“共享数据库”。不过，在如今已经成熟的分布式以及微服务的环境下，不同的系统之间是依靠服务而不是数据库来通信了，比如授权服务给受保护资源服务提供一个 RPC 服 务。如下图所示。
 
-![image-20201221231740063](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201221231740.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201221231740.png" alt="image-20201221231740063" style="zoom:50%;" />
 
 那么，在有了 JWT 令牌之后，我们就多了一种选择，因为 JWT 令牌本身就包含了之前所要依赖数据库或者依赖 RPC 服务才能拿到的信息，比如我上面提到的哪个用户为哪个软件进行了授权等信息。
 
@@ -466,7 +466,7 @@ JWT 令牌是如何被使用的呢？在讲如何使用之前呢，我先和你�
 
 有了 JWT 令牌之后的通信方式，就如下面的图 3 所展示的那样了，授权服务“扔出”一个 令牌，受保护资源服务“接住”这个令牌，然后自己开始解析令牌本身所包含的信息就可以了，而不需要再去查询数据库或者请求 RPC 服务。这样也实现了我们上面说的令牌内检。
 
-![image-20201221231951795](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201221231951.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201221231951.png" alt="image-20201221231951795" style="zoom:50%;" />
 
 在上面这幅图中呢，为了更能突出 JWT 令牌的位置，我简化了逻辑关系。实际上，授权服务颁发了 JWT 令牌后给到了小兔软件，小兔软件拿着 JWT 令牌来请求受保护资源服务， 也就是小明在京东店铺的订单。很显然，JWT 令牌需要在公网上做传输。所以在传输过程中，JWT 令牌需要进行 Base64 编码以防止乱码，同时还需要进行签名及加密处理来防止数据信息泄露。
 
@@ -544,7 +544,7 @@ JWT 令牌可以把有效期的信息存储在本身的结构体中。具体到 
 
 我将以上三种情况整理成了一份序列图，以便帮助你理解。同时，为了突出令牌，我将访问令牌和刷新令牌，特意用深颜色标识出来，并单独作为两个角色放进了整个序列图中。
 
-![image-20201221234105261](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201221234105.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201221234105.png" alt="image-20201221234105261" style="zoom:50%;" />
 
 # 05 | 如何安全、快速地接入OAuth 2.0？
 
