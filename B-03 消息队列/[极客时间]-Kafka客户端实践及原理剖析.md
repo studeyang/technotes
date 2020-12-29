@@ -10,7 +10,7 @@
 
 Kafka 的消息组织方式实际上是三级结构：主题 - 分区 - 消息。主题下的每条消息只会保存在某一个分区中，而不会在多个分区中被保存多份。官网上的这张图非常清晰地展示了 Kafka 的三级结构，如下所示：
 
-![image-20201123223445119](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201123223445.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201123223445.png" alt="image-20201123223445119" style="zoom: 67%;" />
 
 Kafka 为什么使用分区的概念而不是直接使用多个主题呢？
 
@@ -45,7 +45,7 @@ Kafka 为什么使用分区的概念而不是直接使用多个主题呢？
 
   也称 Round-robin 策略，即顺序分配。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201123224819.png" alt="image-20201123224819043" style="zoom:40%;" align="left" />
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201123224819.png" alt="image-20201123224819043" style="zoom: 25%;" align="left" />
 
   轮询策略是 Kafka Java 生产者 API 默认提供的分区策略。
 
@@ -53,7 +53,7 @@ Kafka 为什么使用分区的概念而不是直接使用多个主题呢？
 
   也称 Randomness 策略。所谓随机就是我们随意地将消息放置到任意一个分区上，如下面这张图所示。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201123225047.png" alt="image-20201123225047297" style="zoom:40%;" align="left"/>
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201123225047.png" alt="image-20201123225047297" style="zoom: 25%;" align="left"/>
 
   实现随机策略版的 partition 方法如下：
 
@@ -72,7 +72,7 @@ Kafka 为什么使用分区的概念而不是直接使用多个主题呢？
 
   也称 Key-ordering 策略。Kafka 允许为每条消息定义消息键，简称为 Key。一旦消息被定义了 Key，那么就可以保证同一个 Key 的所有消息都进入到相同的分区里面，由于每个分区下的消息处理都是有顺序的，故这个策略被称为按消息键保序策略，如下图所示。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201123225837.png" alt="image-20201123225837947" style="zoom:40%;" align="left" />
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201123225837.png" alt="image-20201123225837947" style="zoom: 25%;" align="left" />
 
   实现这个策略的 partition 方法如下：
 
@@ -170,7 +170,7 @@ Kafka 会将启用了哪种压缩算法封装进消息集合中，这样当 Cons
 
 下面这张表是 Facebook Zstandard 官网提供的一份压缩算法 benchmark 比较结果：
 
-![image-20201124230704644](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201124230704.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201124230704.png" alt="image-20201124230704644" style="zoom:50%;" />
 
 吞吐量方面：LZ4 > Snappy > zstd 和 GZIP；
 
@@ -210,7 +210,7 @@ Producer 永远要使用带有回调通知的方法发送 API，即使用`produc
 
 Consumer 程序有个“位移”的概念，表示的是这个 Consumer 当前消费到的 Topic 分区的位置。
 
-![image-20201125224030536](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201125224030.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201125224030.png" alt="image-20201125224030536" style="zoom:50%;" />
 
 保证 Consumer 端的消息不丢失，可以维持先消费消息，再更新位移的顺序。当然，这种处理方式可能带来的问题是消息的重复处理。
 
@@ -588,7 +588,7 @@ Rebalance 的触发条件有 3 个。
 
 举个例子，假设目前某个 Consumer Group 下有两个 Consumer，比如 A 和 B，当第三个成员 C 加入时，Kafka 会触发 Rebalance，并根据默认的分配策略重新为 A、B 和 C 分配分区，如下图所示：
 
-![image-20201203230433441](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201203230433.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201203230433.png" alt="image-20201203230433441" style="zoom:50%;" />
 
 Rebalance 之后的分配依然是公平的。
 
@@ -654,7 +654,7 @@ Kafka 使用 Compact 策略来删除位移主题中的过期消息，避免该�
 
 这一张来自官网的图片，可以说明 Compact 过程。
 
-![image-20201204234938194](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201204234943.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201204234943.png" alt="image-20201204234938194" style="zoom: 50%;" />
 
 图中位移为 0、2 和 3 的消息的 Key 都是 K1。Compact 之后，分区只需要保存位移为 3 的消息，因为它是最新发送的。
 
