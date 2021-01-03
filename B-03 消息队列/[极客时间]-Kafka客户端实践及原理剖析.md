@@ -867,8 +867,7 @@ props.put("max.poll.interval.ms", 5000);
 consumer.subscribe(Arrays.asList("test-topic"));
 
 while (true) {
-    ConsumerRecords<String, String> records = 
-		consumer.poll(Duration.ofSeconds(1));
+    ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
     // 使用 Thread.sleep 模拟真实的消息处理逻辑
     Thread.sleep(6000L);
     consumer.commitSync();
