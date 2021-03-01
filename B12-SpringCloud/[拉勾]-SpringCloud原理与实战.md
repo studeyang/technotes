@@ -57,11 +57,11 @@
 
 对于领域的划分，业界主流的分类方法认为，系统中的各个子域可以分成核心子域、支撑子域和通用子域三种类型，其中系统中的核心业务属于核心子域，专注于业务某一方面的子域称为支撑子域，可以作为某种基础设施的功能可以归到通用子域。下图就是一个典型的领域划分示例，来自电商系统：
 
-![image-20210226231615835](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226231615.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226231615.png" alt="image-20210226231615835" style="zoom:50%;" />
 
 服务建模本质上是一个为了满足业务需求，并通过技术手段将这些业务需求转换为可实现服务的过程。我们可以把业务体系中的服务分成如下几种类型：基础服务、通用服务、定制服务和其他服务等。
 
-![image-20210226231923650](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226231923.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226231923.png" alt="image-20210226231923650" style="zoom:50%;" />
 
 **微服务架构的第二要素：技术体系**
 
@@ -81,7 +81,7 @@
 
 当服务数量达到一定量级时，就需要引入独立的媒介来管理服务的实例，这个媒介一般被称为服务注册中心。
 
-![image-20210226232434052](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226232434.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226232434.png" alt="image-20210226232434052" style="zoom:50%;" />
 
 服务注册中心是保存服务调用所需的路由信息的存储仓库，也是服务提供者和服务消费者进行交互的媒介，充当着服务注册和发现服务器的作用。
 
@@ -89,7 +89,7 @@
 
 当客户端请求到达集群，如何确定由哪一台服务器进行请求响应呢？这就是服务路由问题。
 
-![image-20210226232616544](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226232616.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226232616.png" alt="image-20210226232616544" style="zoom:50%;" />
 
 为实现精细化的路由管理，这时候我们就可以采用路由规则。路由规则常见的实现方案是白名单或黑名单，即把需要路由的服务地址信息（如服务 IP）放入可以控制是否可见的路由池中进行路由。同样，路由规则也是微服务开发框架的一项常见功能。
 
@@ -97,25 +97,25 @@
 
 对于分布式环境中的服务而言，服务在自身失败引发生错误的同时，还会因为依赖其他服务而导致失败。除了比较容易想到和实现的超时、重试和异步解耦等手段之外，我们需要考虑针对各种场景的容错机制。
 
-![image-20210226232907988](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226232908.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226232908.png" alt="image-20210226232907988" style="zoom:50%;" />
 
 5. 服务网关
 
 服务网关也叫 API 网关，封装了系统内部架构，为每个客户端提供一个定制的 API。在微服务架构中，服务网关的核心要点是，所有的客户端和消费端都通过统一的网关接入微服务，在网关层处理所有的非业务功能。
 
-![image-20210226232952324](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226232952.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226232952.png" alt="image-20210226232952324" style="zoom:50%;" />
 
 6. 服务配置
 
 在微服务架构中，考虑到服务数量和配置信息的分散性，一般都需要引入配置中心的设计思想和相关工具。与注册中心一样，配置中心也是微服务架构中的基础组件，其目的也是对服务进行统一管理，区别在于配置中心管理的对象是配置信息而不是服务的实例信息。
 
-![image-20210226233013130](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226233013.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226233013.png" alt="image-20210226233013130" style="zoom:50%;" />
 
 7. 服务安全
 
 在对微服务架构的学习过程中，服务安全是一块非常重要但又容易被忽视的内容。一般意义上的访问安全性，都是围绕认证和授权这两个核心概念来展开的。也就是说我们首先需要确定用户身份，然后再确定这个用户是否有访问指定资源的权限。站在单个微服务的角度讲，我们系统每次服务访问都能与授权服务器进行集成以便获取访问 Token。站在多个服务交互的角度讲，我们需要确保 Token 在各个微服务之间的有效传播。另一方面，服务内部，我们可以使用不同的访问策略限制服务资源的访问。
 
-![image-20210226233029545](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226233029.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210226233029.png" alt="image-20210226233029545" style="zoom:50%;" />
 
 8. 服务监控
 
@@ -126,4 +126,74 @@
 **微服务架构的第三要素：研发过程**
 
 当寻找把一个大的应用程序进行拆分的方法时，研发过程通常都会围绕产品团队、项目管理、大前端和服务器端团队而展开，这些团队也就是通常所说的职能团队。任何一个需求，无论大小，都将导致跨团队协作，从而增加沟通和协作成本。而微服务架构则倾向围绕业务功能的组织来分割服务，而不是面向某项技术能力。因此，团队是跨职能的特征团队，每个服务都围绕着业务进行构建，并且能够被独立部署到生产环境。
+
+# 02 | 顶级框架：Spring Cloud 是一款什么样的微服务开发框架？
+
+**从 Spring Boot 到 Spring Cloud**
+
+Spring Boot 特性主要体现在开发过程的简单化，包括支持快速构建项目、不依赖外部容器独立运行、开发部署效率高，以及与云平台天然集成等。
+
+在微服务架构中，Spring Cloud 构建在 Spring Boot 之上，继承了 Spring Boot 的多项功能特性，使得开发微服务变得简单而高效。
+
+**Spring Cloud 中的核心组件**
+
+Spring Cloud 中包含了开发一个完整的微服务系统所需的几乎所有技术组件，包括服务注册和发现、API 网关、配置中心、消息处理、负载均衡、熔断器、数据监控等。
+
+1. Spring Cloud Netflix Eureka 与服务治理
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301220113.png" alt="image-20210301220009494" style="zoom:50%;" />
+
+在服务治理场景下，这些组件构成了一个完整的从服务注册、服务发现到服务调用的流程。
+
+2. Spring Cloud Gateway 与服务网关
+
+Spring Cloud Gateway 构建在最新版本的 Spring 5 和响应式编程框架 Project Reactor 之上，提供了非阻塞的 I/O 通信机制。
+
+<img src="/Users/yanglulu/Library/Application Support/typora-user-images/image-20210301220252298.png" alt="image-20210301220252298" style="zoom:50%;" />
+
+3. Spring Cloud Circuit Breaker 与服务容错
+
+Spring Cloud Circuit Breaker 是对熔断器实现方案的一种抽象。在该组件的内部，Spring Cloud Circuit Breaker 集成了Netfix Hystrix、Resilience4J、Sentinel、Spring Retry这四种熔断器实现工具。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301220454.png" alt="image-20210301220454935" style="zoom:50%;" />
+
+4. Spring Cloud Config 与配置中心
+
+在 Spring Cloud 中，集中化配置中心服务器的实现依赖于 Spring Cloud Config，而配置仓库的实现方案除了本地文件系统之外，还支持Git、SVN等常见的版本控制工具。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301220555.png" alt="image-20210301220555221" style="zoom: 50%;" />
+
+5. Spring Cloud Stream 与事件驱动
+
+Spring Cloud Stream 中的 Source 组件是真正生成消息的组件，然后消息通过 Channel 传送到 Binder。这里的 Binder 是一个中间层组件，通过 Binder 可以与特定的消息中间件进行通信。
+
+在 Spring Cloud Stream 中，目前已经内置集成的消息中间件包括 RabbitMQ 和 Kafka。消息消费者则同样通过 Binder 从消息传递系统中获取消息，消息通过 Channel 将流转到 Sink 组件。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301220850.png" alt="image-20210301220850022" style="zoom:50%;" />
+
+6. Spring Cloud Security 与服务安全
+
+Spring Cloud Security 具备众多特点，包括基于流行的OAuth2 协议的授权机制，以及基于 Token的资源访问保护机制。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301220958.png" alt="image-20210301220958206" style="zoom:50%;" />
+
+7. Spring Cloud Sleuth 与链路跟踪
+
+我们可以通过Spring Cloud Sleuth自动完成服务调用链路的构建。
+
+任何通过 HTTP 端点接收到的请求或使用 RestTemplate 发出的请求都可以被 Spring Cloud Sleuth 自动收集日志。
+
+同时它也能无缝支持通过由 API 网关 Zuul 发送的请求，以及基于 Spring Cloud Stream 等消息传递技术发送的请求。
+
+并且，Spring Cloud Sleuth 也兼容了 Zipkin、HTrace 等第三方工具的应用和集成，从而实现对服务依赖关系、服务调用时序，以及服务调用数据的可视化，如下图所示。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301221343.png" alt="image-20210301221343106" style="zoom:50%;" />
+
+8. Spring Cloud Contracts 与服务测试
+
+在微服务架构中，当不同服务之间进行交互和集成时，测试的关注点就变成如何确保服务定义和协议级别的正确性和稳定性，也就是所谓的端到端测试。
+
+Spring Cloud Contract 框架采用了服务桩（Stub） 实现机制来确保特定服务版本的各个服务之间交互过程的正确性，如下所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301221612.png" alt="image-20210301221612195" style="zoom:50%;" />
 
