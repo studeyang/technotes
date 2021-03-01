@@ -197,3 +197,73 @@ Spring Cloud Contract 框架采用了服务桩（Stub） 实现机制来确保�
 
 <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301221612.png" alt="image-20210301221612195" style="zoom:50%;" />
 
+# 03 | 案例驱动：如何通过实战案例来学习 Spring Cloud 框架？
+
+在物联网和智能穿戴式设备日益发达的当下，试想一下这样的日常场景。
+
+患者通过智能手环、便携式脉诊仪等一些智能穿戴式设备检测自身的各项健康信息，然后把这些健康信息实时上报到云平台，云平台检测到用户健康信息中的异常情况时会通过人工或自动的方式进行一定的健康干预，从而确保用户健康得到保证。
+
+这是大健康领域非常典型的一个业务场景，也是我们案例的来源。
+
+**SpringHealth：案例驱动**
+
+服务建模是案例分析的第一步。服务建模包括 子域与界限上下文的划分 以及 服务拆分和集成策略的确定。
+
+SpringHealth 包含的业务场景比较简单，用户佩戴着各种穿戴式设备，云平台中的医护人员可以根据这些设备上报的健康信息生成健康干预。而在生成健康干预的过程中，我们需要对设备本身以及用户信息进行验证。从领域建模的角度进行分析，我们可以把该系统分成三个子域，即：
+
+- 用户（User）子域，用于用户管理，用户可以通过注册成为系统用户，同时也可以修改或删除用户信息，并提供用户信息有效性验证的入口。
+
+- 设备（Device）子域，用于设备管理，医护人员可以查询某个用户的某款穿戴式设备以便获取设备的详细信息，同时基于设备获取当前的健康信息。
+
+- 健康干预（Intervention）子域，用于健康干预管理，医护人员可以根据用户当前的健康信息生成对应的健康干预。当然，也可以查询自己所提交健康干预的当前状态。
+
+从子域的分类上讲，用户子域比较明确，显然应该作为一种通用子域。而健康干预是 SpringHealth 的核心业务，所以应该是核心子域。至于设备子域，在这里比较倾向于归为支撑子域。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301224022.png" alt="image-20210301224022434" style="zoom: 33%;" />
+
+基于以上分析，我们可以把 SpringHealth 划分成三个微服务，即 user-service、device-service 和 intervention-service。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301224241.png" alt="image-20210301224241826" style="zoom: 33%;" />
+
+以上述三个服务构成了 SpringHealth 的业务主体，属于业务微服务。
+
+**SpringHealth：服务设计**
+
+纵观整个 SpringHealth 系统，除了前面介绍的三个业务微服务之外，实际上更多的服务来自非业务性的基础设施类服务。
+
+1. 服务列表
+
+整个 SpringHealth 的所有服务如下表所示。对于基础设施类服务，命名上我们统一以 -server 来结尾，而对于业务服务，则使用的是 -service 后缀。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301224814.png" alt="image-20210301224814453" style="zoom:50%;" />
+
+2. 服务数据
+
+我们针对三个业务服务，建立独立的三个数据库，数据库的访问信息通过配置中心进行集中管理，如下图所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301225020.png" alt="image-20210301225019975" style="zoom:50%;" />
+
+**SpringHealth：代码工程**
+
+服务运行时上存在一定的依赖性。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210301225221.png" alt="image-20210301225221324" style="zoom:50%;" />
+
+**案例之外：从案例实战到原理剖析**
+
+我们将通过源码解析来剖析 Spring Cloud 中核心组件的工作原理，典型的场景包括以下几点：
+
+- 服务治理原理剖析。服务治理的原理剖析涉及两大块内容，一块是构建 Eureka 服务器以及使用 Eureka 客户端的实现机制，另一块则是客户端负载均衡组件 Ribbon 的基本架构和实现原理。
+- 服务网关原理剖析。服务网关中，我们选择基于 Zuul 网关的设计思想、功能组件以及路由机制来对它的实现原理进行详细的展开。
+- 服务容错原理剖析。针对服务容错，我们选择以 Hystrix 为基础，来分析 HystrixCircuitBreaker 核心类的底层实现原理以及基于滑动窗口实现数据采集的运行机制。
+- 服务配置原理剖析。在掌握 Spring Cloud Config 的配置中心应用方式的基础上，我们将重点关注服务器端和客户端的底层交互机制，以及配置信息自动更新的工作原理。
+- 事件通信原理剖析。作为集成了 RabbitMQ 和 Kafka 这两款主流消息中间件的 Spring Cloud Stream 框架，我们的关注点在于它对消息集成过程的抽象以及集成过程的实现原理。
+
+
+
+
+
+
+
+
+
