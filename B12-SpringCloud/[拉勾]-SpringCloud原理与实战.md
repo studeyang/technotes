@@ -335,13 +335,189 @@ Spring Cloud Netflix 中也集成了Netflix Ribbon 组件来实现客户端负�
 
 # 05 | 服务注册：构建 Eureka 服务器及其实现原理？
 
+**基于 Eureka 构建注册中心**
 
+1. 构建单点 Eureka 服务器
 
+引入依赖：
 
+```xml
+<dependency>
+     <groupId>org.springframework.cloud</groupId>
+     <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+</dependency>
+```
 
+创建 Spring Boot 的启动类：
 
+```java
+@SpringBootApplication
+@EnableEurekaServer
+public class EurekaServerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(EurekaServerApplication.class, args);
+    }
+}
+```
 
+Eureka 配置项可以分成三大类。
 
+一类用于控制 Eureka 服务器端行为，以 eureka.server 开头；一类则是从客户端角度出发考虑配置需求，以 eureka.client 开头；而最后一类则关注于注册到 Eureka 的服务实例本身，以 eureka.instance 开头。
+
+在 eureka-server 工程的 application.yml 文件中添加了如下配置信息。
+
+```yaml
+server:
+  port: 8761
+  
+eureka:
+  client:
+    # 是否把当前的客户端实例注册到 Eureka 服务器
+    registerWithEureka: false
+    # 是否从 Eureka 服务器上拉取已注册的服务信息
+    fetchRegistry: false
+    serviceUrl:
+      defaultZone: http://localhost:8761
+```
+
+2. 构建 Eureka 服务器集群
+
+我们准备两个 Eureka 服务实例 eureka1 和 eureka2。
+
+在 Spring Boot 中，我们分别提供 application-eureka1.yml 和 application-eureka2.yml 这两个配置文件来设置相关的配置项。其中 application-eureka1.yml 配置文件的内容如下：
+
+```yaml
+server:
+  port: 8761
+
+eureka:
+  instance:
+    # 指定当前 Eureka 服务的主机名称
+    hostname: eureka1
+  client:
+    serviceUrl:
+      # 指向集群中的其他 Eureka 服务器
+      defaultZone: http://eureka2:8762/eureka/
+```
+
+对应的，application-eureka2.yml 配置文件的内容如下：
+
+```yaml
+server:
+  port: 8762
+
+eureka:
+  instance:
+    hostname: eureka2
+  client:
+    serviceUrl:
+	    defaultZone: http://eureka1:8761/eureka/
+```
+
+Eureka 集群的构建方式实际上就是将自己作为服务并向其他注册中心注册自己，这样就形成了一组互相注册的服务注册中心以实现服务列表的同步。
+
+显然，这个场景下 registerWithEureka 和 fetchRegistry配置项应该都使用其默认的 true 值。
+
+eureka.instance.hostname 配置项中的 eureka1 和 eureka2 是无法访问的，所以需要在本机hosts 文件中添加以下信息。
+
+```reStructuredText
+127.0.0.1 eureka1
+127.0.0.1 eureka2
+```
+
+**理解 Eureka 服务器实现原理**
+
+1. Eureka 核心概念
+
+我们在对 Eureka 的内部结构做进一步展开，可以得到如下所示的注册中心细化模型图。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210303224426.png" alt="image-20210303224426138" style="zoom: 50%;" />
+
+服务注册（Register）：各个微服务通过向 Eureka 服务器提供 IP 地址、端点等各项与服务发现相关的基本信息完成服务注册操作。
+
+服务续约（Register）：Eureka 客户端需要每隔一定时间主动上报自己的运行时状态。
+
+服务取消（Cancel）：Eureka 客户端主动告知 Eureka 服务器自己不想再注册到 Eureka 中。
+
+服务剔除（Evict）：当 Eureka 客户端连续一段时间没有向 Eureka 服务器发送服务续约信息时，Eureka 服务器就会认为该服务实例已经不再运行，从而将其从服务列表中进行剔除。
+
+2. Eureka 服务存储源码解析
+
+对于一个注册中心而言，我们首先需要关注它的数据存储方法。InstanceRegistry 接口及其实现类承接了这部分职能。类层结构如下所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210303225111.png" alt="image-20210303225111370" style="zoom:50%;" />
+
+在 AbstractInstanceRegistry 中发现了 Eureka 用于保存注册信息的数据结构，如下所示：
+
+```java
+private final ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>> registry = new ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>>();
+```
+
+其中第一层的 ConcurrentHashMap 的 Key 为 spring.application.name，也就是服务名；而第二层的 Map 的 Key 为 instanceId，也就是服务的唯一实例 ID，Value 为 Lease 对象。
+
+Eureka 采用 Lease（租约）这个词来表示对服务注册信息的抽象，Lease 对象保存了服务实例信息以及一些实例服务注册相关的时间，如注册时间 registrationTimestamp、最新的续约时间 lastUpdateTimestamp 等。如果用图形化的表达方式来展示这种数据结构，可以参考下图：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210303225905.png" alt="image-20210303225905311" style="zoom:50%;" />
+
+3. Eureka 服务缓存源码解析
+
+Eureka 服务器端组件的另一个核心功能是提供服务列表。为了提高性能，Eureka 服务器会缓存一份所有已注册的服务列表，并通过一定的定时机制对缓存数据进行更新。
+
+为了获取注册到 Eureka 服务器上具体某一个服务实例的详细信息，可以访问如下地址：
+
+```http
+http://<eureka-server-ip>:8761/eureka/apps/<APPID>
+```
+
+ApplicationResource 类（位于com.netflix.eureka.resources 包中）提供了根据应用获取注册信息的入口。我们来看该类的 getApplication 方法，核心代码如下所示：
+
+```java
+Key cacheKey = new Key(
+       Key.EntityType.Application,
+       appName,
+       keyType,
+       CurrentRequestVersion.get(),
+       EurekaAccept.fromString(eurekaAccept)
+);
+
+String payLoad = responseCache.get(cacheKey);
+
+if (payLoad != null) {
+    logger.debug("Found: {}", appName);
+    return Response.ok(payLoad).build();
+} else {
+    logger.debug("Not Found: {}", appName);
+    return Response.status(Status.NOT_FOUND).build();
+}
+```
+
+4. Eureka 高可用源码解析
+
+Eureka 的高可用部署方式被称为 Peer Awareness 模式。我们在 InstanceRegistry 的类层结构中也已经看到了它的一个扩展接口 PeerAwareInstanceRegistry 以及该接口的实现类 PeerAwareInstanceRegistryImpl，它的 register 方法如下所示：
+
+```java
+@Override
+public void register(final InstanceInfo info, final boolean isReplication) {
+    int leaseDuration = Lease.DEFAULT_DURATION_IN_SECS;
+    if (info.getLeaseInfo() != null && info.getLeaseInfo().getDurationInSecs() > 0) {
+        leaseDuration = info.getLeaseInfo().getDurationInSecs();
+    }
+    super.register(info, leaseDuration, isReplication);
+    replicateToPeers(Action.Register, info.getAppName(), info.getId(), info, null, isReplication);
+}
+```
+
+replicateToPeers 方法就是用来实现服务器节点之间的状态同步。replicateToPeers 方法的核心代码如下所示：
+
+```java
+for (final PeerEurekaNode node : peerEurekaNodes.getPeerEurekaNodes()) {
+    //如果该 URL 代表主机自身，则不用进行注册
+    if (peerEurekaNodes.isThisMyUrl(node.getServiceUrl())) {
+         continue;
+    }
+    replicateInstanceActionsToPeers(action, appName, id, info, newStatus, node);
+}
+```
 
 
 
