@@ -519,19 +519,195 @@ for (final PeerEurekaNode node : peerEurekaNodes.getPeerEurekaNodes()) {
 }
 ```
 
+# 06 | 服务发现：构建 Eureka 客户端及其实现原理？
 
+**使用 Eureka 注册和发现服务**
 
+今天我们将先以 user-service 为例来演示如何完成服务的注册和发现。
 
+1. 实现服务注册
 
+添加依赖：
 
+```xml
+<dependency>
+     <groupId>org.springframework.cloud</groupId>
+     <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+```
 
+user-service 的 Bootstrap 类：
 
+```java
+@SpringBootApplication
+@EnableEurekaClient
+public class UserApplication {
+  	public static void main(String[] args) {
+        SpringApplication.run(UserApplication.class, args);
+    }
+}
+```
 
+可以使用统一的 @SpringCloudApplication 注解，来实现 @SpringBootApplication 和 @EnableEurekaClient 这两个注解整合在一起的效果。
 
+user-service 中的配置内容如下所示：
 
+```yaml
+spring:
+  application:
+	name: userservice 
+server:
+  port: 8081
+	 
+eureka:
+  client:
+    serviceUrl:
+	    defaultZone: http://localhost:8761/eureka/
+```
 
+如果使用的是 Eureka 服务器集群，那么 eureka.client.serviceUrl.defaultZone 配置项的内容就应该是“http://eureka1:8761/eureka/,http://eureka2:8762/eureka/”，用于指向当前的集群环境。
 
+2. 实现服务发现
 
+为了获取注册到 Eureka 服务器上具体某一个服务实例的详细信息，我们可以访问如下地址：
 
+```http
+http://<eureka-ip-port>:8761/eureka/apps/<APPID>
+```
 
+例如：
+
+```http
+http://localhost:8761/eureka/apps/userservice
+```
+
+**理解 Eureka 客户端基本原理**
+
+在 Netflix Eureka 中，专门提供了一个客户端包，并抽象了一个客户端接口 EurekaClient。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210304222710.png" alt="image-20210304222710360" style="zoom: 67%;" />
+
+# 07 | 负载均衡：如何使用 Ribbon 实现客户端负载均衡？
+
+Spring Cloud 中同样存在着与 Eureka 配套的负载均衡器，这就是 Ribbon 组件。Eureka 和 Ribbon 的交互方式如下图所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210304223949.png" alt="image-20210304223949098" style="zoom: 50%;" />
+
+**理解 Ribbon 与 DiscoveryClient**
+
+1. Ribbon 的核心功能
+
+Spring Cloud Netflix Ribbon 通过注解就能简单实现在面向服务的接口调用中，自动集成负载均衡功能，使用方式主要包括以下两种：
+
+- 使用 @LoadBalanced 注解。
+
+@LoadBalanced 注解用于修饰发起 HTTP 请求的 RestTemplate 工具类，并在该工具类中自动嵌入客户端负载均衡功能。开发人员不需要针对负载均衡做任何特殊的开发或配置。
+
+- 使用 @RibbonClient 注解。
+
+可以使用 @RibbonClient 注解来完全控制客户端负载均衡行为。这在需要定制化负载均衡算法等某些特定场景下非常有用，我们可以使用这个功能实现更细粒度的负载均衡配置。
+
+2. 使用 DiscoveryClient 获取服务实例信息
+
+首先，我们获取当前注册到 Eureka 中的服务名称全量列表，如下所示：
+
+```java
+List<String> serviceNames = discoveryClient.getServices();
+```
+
+基于这个服务名称列表可以获取所有自己感兴趣的服务，并进一步获取这些服务的实例信息：
+
+```java
+List<ServiceInstance> serviceInstances = discoveryClient.getInstances(serviceName);
+```
+
+3. 通过 @Loadbalanced 注解调用服务
+
+我们在 intervention-service 的启动类 InterventionApplication中，通过 @LoadBalanced 注解创建 RestTemplate。
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+public class InterventionApplication {
+ 
+    @LoadBalanced
+    @Bean
+    public RestTemplate getRestTemplate(){
+        return new RestTemplate();
+    }
+ 
+    public static void main(String[] args) {
+        SpringApplication.run(InterventionApplication.class, args);
+    }
+}
+```
+
+我们在 intervention-service 工程中添加一个新的 UserServiceClient 类并添加以下代码：
+
+```java
+@Component
+public class UserServiceClient {
+ 
+    @Autowired
+  	RestTemplate restTemplate;
+	 
+	  public UserMapper getUserByUserName(String userName){
+        ResponseEntity<UserMapper> restExchange =
+                restTemplate.exchange(
+                        "http://userservice/users/{userName}",
+                        HttpMethod.GET,
+                        null, UserMapper.class, userName);
+
+        UserMapper user = restExchange.getBody();
+        return user;
+    }
+}
+```
+
+这里的 RestTemplate 已经具备了客户端负载均衡功能，因为我们在 InterventionApplication 类中创建该 RestTemplate 时添加了 @LoadBalanced 注解。
+
+同样请注意，URL“http://userservice/users/{userName}”中的”userservice”是在 user-service 中配置的服务名称，也就是在注册中心中存在的名称。
+
+4. 通过 @RibbonClient 注解自定义负载均衡策略
+
+默认情况下，Ribbon 使用的是轮询策略，我们无法控制具体生效的是哪种负载均衡算法。但在有些场景下，我们就需要对负载均衡这一过程进行更加精细化的控制，这时候就可以用到 @RibbonClient 注解。
+
+为了使用 @RibbonClient 注解，我们需要创建一个独立的配置类，用来指定具体的负载均衡规则。
+
+```java
+@Configuration
+public class SpringHealthLoadBalanceConfig {
+ 
+    @Autowired
+    IClientConfig config;
+ 
+    @Bean
+    @ConditionalOnMissingBean
+    public IRule springHealthRule(IClientConfig config) {
+        return new RandomRule();
+    }
+}
+```
+
+该配置类的作用是使用 RandomRule 替换 Ribbon 中的默认负载均衡策略 RoundRobin。我们可以在调用特定服务时使用该配置类。
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@RibbonClient(name = "userservice", configuration = SpringHealthLoadBalanceConfig.class)
+public class InterventionApplication{
+ 
+	@Bean
+    @LoadBalanced
+    public RestTemplate restTemplate(){
+        return new RestTemplate();
+    }
+ 
+    public static void main(String[] args) {
+        SpringApplication.run(InterventionApplication.class, args);
+    }
+}
+```
+
+现在每次访问 user-service 时将使用 RandomRule 这一随机负载均衡策略。
 
