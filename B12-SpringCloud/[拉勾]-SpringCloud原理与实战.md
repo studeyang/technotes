@@ -711,3 +711,200 @@ public class InterventionApplication{
 
 现在每次访问 user-service 时将使用 RandomRule 这一随机负载均衡策略。
 
+# 08 | 负载均衡：Ribbon 的基本架构和实现原理？
+
+**Netflix Ribbon 基本架构**
+
+作为一款客户端负载均衡工具，要做的事情无非就是两件：第一件事情是获取注册中心中的服务器列表；第二件事情是在这个服务列表中选择一个服务进行调用。
+
+针对这两个问题，Netflix Ribbon 提供了自身的一套基本架构，并抽象了一批核心类，让我们来一起看一下核心类。
+
+1. Netflix Ribbon 中的核心类
+
+Netflix Ribbon 的核心接口 ILoadBalancer 就是围绕着上述两个问题来设计的，该接口位于 com.netflix.loadbalancer 包下，定义如下：
+
+```java
+public interface ILoadBalancer {
+    //添加后端服务
+    public void addServers(List<Server> newServers);
+ 
+    //选择一个后端服务
+    public Server chooseServer(Object key); 
+ 
+    //标记一个服务不可用
+    public void markServerDown(Server server);
+ 
+    //获取当前可用的服务列表
+    public List<Server> getReachableServers();
+	 
+    //获取所有后端服务列表
+    public List<Server> getAllServers();
+}
+```
+
+ILoadBalancer 接口的类层结构如下所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210305224753.png" alt="image-20210305224753270" style="zoom:50%;" />
+
+我们先来梳理 BaseLoadBalancer 包含的作为一个负载均衡器应该具备的一些核心组件，比较重要的有以下三个。
+
+- IRule
+
+IRule 接口是对负载均衡策略的一种抽象，可以通过实现这个接口来提供各种适用的负载均衡算法。
+
+```java
+public interface IRule {
+    public Server choose(Object key);
+    public void setLoadBalancer(ILoadBalancer lb);
+    public ILoadBalancer getLoadBalancer();
+}
+```
+
+- IPing
+
+IPing 接口判断目标服务是否存活，定义如下：
+
+```java
+public interface IPing {
+    public boolean isAlive(Server server);
+}
+```
+
+- LoadBalancerStats
+
+LoadBalancerStats 类记录负载均衡的实时运行信息，用来作为负载均衡策略的运行时输入。
+
+2. Netflix Ribbon 中的负载均衡策略
+
+IRule 接口的类层结构如下图所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210305225852.png" alt="image-20210305225852543" style="zoom:50%;" />
+
+静态的几种策略相对都比较简单，而像 RetryRule 实际上不算是严格意义上的负载均衡策略，所以这里重点关注 Ribbon 所实现的几种不同的动态策略。
+
+- BestAvailableRule 策略
+
+选择一个并发请求量最小的服务器，逐个考察服务器然后选择其中活跃请求数最小的服务器。
+
+- WeightedResponseTimeRule 策略
+
+该策略与请求的响应时间有关，显然，如果响应时间越长，就代表这个服务的响应能力越有限，那么分配给该服务的权重就应该越小。
+
+- AvailabilityFilteringRule 策略
+
+通过检查 LoadBalancerStats 中记录的各个服务器的运行状态，过滤掉那些处于一直连接失败或处于高并发状态的后端服务器。
+
+**Spring Cloud Netflix Ribbon**
+
+Spring Cloud Netflix Ribbon 专门针对 Netflix Ribbon 提供了一个独立的集成实现。
+
+Spring Cloud Netflix Ribbon 相当于 Netflix Ribbon 的客户端。而对于 Spring Cloud Netflix Ribbon 而言，我们的应用服务相当于它的客户端。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210305230331.png" alt="image-20210305230331728" style="zoom:50%;" />
+
+这次，我们打算从应用服务层的 @LoadBalanced 注解入手，切入 Spring Cloud Netflix Ribbon，然后再从 Spring Cloud Netflix Ribbon 串联到 Netflix Ribbon，从而形成整个负载均衡闭环管理。
+
+1. @LoadBalanced 注解
+
+为什么通过 @LoadBalanced 注解创建的 RestTemplate 就能自动具备客户端负载均衡的能力？
+
+在 Spring Cloud Netflix Ribbon 中存在一个自动配置类——LoadBalancerAutoConfiguration 类。
+
+而在该类中，维护着一个被 @LoadBalanced 修饰的 RestTemplate 对象的列表。在初始化的过程中，对于所有被 @LoadBalanced 注解修饰的 RestTemplate，调用 RestTemplateCustomizer 的 customize 方法进行定制化，该定制化的过程就是对目标 RestTemplate 增加拦截器 LoadBalancerInterceptor，如下所示：
+
+```java
+@Configuration
+@ConditionalOnMissingClass("org.springframework.retry.support.RetryTemplate")
+static class LoadBalancerInterceptorConfig {
+    @Bean
+    public LoadBalancerInterceptor ribbonInterceptor(
+                            LoadBalancerClient loadBalancerClient, 
+                            LoadBalancerRequestFactory requestFactory) {
+        return new LoadBalancerInterceptor(loadBalancerClient, requestFactory);
+    }
+ 
+    @Bean
+    @ConditionalOnMissingBean
+    public RestTemplateCustomizer restTemplateCustomizer(
+                final LoadBalancerInterceptor loadBalancerInterceptor) {
+        return restTemplate -> {
+                List<ClientHttpRequestInterceptor> list = new ArrayList<>(
+                        restTemplate.getInterceptors());
+                list.add(loadBalancerInterceptor);
+                restTemplate.setInterceptors(list);
+            };
+    }
+}
+```
+
+这个 LoadBalancerInterceptor 用于实时拦截，可以看到它的构造函数中传入了一个对象 LoadBalancerClient，而在它的拦截方法本质上就是使用 LoadBalanceClient 来执行真正的负载均衡。LoadBalancerInterceptor 类代码如下所示：
+
+```java
+public class LoadBalancerInterceptor implements ClientHttpRequestInterceptor {
+ 
+    private LoadBalancerClient loadBalancer;
+    private LoadBalancerRequestFactory requestFactory;
+ 
+    public LoadBalancerInterceptor(LoadBalancerClient loadBalancer, LoadBalancerRequestFactory requestFactory) {
+        this.loadBalancer = loadBalancer;
+        this.requestFactory = requestFactory;
+    }
+ 
+    public LoadBalancerInterceptor(LoadBalancerClient loadBalancer) {
+        this(loadBalancer, new LoadBalancerRequestFactory(loadBalancer));
+    }
+ 
+    @Override
+    public ClientHttpResponse intercept(final HttpRequest request, final byte[] body,
+            final ClientHttpRequestExecution execution) throws IOException {
+        final URI originalUri = request.getURI();
+        String serviceName = originalUri.getHost();
+        Assert.state(serviceName != null, "Request URI does not contain a valid hostname: " + originalUri);
+        return this.loadBalancer.execute(serviceName, requestFactory.createRequest(request, body, execution));
+    }
+}
+```
+
+可以看到这里的拦截方法 intercept 直接调用了 LoadBalancerClient 的 execute 方法完成对请求的负载均衡执行。
+
+2. LoadBalanceClient 接口
+
+LoadBalancerClient 是一个非常重要的接口，定义如下：
+
+```java
+public interface LoadBalancerClient extends ServiceInstanceChooser {
+ 
+    <T> T execute(String serviceId, LoadBalancerRequest<T> request) throws IOException;
+ 
+    <T> T execute(String serviceId, ServiceInstance serviceInstance,
+           LoadBalancerRequest<T> request) throws IOException;
+ 
+    URI reconstructURI(ServiceInstance instance, URI original);
+}
+```
+
+LoadBalancerClient 继承自 ServiceInstanceChooser 接口，该接口定义如下：
+
+```java
+public interface ServiceInstanceChooser {
+    ServiceInstance choose(String serviceId);
+}
+```
+
+提供具体实现的是实现了 LoadBalancerClient 接口的 RibbonLoadBalancerClient，而 RibbonLoadBalancerClient 位于 spring-cloud-netflix-ribbon 工程中。这样我们的代码流程就从应用程序转入到了 Spring Cloud Netflix Ribbon 中。
+
+RibbonLoadBalancerClient 中，choose 方法最终调用了如下所示的 getServer 方法：
+
+```java
+protected Server getServer(ILoadBalancer loadBalancer) {
+        if (loadBalancer == null) {
+            return null;
+        }
+        return loadBalancer.chooseServer("default"); 
+}
+```
+
+这里的 loadBalancer 对象就是前面介绍的 Netflix Ribbon 中的 ILoadBalancer 接口的实现类。这样，我们就把 Spring Cloud Netflix Ribbon 与 Netflix Ribbon 的整体协作流程串联起来。
+
+
+
