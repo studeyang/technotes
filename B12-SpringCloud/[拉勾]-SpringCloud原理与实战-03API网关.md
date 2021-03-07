@@ -160,5 +160,165 @@ thirdpartyservice:
 
 在不使用 Eureka 的情况下，我们需要手工指定 Ribbon 的服务列表。“users.ribbon.listOfServers”配置项为我们提供了这方面的支持，如在上面的示例中“http://thirdpartyservice1:8080，http://thirdpartyservice2:8080”就为 Ribbon 提供了两个服务定义作为实现负载均衡的服务列表。
 
+# 10 | 同步网关：剖析 Zuul 网关的工作原理
+
+**ZuulFilter 组件架构**
+
+Zuul 响应 HTTP 请求的过程是一种典型的过滤器结构，内部提供了 ZuulFilter 组件来实现这一机制。作为切入点，我们先从 ZuulFilter 展开讨论。
+
+1. ZuulFilter 的定义与 ZuulRegistry
+
+在 Zuul 中，ZuulFilter 是 Zuul 中的关键组件。IZuulFilter 接口定义如下：
+
+```java
+public interface IZuulFilter {
+  // 是否需要执行该过滤器
+  boolean shouldFilter();
+  // 具体需要实现的业务逻辑
+  Object run() throws ZuulException;
+}
+```
+
+IZuulFilter的直接实现类是 ZuulFilter，ZuulFilter 是一个抽象类，额外提供了如下所示的两个抽象方法：
+
+```java
+//过滤器类型
+//分为 PRE、ROUTING、POST 和 ERROR 四种
+abstract public String filterType();
+//过滤器执行顺序，数字越小则越先执行
+abstract public int filterOrder();
+```
+
+既然有了过滤器，系统中就应该存在一个管理过滤器的组件，称为过滤器注册表 FilterRegistry。定义如下：
+
+```java
+public class FilterRegistry {
+
+  private static final FilterRegistry INSTANCE = new FilterRegistry();
+
+  public static final FilterRegistry instance() {
+    return INSTANCE;
+  }
+
+  private final ConcurrentHashMap<String, ZuulFilter> filters = new ConcurrentHashMap<String, ZuulFilter>();
+  
+  private FilterRegistry() {}
+  
+}
+```
+
+2. ZuulFilter 的加载与 FilterLoader
+
+FilterLoader 负责 ZuulFilter 的加载。它用来在源码变化时编译、载入和校验过滤器。针对这个核心类，我们将从它的变量入手，对它进行分析。
+
+```java
+//Filter 文件名与修改时间的映射
+private final ConcurrentHashMap<String, Long> filterClassLastModified = new ConcurrentHashMap<>();
+//Filter 名称与代码的映射
+private final ConcurrentHashMap<String, String> filterClassCode = new ConcurrentHashMap<>();
+//Filter 名称与名称的映射，作用是判断该 Filter 是否存在
+private final ConcurrentHashMap<String, String> filterCheck = new ConcurrentHashMap<>();
+//Filter 类型与 List<ZuulFilter> 的映射
+private final ConcurrentHashMap<String, List<ZuulFilter>> hashFiltersByType = new ConcurrentHashMap<>();
+//前面提到的 FilterRegistry 单例
+private FilterRegistry filterRegistry = FilterRegistry.instance();
+//动态代码编译器实例，Zuul 提供的默认实现是 GroovyCompiler
+static DynamicCodeCompiler COMPILER;
+//ZuulFilter 工厂类
+static FilterFactory FILTER_FACTORY = new DefaultFilterFactory();
+```
+
+DynamicCodeCompiler 是一种动态代码编译器。DynamicCodeCompiler 接口定义如下：
+
+```java
+public interface DynamicCodeCompiler {
+  //从代码编译到类
+  Class compile(String sCode, String sName) throws Exception;
+  //从文件编译到类
+  Class compile(File file) throws Exception;
+}
+```
+
+Zuul 通过文件来存储各种 ZuulFilter 的定义和实现逻辑，然后启动一个守护线程（FilterFileManager）定时轮询这些文件，确保变更之后的文件能够动态加载到 FilterRegistry 中。
+
+3. RequestContext 与上下文
+
+我们可以通过 RequestContext 对象将业务信息放到请求上下文（Context）中，并使其在各个 ZuulFilter 中进行传递。
+
+HTTP 请求的所有参数总是绑定在处理请求的线程中，每个新的请求都是由一个独立的线程进行处理，诸如 Tomcat 之类的服务器会为我们启动了这个线程。
+
+因此，RequestContext 的访问必须设计成线程安全，Zuul 使用了非常常见和实用的 ThreadLocal，如下所示：
+
+```java
+protected static final ThreadLocal<? extends RequestContext> threadLocal = 
+  new ThreadLocal<RequestContext>() {
+        @Override
+        protected RequestContext initialValue() {
+            try {
+                return contextClass.newInstance();
+            } catch (Throwable e) {
+                throw new RuntimeException(e);
+            }
+        }
+};
+```
+
+用于获取 RequestContext 的 getCurrentContext 方法如下所示：
+
+```java
+public static RequestContext getCurrentContext() {
+  RequestContext context = threadLocal.get();
+  return context;
+}
+```
+
+4. HTTP 请求与过滤器执行
+
+接下去我们分析如何使用加载好的 ZuulFilter。Zuul 提供了 FilterProcessor 类来执行 Filter，FilterProcessor 基于 runFilters 方法衍生出 postRoute()、preRoute()、error() 和 route() 这四个方法，分别对应 Zuul 中的四种过滤器类型。
+
+其中 PRE 过滤器在请求到达目标服务器之前调用，ROUTING 过滤器把请求发送给目标服务，POST 过滤器在请求从目标服务返回之后执行，而 ERROR 过滤器则在发生错误时执行。同时，这四种过滤器有一定的执行顺序，如下所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210307232307.png" alt="image-20210307232307246" style="zoom:50%;" />
+
+在 Spring Cloud 中所有请求都是 HTTP 请求，Zuul 作为一个服务网关同样也需要完成对 HTTP 请求的响应。ZuulServlet 是 Zuul 中对 HttpServlet 接口的一个实现类。
+
+**Spring Cloud 集成 ZuulFilter**
+
+Spring Cloud 的 ZuulFilter 是如何实现加载的呢？
+
+在 ZuulFilterInitializer 中发现了如下所示的 contextInitialized 方法：
+
+```java
+@PostConstruct
+public void contextInitialized() {
+  log.info("Starting filter initializer");
+ 
+  TracerFactory.initialize(tracerFactory);
+  CounterFactory.initialize(counterFactory);
+ 
+  for (Map.Entry<String, ZuulFilter> entry : this.filters.entrySet()) {
+    filterRegistry.put(entry.getKey(), entry.getValue());
+  }
+}
+```
+
+至此，Spring Cloud 通过 Netflix Zuul 提供的 FilterLoader 和 FilterRegistry 等工具类完成了两者之间的集成。
+
+# 11 | 异步网关：基于 Spring Cloud Gateway 构建 API 网关
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
