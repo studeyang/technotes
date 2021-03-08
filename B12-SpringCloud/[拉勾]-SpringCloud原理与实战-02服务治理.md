@@ -432,7 +432,7 @@ public class SpringHealthLoadBalanceConfig {
 @RibbonClient(name = "userservice", configuration = SpringHealthLoadBalanceConfig.class)
 public class InterventionApplication{
  
-	@Bean
+    @Bean
     @LoadBalanced
     public RestTemplate restTemplate(){
         return new RestTemplate();
@@ -632,14 +632,11 @@ RibbonLoadBalancerClient 中，choose 方法最终调用了如下所示的 getSe
 
 ```java
 protected Server getServer(ILoadBalancer loadBalancer) {
-        if (loadBalancer == null) {
-            return null;
-        }
-        return loadBalancer.chooseServer("default"); 
+    if (loadBalancer == null) {
+        return null;
+    }
+    return loadBalancer.chooseServer("default"); 
 }
 ```
 
 这里的 loadBalancer 对象就是前面介绍的 Netflix Ribbon 中的 ILoadBalancer 接口的实现类。这样，我们就把 Spring Cloud Netflix Ribbon 与 Netflix Ribbon 的整体协作流程串联起来。
-
-
-
