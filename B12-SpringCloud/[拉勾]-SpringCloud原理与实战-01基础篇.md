@@ -151,7 +151,7 @@ Spring Cloud 中包含了开发一个完整的微服务系统所需的几乎所�
 
 Spring Cloud Gateway 构建在最新版本的 Spring 5 和响应式编程框架 Project Reactor 之上，提供了非阻塞的 I/O 通信机制。
 
-<img src="/Users/yanglulu/Library/Application Support/typora-user-images/image-20210301220252298.png" alt="image-20210301220252298" style="zoom:50%;" />
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210308171411.png" alt="image-20210301220252298" style="zoom:50%;" />
 
 3. Spring Cloud Circuit Breaker 与服务容错
 
