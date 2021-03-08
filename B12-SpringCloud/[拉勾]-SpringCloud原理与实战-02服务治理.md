@@ -58,7 +58,7 @@ ZooKeeper本质上是一个树形结构，可以在树上创建临时节点，�
 
 当服务消费者真正对某一个服务提供者发起远程调用时，这时候就需要集成负载均衡机制。这时候的负载均衡也是一种客户端行为，被称为客户端负载均衡：
 
-<img src="/Users/yanglulu/Library/Application Support/typora-user-images/image-20210302225006561.png" alt="image-20210302225006561" style="zoom:33%;" />
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210308151740.png" alt="image-20210302225006561" style="zoom:33%;" />
 
 **Spring Cloud中的服务治理解决方案**
 
