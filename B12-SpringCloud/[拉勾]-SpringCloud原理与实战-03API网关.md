@@ -306,19 +306,163 @@ public void contextInitialized() {
 
 # 11 | 异步网关：基于 Spring Cloud Gateway 构建 API 网关
 
+**Spring Cloud Gateway 简介**
 
+在性能上，Spring Cloud Gateway 基于最新的 Spring 5 和 Spring Boot 2，以及用于响应式编程的 Project Reactor 框架，提供的是响应式、非阻塞式 I/O 模型。
 
+而 Zuul 的实现原理是对 Servlet 的一层封装，通信模式上采用的是阻塞式 I/O。
 
+所以 Spring Cloud Gateway 性能更高。
 
+功能上，Spring Cloud Gateway 也比 Zuul 更为丰富。除了通用的服务路由机制之外，Spring Cloud Gateway 还支持请求限流等面向服务容错方面的功能，同样也能与 Hystrix 等框架进行良好的集成。
 
+但是，Spring Cloud Gateway 的源码非常复杂，出现问题不容易排查和解决。而 Zuul 的编程模型和底层原理都非常简单，开发调试上也容易把握。
 
+如何使用 Spring Cloud Gateway 呢？
 
+添加依赖：
 
+```xml
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+```
 
+Bootstrap 类上添加 @EnableDiscoveryClient 注解。
 
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class GatewayApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(GatewayApplication.class, args);
+    }
+}
+```
 
+**Spring Cloud Gateway 与服务路由**
 
+1. Spring Cloud Gateway 基本架构
 
+Spring Cloud Gateway 中的核心概念有两个，一个是过滤器（Filter），一个是谓词（Predicate）。Spring Cloud Gateway 的整体架构图如下图所示：
 
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210308233201.png" alt="image-20210308233200967" style="zoom: 67%;" />
 
+Spring Cloud Gateway 中的过滤器和 Zuul 中的过滤器是同一个概念。它们都可以用于在处理 HTTP 请求之前或之后修改请求本身，及对应响应结果。区别在于两者的类型和实现方式不同。
+
+而所谓谓词，本质上是一种判断条件，用于将 HTTP 请求与路由进行匹配。Spring Cloud Gateway 内置了大量的谓词组件，可以分别对 HTTP 请求的消息头、请求路径等常见的路由媒介进行自动匹配以便决定路由结果。
+
+2. 使用 Spring Cloud Gateway 实现路由
+
+一条完整路由配置的基本结构，如下所示。
+
+```yaml
+spring:
+  cloud:
+	  gateway:
+	    discovery:
+        locator:
+          enabled: true
+      routes:
+      #路由信息编号
+      - id: testroute
+        #集成负载均衡机制
+        uri: lb://testservice
+        #匹配以“/test”开头的请求
+        predicates:
+        - Path=/test/**
+        #为路径添加前缀
+        filters:
+        - PrefixPath=/prefix
+```
+
+spring.cloud.gateway.discovery.locator.enabled 表示设置 Spring Cloud Gateway 对 HTTP 请求的路由行为。
+
+SpringHealth 案例系统，Spring Cloud Gateway 网关服务中完整版的配置信息如下所示：
+
+```yaml
+server:
+  port: 5555
+
+eureka:
+  instance:
+    preferIpAddress: true
+  client:
+    registerWithEureka: true
+    fetchRegistry: true
+    serviceUrl:
+        defaultZone: http://localhost:8761/eureka/
+
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+      - id: userroute
+        uri: lb://userservice
+        predicates:
+        - Path=/user/**
+        filters:
+        - RewritePath=/user/(?<path>.*), /$\{path}
+      - id: deviceroute
+        uri: lb://deviceservice
+        predicates:
+        - Path=/device/**
+        filters:
+        - RewritePath=/device/(?<path>.*), /$\{path}
+      - id: interventionroute
+        uri: lb://interventionservice
+        predicates:
+        - Path=/intervention/**
+        filters:
+        - RewritePath=/intervention/(?<path>.*), /$\{path}
+```
+
+以上配置添加了一个对请求路径进行重写（Rewrite）的过滤器。分别在路径上添加了“/user”“/device”和“/intervention”前缀。这种重写过滤器的效果实际上和前面介绍的前缀过滤器有相同的效果。
+
+与 Zuul 一样，Spring Cloud Gateway 的扩展性也主要体现在过滤器组件中。
+
+**剖析 Spring Cloud Gateway 中的过滤器**
+
+针对过滤器，Spring Cloud Gateway 提供了一个全局过滤器（GlobalFilter）的概念。
+
+我们首先想到了可以使用全局过滤器来对所有 HTTP 请求进行拦截，具体做法是实现 GlobalFilter 接口，示例代码如下所示。
+
+```java
+@Configuration
+public class JWTAuthFilter implements GlobalFilter {
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        ServerHttpRequest.Builder builder = exchange.getRequest().mutate();
+        builder.header("Authorization","JWTToken");
+        
+        return chain.filter(exchange.mutate().request(builder.build()).build());
+    }
+}
+```
+
+在这个示例中，我们给所有经过 API 网关的 HTTP 请求添加了一个消息头，用来设置与 JWT Token 相关的安全认证信息。
+
+Spring Cloud Gateway 也提供了可用于 pre 和 post 两种阶段的过滤器。以下代码展示了一个 PostGatewayFilter 的实现方式。
+
+首先继承一个 AbstractGatewayFilterFactory 类，然后可以通过覆写 apply 方法来提供针对 ServerHttpResponse 对象的任何操作：
+
+```java
+public class PostGatewayFilterFactory extends AbstractGatewayFilterFactory {
+    @Override
+    public GatewayFilter apply(Config config) {
+        return (exchange, chain) -> {
+          return chain.filter(exchange).then(Mono.fromRunnable(() -> {
+              ServerHttpResponse response = exchange.getResponse();
+              //针对Response的各种处理
+            }));
+          };
+    }
+}
+```
+
+PreGatewayFilter 的实现方式也类似，只不过处理的目标一般是 ServerHttpRequest 对象。
 
