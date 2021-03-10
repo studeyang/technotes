@@ -1,4 +1,4 @@
-# 12 | 服务容错：服务容错的思想和模式？
+# 12 | 服务容错：服务容错的思想和模式
 
 今天的内容关注服务容错的设计理念和与其相关的架构模式。
 
@@ -59,9 +59,171 @@ Spring Cloud 中专门用于提供服务容错功能的 Spring Cloud Circuit Bre
 
 其中 Netflix Hystrix 显然来自 Netflix OSS；Resilience4j 是受 Hystrix 项目启发所诞生的一款新型的容错库；Sentinel 从定位上讲是一款包含了熔断降级功能的高可用流量防护组件；而最后的 Spring Retry 是 Spring 自研的重试和熔断框架。
 
+# 13 | 熔断之器：如何使用 Spring Cloud Circuit Breaker 实现服务容错？（上）
 
+Spring Cloud Circuit Breaker 是一个集成性的框架，内部整合了 Netflix Hystrix、Resilience4j、Sentinel 和 Spring Retry 这四款独立的熔断器组件。
 
+我们先来讨论 Netflix Hystrix。
 
+**引入 Hystrix**
 
+添加依赖：
 
+```xml
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+</dependency>
+```
+
+定义 Bootstrap 类：
+
+```java
+@SpringCloudApplication
+public class InterventionApplication {
+}
+```
+
+@SpringCloudApplication 是一个组合注解，整合了 @SpringBootApplication、@EnableDiscoveryClient 和 @EnableCircuitBreaker 这三个注解。
+
+**使用 Hystrix 实现服务隔离**
+
+我们可以提供一个 HystrixCommand 类的子类来实现服务隔离。我们基于最常用的线程池隔离来进行介绍。典型的 HystrixCommand 子类代码风格如下所示：
+
+```java
+public class GetUserCommand extends HystrixCommand<UserMapper> {
+
+    //远程调用 user-service 的客户端工具类
+    private UserServiceClient userServiceClient;
+ 
+    protected GetUserCommand(String name) {
+        super(
+            //设置命令组
+            Setter.withGroupKey(HystrixCommandGroupKey.Factory.asKey("springHealthGroup"))
+            //设置命令键
+            .andCommandKey(HystrixCommandKey.Factory.asKey("interventionKey"))
+            //设置线程池键
+            .andThreadPoolKey(HystrixThreadPoolKey.Factory.asKey(name))
+            //设置命令属性
+            .andCommandPropertiesDefaults(
+                    HystrixCommandProperties.Setter()
+                        .withExecutionTimeoutInMilliseconds(5000))
+            //设置线程池属性
+            .andThreadPoolPropertiesDefaults(
+                    HystrixThreadPoolProperties.Setter()
+                        .withMaxQueueSize(10)
+                        .withCoreSize(2))
+        );
+    }
+    @Override
+    protected UserMapper run() throws Exception {
+        return userServiceClient.getUserByUserName("springhealth_user1");
+    }
+ 
+    @Override
+    protected UserMapper getFallback() {
+        return new UserMapper(1L, "user1", "springhealth_user1");
+    }
+}
+```
+
+在日常开发过程中，一般不建议你通过创建一个 HystrixCommand 子类的方式来实现服务隔离，而是推荐你使用更为简单的 @HystrixCommand 注解。@HystrixCommand 是 Hystrix 为简化开发过程而专门提供的一个注解，定义如下：
+
+```java
+public @interface HystrixCommand {
+    String groupKey() default "";
+    String commandKey() default "";
+    String threadPoolKey() default "";
+    String fallbackMethod() default "";
+    HystrixProperty[] commandProperties() default {};
+    HystrixProperty[] threadPoolProperties() default {};
+    Class<? extends Throwable>[] ignoreExceptions() default {};
+    ObservableExecutionMode observableExecutionMode() default ObservableExecutionMode.EAGER;
+    HystrixException[] raiseHystrixExceptions() default {};
+    String defaultFallback() default "";
+}
+```
+
+我们回到案例，并使用 @HystrixCommand 注解进行重构，效果如下：
+
+```java
+@HystrixCommand(threadPoolKey = "springHealthGroup",
+    threadPoolProperties =
+     {
+         @HystrixProperty(name="coreSize",value="2"),
+         @HystrixProperty(name="maxQueueSize",value="10")
+     }
+)
+private UserMapper getUser(String userName) {
+    return userClient.getUserByUserName(userName);
+}
+```
+
+**使用 Hystrix 实现服务熔断**
+
+在 SpringHealth 案例中，我们知道 intervention-service 需要调用 user-service 和 device-service 来生成健康干预记录，该操作调用的代码如下所示：
+
+```java
+@Autowired
+private UserServiceClient userClient;
+ 
+@Autowired
+private DeviceServiceClient deviceClient;
+ 
+@HystrixCommand
+private UserMapper getUser(String userName) {
+    return userClient.getUserByUserName(userName);
+}
+ 
+@HystrixCommand
+private DeviceMapper getDevice(String deviceCode) {
+    return deviceClient.getDevice(deviceCode);
+}
+```
+
+Hystrix 还提供了一系列的配置项来细化对熔断器的控制。常见的配置项如下所示：
+
+```java
+@HystrixCommand(commandProperties = {
+            //超时时间
+            @HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "12000"),
+            //一个滑动窗口内最小的请求数
+            @HystrixProperty(name = "circuitBreaker.requestVolumeThreshold", value = "10"),
+            //错误比率阈值
+            @HystrixProperty(name = "circuitBreaker.errorThresholdPercentage", value = "75"),
+            //触发熔断的时间值
+            @HystrixProperty(name = "circuitBreaker.sleepWindowInMilliseconds", value = "7000"),
+            //一个滑动窗口的时间长度
+            @HystrixProperty(name = "metrics.rollingStats.timeInMilliseconds", value = "15000"),
+            //一个滑动窗口被划分的数量
+            @HystrixProperty(name = "metrics.rollingStats.numBuckets", value = "5") })
+```
+
+**使用 Hystrix 实现服务回退**
+
+Hystrix 在服务调用失败时都可以执行服务回退逻辑。在开发过程上，我们只需要提供一个 Fallback 方法实现并进行配置即可。
+
+如下所示的就是 Fallback 方法的一个示例：
+
+```java
+private UserMapper getUserFallback(String userName) {
+    UserMapper fallbackUser = new UserMapper(0L,"no_user","not_existed_user");
+    return fallbackUser;
+}
+```
+
+我们通过构建一个不存在的 User 信息来返回 Fallback 结果。有了这个 Fallback 方法，剩下来要做的就是在 @HystrixCommand 注解中设置“fallbackMethod”配置项。重构后的 getUser 方法如下所示：
+
+```java
+@HystrixCommand(threadPoolKey = "springHealthGroup",
+    threadPoolProperties =
+        {
+            @HystrixProperty(name="coreSize", value="2"),
+            @HystrixProperty(name="maxQueueSize", value="10")
+        },
+    fallbackMethod = "getUserFallback")
+private UserMapper getUser(String userName) {
+    return userClient.getUserByUserName(userName);
+}
+```
 
