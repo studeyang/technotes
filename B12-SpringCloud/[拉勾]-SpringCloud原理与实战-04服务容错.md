@@ -502,3 +502,113 @@ hystrix:
 
 上述配置信息的效果就是覆写 Hystrix 的默认超时时间为 5000 毫秒。请注意，以上配置项对经由 API 网关中的所有服务均生效。如果我们想要设置具体某一个服务（例如 userservice）的 Hystrix 超时时间，把“hystrix.command.default”段改为“hystrix.command.userservice”即可。
 
+# 15 | 熔断原理：Hystrix Circuit Breaker 的底层实现机制
+
+**Hystrix Circuit Breaker**
+
+使用 Hystrix 熔断器的最简单方法就是在 Spring Boot 应用程序中添加 @EnableCircuitBreaker 注解。让我们先来分析一下这个注解背后的实现原理。
+
+1. @EnableCircuitBreaker 注解
+
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Inherited
+@Import(EnableCircuitBreakerImportSelector.class)
+public @interface EnableCircuitBreaker { 
+}
+```
+
+ EnableCircuitBreakerImportSelector 类定义如下：
+
+```java
+public class EnableCircuitBreakerImportSelector extends SpringFactoryImportSelector<EnableCircuitBreaker> {
+    @Override
+    protected boolean isEnabled() {
+        return getEnvironment().getProperty(
+          "spring.cloud.circuit.breaker.enabled", Boolean.class, Boolean.TRUE);
+    }
+}
+```
+
+EnableCircuitBreakerImportSelector 类会加载 spring.factories 中标明为 EnableCircuitBreaker 的配置类，如下所示：
+
+```properties
+org.springframework.cloud.client.circuitbreaker.EnableCircuitBreaker=\
+	org.springframework.cloud.netflix.hystrix.HystrixCircuitBreakerConfiguration
+```
+
+HystrixCircuitBreakerConfiguration 配置类内部构造了一个切面：
+
+```java
+@Pointcut("@annotation(com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand)")
+public void hystrixCommandAnnotationPointcut() {
+}
+
+@Pointcut("@annotation(com.netflix.hystrix.contrib.javanica.annotation.HystrixCollapser)")
+public void hystrixCollapserAnnotationPointcut() {
+}
+
+@Around("hystrixCommandAnnotationPointcut() || hystrixCollapserAnnotationPointcut()")
+public Object methodsAnnotatedWithHystrixCommand(final ProceedingJoinPoint joinPoint) throws Throwable {
+}
+```
+
+2. HystrixCircuitBreaker 实现原理
+
+HystrixCircuitBreaker 接口定义如下所示：
+
+```java
+public interface HystrixCircuitBreaker {
+  //请求是否可被执行
+  public boolean allowRequest(); 
+  //返回当前熔断器是否打开
+  public boolean isOpen(); 
+  //关闭熔断器
+  void markSuccess();
+}
+```
+
+**Hystrix 滑动窗口机制**
+
+1. 滑动窗口和数据流处理
+
+通常，我们想要对一些数据做分析和统计时，会首先采集一定的样本，然后进行一定的分组。在采集策略上可以使用时间维度或数量维度。
+
+滑动窗口显然属于时间维度的采集方式，即采集过程基于一定的时间窗口，而这个时间窗口随着时间的演进而逐步向前滑动。
+
+在 Hystrix 中，采用滑动窗口来采集的系统运行时健康数据包括成功请求数量、失败请求数、超时请求数、被拒绝的请求数等。然后每次取最近 10 秒的数据来进行计算，如果这 10 秒中请求的失败率计算下来超过了 50%，就会触发熔断器的熔断机制。这里的 10 秒就是一个滑动窗口，参考其官网的一幅图：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315221231.png" alt="image-20210315221231343" style="zoom:50%;" />
+
+那么如何来实现这个滑动窗口呢？
+
+2. 响应式编程和 RxJava 基础
+
+在响应式编程中，我们把源源不断的事件看成是一个流（Stream）。RxJava 中用于健康信息采集的操作符包括 window、flatMap 和 reduce 等。
+
+- window 操作符。
+
+  window 操作符用于开窗操作，也就是把当前流中的元素采集并合并到另外的流中，该操作符示意图如下图所示：
+
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315221604.png" alt="image-20210315221604543" style="zoom:50%;" />
+
+- flatMap 操作符。
+
+  flatMap 操作符把输入流中的每个元素转换成另一个流，再把这些转换之后得到的流元素进行合并。flapMap 操作符示意图如下图所示：
+
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315221825.png" alt="image-20210315221825625" style="zoom:50%;" />
+
+- reduce 操作符。
+
+  reduce 操作符对流中包含的所有元素进行累积计算，该操作符示意图见下图所示：
+
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315221922.png" alt="image-20210315221922324" style="zoom:50%;" />
+
+3. HealthCountsStream
+
+HealthCountsStream 类的类层结构，如下图所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315222144.png" alt="image-20210315222144458" style="zoom: 50%;" />
+
