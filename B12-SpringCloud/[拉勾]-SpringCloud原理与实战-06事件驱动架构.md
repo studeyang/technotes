@@ -254,6 +254,170 @@ Spring Cloud Stream 通过 Sink 获取消息并交由 UserInfoChangedSink 实现
 
 ![image-20210316225547206](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316225547.png)
 
+# 23 | 消息消费：如何使用 Spring Cloud Stream 实现消息发布者和消费者？（下）
+
+今天我们将延续上一课时的内容，来具体讲解如何在服务中添加消息消费者，以及使用各项消息消费的高级主题。
+
+**在服务中添加消息消费者**
+
+1. 使用 @EnableBinding 注解
+
+引入 spring-cloud-stream、spring-cloud-starter-stream-kafka 依赖后，构建 Bootstrap 类：
+
+```java
+@SpringCloudApplication
+@EnableBinding(Sink.class)
+public class InterventionApplication{
+    public static void main(String[] args) {
+        SpringApplication.run(InterventionApplication.class, args);
+    }
+}
+```
+
+2. 创建 Sink
+
+UserInfoChangedSink 负责处理具体的消息消费逻辑，代码如下所示：
+
+```java
+public class UserInfoChangedSink {
+ 
+    @Autowired
+    private UserInfoRedisRepository userInfoRedisRepository;
+ 
+    private static final Logger logger = LoggerFactory.getLogger(UserInfoChangedSink.class);
+ 
+    @StreamListener("input")
+    public void handleChangedUserInfo(UserInfoChangedEventMapper userInfoChangedEventMapper) {
+     
+        logger.debug("Received a message of type " + userInfoChangedEventMapper.getType()); 
+        logger.debug("Received a {} event from the user-service for user name {}",
+                     userInfoChangedEventMapper.getOperation(), 
+                     userInfoChangedEventMapper.getUser().getUserName());
+        
+        if(userInfoChangedEventMapper.getOperation().equals("ADD")) {
+            userInfoRedisRepository.saveUser(userInfoChangedEventMapper.getUser());
+        } else if(userInfoChangedEventMapper.getOperation().equals("UPDATE")) {
+            userInfoRedisRepository.updateUser(userInfoChangedEventMapper.getUser());            
+        } else if(userInfoChangedEventMapper.getOperation().equals("DELETE")) {
+            userInfoRedisRepository.deleteUser(userInfoChangedEventMapper.getUser().getUserName());
+        } else {            
+            logger.error("Received an UNKNOWN event from the user-service of type {}",
+                         userInfoChangedEventMapper.getType());
+        }
+    }
+}
+```
+
+3. 配置 Binder
+
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings:
+        input:
+          destination:  userInfoChangedTopic
+          content-type: application/json
+      kafka:
+        binder:
+          zk-nodes: localhost
+	      brokers: localhost
+```
+
+**Spring Cloud Stream 高级主题**
+
+1. 自定义消息通道
+
+```java
+public interface UserInfoChangedChannel{ 
+    String USER_INFO = "userInfoChangedChannel";
+    
+    @Input(UserInfoChangedChannel.USER_INFO)
+    SubscribableChannel userInfoChangedChannel();
+}
+```
+
+一旦我们完成了自定义的消息通信，就可以在 @StreamListener 注解中设置这个通道。
+
+```java
+@EnableBinding(UserInfoChangedChannel.class)
+public class UserInfoChangedSink {
+    @StreamListener(UserInfoChangedChannel.USER_INFO)
+    public void handleChangedUserInfo(UserInfoChangedEventMapper userInfoChangedEventMapper) {
+	      …
+    }
+}
+```
+
+对于 Binder 的配置而言，我们要做的也只是调整通道的名称。
+
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings:
+        userInfoChangedChannel:
+          destination:  userInfoChangedTopic
+          content-type: application/json
+      kafka:
+        binder:
+          zk-nodes: localhost
+	      brokers: localhost
+```
+
+2. 使用消费者分组
+
+在集群环境下，我们希望服务的不同实例被放置在竞争的消费者关系中，同一服务集群中只有一个实例能够处理给定消息。Spring Cloud Stream 提供的消费者分组可以很方便地实现这一需求，效果图如下所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210317231101.png" alt="image-20210317231101428" style="zoom: 50%;" />
+
+要想实现上图所示的消息消费效果，在配置Binder时指定消费者分组信息即可，如下所示：
+
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings:
+        userInfoChangedChannel:
+          destination:  userInfoChangedTopic
+          content-type: application/json
+        group: interventionGroup
+      kafka:
+        binder:
+          zk-nodes: localhost
+	      brokers: localhost
+```
+
+3. 使用消息分区
+
+我们希望用户信息中 id 为单号的 UserInfoChangedEvent 始终由第一个 intervention-service 实例进行消费，而id为双号的 UserInfoChangedEvent 则始终由第二个 intervention-service 实例进行消费。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210317231440.png" alt="image-20210317231440858" style="zoom:50%;" />
+
+Binder 配置如下。
+
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings:
+        default:
+          content-type: application/json
+          binder: rabbitmq
+        output:
+            destination: userInfoChangedExchange
+          group: interventionGroup
+          producer:
+            partitionKeyExpression: payload.user.id % 2
+            partitionCount: 2
+```
+
+
+
+
+
+
+
 
 
 
