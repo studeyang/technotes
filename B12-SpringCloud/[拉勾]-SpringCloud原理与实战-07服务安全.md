@@ -201,9 +201,126 @@ public class SpringHealthWebSecurityConfigurer extends WebSecurityConfigurerAdap
 }
 ```
 
+# 27 | 服务授权：使用 OAuth2 协议对服务访问进行授权？
 
+**在微服务中集成 OAuth2 授权机制**
 
+定义受保护资源：
 
+```java
+@SpringCloudApplication
+@EnableResourceServer
+public class UserApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(UserApplication.class, args);
+    }
+}
+```
 
+一旦我们在 user-service 中添加了 @EnableResourceServer 注解之后，user-service 会对所有的 HTTP 请求进行验证以确定 Header 部分中是否包含 Token 信息，如果没有 Token 信息，则会直接限制访问。如果有 Token 信息，就会通过访问 OAuth2 服务器并进行 Token 的验证。
 
+那么 user-service 是如何与 OAuth2 服务器进行通信并获取所传入 Token 的验证结果呢？
+
+要想回答这个问题，我们要明确将 Token 传递给 OAuth2 授权服务器的目的就是获取该 Token 中包含的用户和授权信息。这样，势必需要在 user-service 和 OAuth2 授权服务器之间建立起一种交互关系，我们可以在 user-service 中添加如下所示的 security.oauth2.resource.userInfoUri 配置项来实现这一目标：
+
+```yaml
+security:
+  oauth2:
+    resource:
+	    userInfoUri: http://localhost:8080/userinfo
+```
+
+这里的http://localhost:8080/userinfo 指向 OAuth2服务中的一个端点，我们需要进行构建。相关代码如下所示：
+
+```java
+@RequestMapping(value = "/userinfo", produces = "application/json")
+public Map<String, Object> user(OAuth2Authentication user) {
+    Map<String, Object> userInfo = new HashMap<>();
+    userInfo.put("user", user.getUserAuthentication().getPrincipal());
+    userInfo.put("authorities", AuthorityUtils.authorityListToSet(
+      user.getUserAuthentication().getAuthorities()
+    ));
+    return userInfo;
+}
+```
+
+这个端点的作用就是为了获取可访问那些受保护服务的用户信息。这里用到了 OAuth2Authentication 类，该类保存着用户的身份（Principal）和权限（Authority）信息。
+
+**在微服务中嵌入访问授权控制**
+
+在 Spring Cloud Security 中对访问的不同控制层级进行了抽象，形成了用户、角色和请求方法这三种粒度。这三种层级所能访问的资源范围逐一递减。
+
+所谓的用户层级是指只要是认证用户就可能访问服务内的各种资源。而用户+角色层级在用户层级的基础上，还要求用户属于某一个或多个特定角色。最后的用户+角色+请求方法层级要求最高，能够对某些HTTP操作进行访问限制。接下来我们分别对这三种层级展开讨论。
+
+1. 用户层级的权限访问控制
+
+```java
+@Configuration
+public class SpringHealthResourceServerConfiguration extends ResourceServerConfigurerAdapter {
+    @Override
+    public void configure(HttpSecurity httpSecurity) throws Exception {
+        httpSecurity.authorizeRequests()
+             .anyRequest()
+             .authenticated();
+    }
+}
+```
+
+当我们使用普通的 HTTP 请求来访问 user-service 中的任何 URL 时，将会得到一个“unauthorized”的 401 错误信息。
+
+2. 用户+角色层级的权限访问控制
+
+```java
+@Configuration
+public class SpringHealthResourceServerConfiguration extends ResourceServerConfigurerAdapter {
+ 
+    @Override
+	  public void configure(HttpSecurity httpSecurity) throws Exception {
+        httpSecurity.authorizeRequests()
+                .antMatchers("/interventions/**")
+                .hasRole("ADMIN")
+                .anyRequest()
+                .authenticated();
+    }
+}
+```
+
+现在，如果我们使用角色为“User”的 Token 访问 invervention-service，就会得到一个“access_denied”的错误信息。
+
+3. 用户+角色+操作层级的权限访问控制
+
+```java
+@Configuration
+public class SpringHealthResourceServerConfiguration extends ResourceServerConfigurerAdapter {
+    @Override
+    public void configure(HttpSecurity httpSecurity) throws Exception{
+        httpSecurity.authorizeRequests()
+                .antMatchers(HttpMethod.PUT, "/devices/**")
+                .hasRole("ADMIN")
+                .anyRequest()
+                .authenticated();
+    }
+}
+```
+
+我们使用普通“USER”角色生成的 Token，并调用 device-service 中"/devices/"端点中的 Update 操作，同样会得到“access_denied”错误信息。
+
+**在微服务中传播 Token**
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210320231755.png" alt="image-20210320231755420" style="zoom:50%;" />
+
+持有 Token 的客户端访问 intervention-service 提供的 HTTP 端点进行下单操作，该服务会验证所传入 Token 的有效性。intervention-service 会再通过网关访问 user-service 和 device-service，这两个服务同样分别对所传入 Token 进行验证并返回相应的结果。
+
+如何实现上图中的 Token 传播效果？Spring Security 基于 RestTemplate 进行了封装，专门提供了一个用于在 HTTP 请求中传播 Token 的 OAuth2RestTemplate 工具类。想要在业务代码中构建一个 OAuth2RestTemplate 对象，可以使用如下所示的示例代码：
+
+```java
+@Bean
+public OAuth2RestTemplate oauth2RestTemplate(
+  OAuth2ClientContext oauth2ClientContext, 
+  OAuth2ProtectedResourceDetails details) {
+        return new OAuth2RestTemplate(details, oauth2ClientContext);
+}
+```
+
+OAuth2RestTemplate 会把从 HTTP 请求头中获取的 Token 保存到一个 OAuth2ClientContext 上下文对象中，而 OAuth2ClientContext 会把每个用户的请求信息控制在会话范围内，以确保不同用户的状态分离。另一方面，OAuth2RestTemplate 还依赖于 OAuth2ProtectedResourceDetails 类，该类封装了 clientId、客户端安全码 clientSecret、访问范围 scope 等属性。
 
