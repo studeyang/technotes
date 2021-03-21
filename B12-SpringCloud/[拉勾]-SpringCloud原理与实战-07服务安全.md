@@ -324,3 +324,273 @@ public OAuth2RestTemplate oauth2RestTemplate(
 
 OAuth2RestTemplate 会把从 HTTP 请求头中获取的 Token 保存到一个 OAuth2ClientContext 上下文对象中，而 OAuth2ClientContext 会把每个用户的请求信息控制在会话范围内，以确保不同用户的状态分离。另一方面，OAuth2RestTemplate 还依赖于 OAuth2ProtectedResourceDetails 类，该类封装了 clientId、客户端安全码 clientSecret、访问范围 scope 等属性。
 
+# 28 | 服务认证：如何使用 JWT 实现定制化 Token？
+
+在 OAuth2 协议中，并没有对 Token 具体的组成结构有明确的规定。为了解决 Token 的标准化问题，就诞生了今天我们要介绍的 JWT。
+
+**什么是 JWT？**
+
+JWT 的全称是 JSON Web Token，所以它本质上就是一种基于 JSON 表示的 Token。
+
+从结构上讲，JWT 本身是由三段信息构成的，第一段为头部（Header），第二段为有效负载（Payload），第三段为签名（Signature），如下所示：
+
+```
+header.payload.signature
+```
+
+在JWT中，每一段 JSON 对象都被 Base64 进行编码，然后编码后的内容用“.”号链接一起。所以本质上 JWT 就是一个字符串，如下所示的就是一个 JWT 字符串的示例：
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3NwcmluZ2hlYWx0aC5leGFtcGxlLmNvbSIsInN1YiI6Im1haWx0bzpzcHJpbmdoZWFsdGhAZXhhbXBsZS5jb20iLCJuYmYiOjE1OTkwNTY4NjIsImV4cCI6MTU5OTA2MDQ2MiwiaWF0IjoxNTk5MDU2ODYyLCJqdGkiOiJpZDEyMzQ1NiIsInR5cCI6Imh0dHBzOi8vc3ByaW5naGVhbHRoLmV4YW1wbGUuY29tL3JlZ2lzdGVyIn0.rlg2i8mWwV-gFjHUSCutX-UBMYrqxL0th1xtyGq7UdE
+```
+
+我们可以使用http://jwt.calebb.net/所提供的反向转换原始数据的功能。针对前面的 JWT 字符串，我们可以看到其中所包含的原始 JSON 数据，如下所示：
+
+```json
+{
+ alg: "HS256",
+ typ: "JWT"
+}.
+{
+ iss: "https://springhealth.example.com",
+ sub: "mailto:springhealth@example.com",
+ nbf: 1599056862,
+ exp: 1599060462,
+ iat: 1599056862,
+ jti: "id123456",
+ typ: "https://springhealth.example.com/register"
+}.
+[signature]
+```
+
+**如何集成 OAuth2 与 JWT？**
+
+首先需要在 Maven 的 pom 文件中添加对应的依赖包：
+
+```xml
+<dependency>
+  <groupId>org.springframework.security</groupId>
+  <artifactId>spring-security-jwt</artifactId>
+</dependency>
+```
+
+创建一个用于配置 JwtTokenStore 的配置类：
+
+```java
+@Configuration
+public class SpringHealthJWTTokenStoreConfig {
+ 
+    @Bean
+    public TokenStore tokenStore() {
+        return new JwtTokenStore(jwtAccessTokenConverter());
+    }
+ 
+    @Bean
+    public JwtAccessTokenConverter jwtAccessTokenConverter() {
+        JwtAccessTokenConverter converter = new JwtAccessTokenConverter();
+        converter.setSigningKey("123456");
+        return converter;
+	  }
+ 
+    @Bean
+    public DefaultTokenServices tokenServices() {
+        DefaultTokenServices defaultTokenServices = new DefaultTokenServices();
+        defaultTokenServices.setTokenStore(tokenStore());
+        defaultTokenServices.setSupportRefreshToken(true);
+        return defaultTokenServices;
+    }
+}
+```
+
+构建一个 SpringHealthAuthorizationServerConfigurer 类来覆写 AuthorizationServerConfigurerAdapter 中的 configure 方法。原先的这个 configure 方法实现如下：
+
+```java
+@Override
+public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
+    endpoints.authenticationManager(authenticationManager)
+      .userDetailsService(userDetailsService);
+}
+```
+
+而集成了 JWT 之后，该方法的实现过程如下所示：
+
+```java
+@Override
+public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
+    TokenEnhancerChain tokenEnhancerChain = new TokenEnhancerChain();
+    tokenEnhancerChain.setTokenEnhancers(Arrays.asList(jwtTokenEnhancer, jwtAccessTokenConverter));
+    endpoints.tokenStore(tokenStore).accessTokenConverter(jwtAccessTokenConverter)
+      .tokenEnhancer(tokenEnhancerChain) 
+      .authenticationManager(authenticationManager)
+      .userDetailsService(userDetailsService);
+}
+```
+
+这里构建了一个对 Token 的增强链 TokenEnhancerChain。
+
+**如何在微服务中使用 JWT？**
+
+在服务调用链中传播 JWT Token 有三个实现步骤。第一步，从 HTTP 请求中获取 JWT Token；第二步，以线程安全的方式存储 JWT Token 以便在后续的服务链中进行使用；第三步，将 JWT Token 嵌入 RestTemplate 请求中。
+
+实现第一第二步，我们可以通过过滤器 Filter 对所有请求进行过滤。
+
+```java
+@Component
+public class AuthorizationHeaderFilter implements Filter {
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, 
+                         ServletResponse servletResponse, 
+                         FilterChain filterChain) throws IOException, ServletException {
+        HttpServletRequest httpServletRequest = (HttpServletRequest) servletRequest;
+        AuthorizationHeaderHolder.getAuthorizationHeader()
+          .setAuthorizationHeader(
+            httpServletRequest.getHeader(AuthorizationHeader.AUTHORIZATION_HEADER));
+        filterChain.doFilter(httpServletRequest, servletResponse);
+    }
+ 
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {}
+ 
+    @Override
+    public void destroy() {}
+}
+```
+
+这里的 AuthorizationHeaderHolder 如下所示：
+
+```java
+public class AuthorizationHeaderHolder {
+    private static final ThreadLocal<AuthorizationHeader> 
+      authorizationHeaderContext = new ThreadLocal<AuthorizationHeader>();
+ 
+    public static final AuthorizationHeader getAuthorizationHeader() {
+        AuthorizationHeader header = authorizationHeaderContext.get();
+ 
+        if (header == null) {
+            header = new AuthorizationHeader();
+            authorizationHeaderContext.set(header);
+        }
+        return authorizationHeaderContext.get();
+    }
+ 
+    public static final void setAuthorizationHeader(AuthorizationHeader header) {
+        authorizationHeaderContext.set(header);
+    }
+}
+```
+
+这里使用了 ThreadLocal 来确保对 AuthorizationHeader 对象访问的线程安全性。
+
+AuthorizationHeader 定义如下，用于保存来自 HTTP 请求头的 JWT Token：
+
+```java
+@Component
+public class AuthorizationHeader {
+    public static final String AUTHORIZATION_HEADER = "Authorization";
+
+    private String authorizationHeader = new String();
+ 
+    public String getAuthorizationHeader() {
+        return authorizationHeader;
+    }
+ 
+    public void setAuthorizationHeader(String authorizationHeader) {
+        this.authorizationHeader = authorizationHeader;
+    }
+}
+```
+
+实现第三步，我们需要对 RestTemplate 进行一些设置，如下所示：
+
+```java
+@Bean
+public RestTemplate getCustomRestTemplate() {
+    RestTemplate template = new RestTemplate();
+    List<ClientHttpRequestInterceptor> interceptors = template.getInterceptors();
+    if (interceptors == null) {
+        template.setInterceptors(Collections.singletonList(new AuthorizationHeaderInterceptor()));
+    } else {
+        interceptors.add(new AuthorizationHeaderInterceptor());
+        template.setInterceptors(interceptors);
+    } 
+    return template;
+}
+```
+
+AuthorizationHeaderInterceptor 的作用就是在 HTTP 请求的消息头中嵌入保存在 AuthorizationHeaderHolder 中的 JWT Token，如下所示：
+
+```java
+public class AuthorizationHeaderInterceptor implements ClientHttpRequestInterceptor {
+ 
+    @Override
+    public ClientHttpResponse intercept(
+            HttpRequest request, byte[] body, ClientHttpRequestExecution execution)
+            throws IOException {
+ 
+        HttpHeaders headers = request.getHeaders();
+        headers.add(
+            AuthorizationHeader.AUTHORIZATION_HEADER, 
+            AuthorizationHeaderHolder.getAuthorizationHeader().getAuthorizationHeader()
+        );
+        return execution.execute(request, body);
+    }
+}
+```
+
+**如何扩展 JWT？**
+
+JWT具有良好的可扩展性，开发人员可以根据需要在 JWT Token 中添加自己想要添加的各种附加信息。
+
+针对 JWT 的扩展性场景，Spring Security 专门提供了一个 TokenEnhancer 接口来对 Token 进行增强（Enhance），该接口定义如下：
+
+```java
+public interface TokenEnhancer {
+    OAuth2AccessToken enhance(OAuth2AccessToken accessToken, OAuth2Authentication authentication);
+}
+```
+
+可以看到这里处理的是一个 OAuth2AccessToken 接口，而该接口有一个默认的实现类 DefaultOAuth2AccessToken。我们可以通过该实现类的 setAdditionalInformation 方法以键值对的方式将附加信息添加到 OAuth2AccessToken 中，示例代码如下所示：
+
+```java
+public class SpringHealthJWTTokenEnhancer implements TokenEnhancer {
+
+    @Override
+    public OAuth2AccessToken enhance(OAuth2AccessToken accessToken, OAuth2Authentication authentication) {
+        Map<String, Object> systemInfo= new HashMap<>();
+ 
+        systemInfo.put("system", "springhealth");
+ 
+        ((DefaultOAuth2AccessToken) accessToken).setAdditionalInformation(systemInfo);
+        return accessToken;
+    }
+}
+```
+
+这里我们以硬编码的方式添加了一个“system”属性。
+
+要想使得上述 SpringHealthJWTTokenEnhancer 类能够生效，我们需要对 SpringHealthAuthorizationServerConfigurer 类中的 configure 方法进行重新配置，并将 SpringHealthJWTTokenEnhancer 嵌入到 TokenEnhancerChain 中。事实上，我们在前面的代码中已经演示了这部分内容。
+
+现在，我们已经扩展了 JWT Token。那么，如何从这个 JWT Token 中获取所扩展的属性呢？方法也比较简单和固定，如下所示：
+
+```java
+//获取 JWTToken
+RequestContext ctx = RequestContext.getCurrentContext();
+String authorizationHeader = ctx.getRequest().getHeader(AUTHORIZATION_HEADER);
+String jwtToken = authorizationHeader.replace("Bearer ","");
+
+//解析 JWTToken
+String[] split_string = jwtToken.split("\\.");
+String base64EncodedBody = split_string[1];
+Base64 base64Url = new Base64(true);
+String body = new String(base64Url.decode(base64EncodedBody));
+JSONObject jsonObj = new JSONObject(body);
+
+//获取定制化属性值
+String systemName = jsonObj.getString("system");
+```
+
+我们可以把这段代码嵌入到需要使用到自定义“system”属性的任何场景中。
+
+
+
