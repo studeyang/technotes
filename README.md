@@ -103,7 +103,10 @@
 
 - [300分钟搞懂SpringCloud](B12-SpringCloud/[拉勾]-300分钟搞懂SpringCloud.md)
 - [SpringCloud原理与实战-01基础篇](B12-SpringCloud/[拉勾]-SpringCloud原理与实战-01基础篇.md)
-- [SpringCloud原理与实战-02服务治理](B12-SpringCloud/[拉勾]-SpringCloud原理与实战-02服务治理.md)
+- [SpringCloud原理与实战-02服务治理&API网关](B12-SpringCloud/[拉勾]-SpringCloud原理与实战-02服务治理&API网关.md)
+- [SpringCloud原理与实战-03服务容错&配置中心](B12-SpringCloud/[拉勾]-SpringCloud原理与实战-03服务容错&配置中心.md)
+- [SpringCloud原理与实战-04事件驱动架构&服务安全](B12-SpringCloud/[拉勾]-SpringCloud原理与实战-04事件驱动架构&服务安全.md)
+- [SpringCloud原理与实战-05链路跟踪&微服务测试](B12-SpringCloud/[拉勾]-SpringCloud原理与实战-05链路跟踪&微服务测试.md)
 
 **Elasticsearch**
 
