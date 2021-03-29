@@ -447,19 +447,182 @@ public class InterventionControllerTests {
 
 MockMvc 类中的一组 get/post/put/delete 方法用来初始化一个 HTTP 请求，然后可以使用 param 方法来为该请求添加参数。
 
+# 34 | 契约测试：基于 Spring Cloud Contracts 实现面向契约测试
 
+**使用 Spring Cloud Contract 的测试场景**
 
+在测试领域中另一个非常重要的概念，即 Stub，也就是打桩。
 
+基于 Stub 的测试场景，如下图所示：
 
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210329231504.png" alt="image-20210329231504391" style="zoom:50%;" />
 
+这里的 user-service 和 device-service 就需要提供对应的 Stub 供 intervention-service 进行使用。
 
+这个流程如下所示：
 
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210329231922.png" alt="image-20210329231922678" style="zoom:50%;" />
 
+服务提供者需要编写契约文件，然后基于 Spring Cloud Contract 内置的 Stub 处理机制，自动生成一个 Stub 文件。
 
+对于消费者而言，我们会编写并执行针对契约的测试用例。在执行过程中，Spring Cloud Contract 中的 Stub Runner 组件就会从 Maven 仓库中下载 Stub 文件并使用一个内嵌的 Tomcat 服务器来启动 Stub 服务，这样服务消费者就可以基于既定的测试用例来开展端到端测试。
 
+**如何使用 Spring Cloud Contracts 实现面向契约测试？**
 
+无论是服务的提供者还是消费者，都需要导入关于 Spring Cloud Contract 的 Maven 依赖，如下所示：
 
+```xml
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-contract-stub-runner</artifactId>
+    <scope>test</scope>
+</dependency>
 
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-contract-verifier</artifactId>
+    <scope>test</scope>
+</dependency>
+ 
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-contract-wiremock</artifactId>
+    <scope>test</scope>
+</dependency>
+```
 
+在接下来的内容中，我们即将围绕 SpringHealth 案例系统给出实现这些步骤的详细过程以及示例代码。
 
+1. 服务提供者制定服务契约
 
+对于 user-service 而言，我们首先要提供了一个 HTTP 端点，所以我们实现了如下所示的 UserController 类：
+
+```java
+@RestController
+@RequestMapping(value = "users")
+public class UserController {
+ 
+    @Autowired
+    private UserRepository repository;
+
+    @RequestMapping(path = "/userlist")
+    public UserList getUserList() {
+        UserList userList = new UserList();
+        userList.setData(repository.findAll());
+        return userList;
+    }
+}
+```
+
+然后可以使用 Spring Cloud Contract Verifier 组件来定义契约，UserContract.groovy 契约文件如下所示：
+
+```groovy
+import org.springframework.cloud.contract.spec.Contract
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
+ 
+Contract.make {
+    description "return all users"
+ 
+    request {
+        url "/users/userlist"
+        method GET()
+    }
+ 
+    response {
+        status 200
+        headers {
+            header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_UTF8_VALUE)
+        }
+        body("data": [
+            [id: 1L, userCode: "user1", userName: "springhealth_user1"], 
+            [id: 2L, userCode: "user2", userName: "springhealth_user2"],
+            [id: 3L, userCode: "user3", userName: "springhealth_user3"]
+        ])
+    }
+}
+```
+
+契约文件中包含三个部分，即 description、request 和 response。
+
+description 是对该契约提供的描述信息；request 则定义了请求时的 url 和 method；response 对返回的 headers 和 body 信息进行了约定。
+
+2. 服务提供者生成 Stub 文件
+
+在 user-service 中引入 spring-cloud-contract-maven-plugin 插件。
+
+```xml
+<build>
+  <plugins>
+    <plugin>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-maven-plugin</artifactId>
+    </plugin>
+    <plugin>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-contract-maven-plugin</artifactId>
+      <extensions>true</extensions>
+      <configuration>
+        <packageForbaseClasses>com.springhealth.user</packageForbaseClasses>
+      </configuration>
+    </plugin>
+  </plugins>
+</build>
+```
+
+现在我们通过 mvn install –DskipTests=true 命令打包 user-service。
+
+打包完成之后，在 target 目录下会生成两个 jar 包，一个是正常的 user-testing-service-0.0.1-SNAPSHOT.jar 文件，另一个就是 Stub 文件，名称为 user-testing-service-0.0.1-SNAPSHOT-stubs.jar。
+
+打开 Stub 文件会发现两个文件夹，一个是 contracts 文件夹，内部存放着 UserContract.groovy 契约文件；另一个是 mappings 文件夹，内部存放着 UserContract.json 文件，UserContract.json 文件是用 JSON 格式对 UserContract.groovy 契约文件的一种数据转换。
+
+生成 Stub 文件之后，我们还需要通过 install 命令将该 Stub 文件上传到 Maven 仓库，以便消费者通过 pom 中定义的 group-id 和 artifact-id 加载该 jar 包。至此，服务提供者的开发工作告一段落。
+
+3. 服务消费者编写测试用例
+
+现在回到服务消费者端编写测试用例 InterventionApplicationTests 类，如下所示：
+
+```java
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.cloud.contract.stubrunner.spring.AutoConfigureStubRunner;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.web.client.RestTemplate;
+ 
+@RunWith(SpringRunner.class)
+@SpringBootTest(classes = InterventionApplication.class, 
+                webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureStubRunner(ids = { "com.springhealth:user-testing-service:+:8080" }, workOffline = true)
+public class InterventionApplicationTests {
+ 
+    @Autowired
+    private RestTemplate restTemplate;
+ 
+    @Test
+    public void testGetUsers() {
+        ParameterizedTypeReference<UserList> ptf = new ParameterizedTypeReference<UserList>() {
+        };
+
+        ResponseEntity<UserList> responseEntity = 
+            restTemplate.exchange("http://localhost:8080/user/userlist", HttpMethod.GET, null, ptf);
+
+        Assert.assertEquals(3, responseEntity.getBody().getData().size());
+    }
+}
+```
+
+ids 参数用于定位存放在 Maven 仓库中的 Stub 包，然后在指定端口启动该 Stub 包中的服务。
+
+ids 的格式为 groupId:artifactId:version:classifier:port。这里"com.springhealth:user-testing-service:+:8080"表示去 Maven 仓库定位上一个步骤中上传的 user-testing-service-0.0.1-SNAPSHOT-stubs.jar 包并在 8080 端口中启动服务。
+
+4. 服务消费者执行测试用例
+
+在 testGetUsers() 方法中打一个断点，然后访问 http://localhost:8080/__admin/ 端点。
+
+服务提供者是基于消费者的契约来开发接口，而测试用例则是由 Spring Cloud Contract Verifier 根据契约所生成，因此就形成了对契约的一种约束，也就是消费者对服务提供者的约束。如果服务提供者不能满足测试用例则意味着契约已经发生了变化，这正是面向契约的端对端测试的本质所在。
