@@ -381,8 +381,8 @@ Kafka 的 Java 生产者 API 主要的对象就是 KafkaProducer。通常我们�
 ```java
 // 第 1 步：构造生产者对象所需的参数对象。
 Properties props = new Properties ();
-props.put(“参数 1”, “参数 1 的值”)；
-props.put(“参数 2”, “参数 2 的值”)；
+props.put"参数 1", "参数 1 的值");
+props.put("参数 2", "参数 2 的值");
 // ……
 // 第 2 步：利用第 1 步的参数对象，创建 KafkaProducer 对象实例。
 try (Producer<String, String> producer = new KafkaProducer<>(props)) {
@@ -427,7 +427,7 @@ Producer 会连接 bootstrap.servers 参数指定的所有 Broker。
 
 > bootstrap.servers 参数：指定了这个 Producer 启动时要连接的 Broker 地址。如果你为这个参数指定了 1000 个 Broker 连接信息，你的 Producer 启动时会首先创建与这 1000 个 Broker 的 TCP 连接。
 >
-> 因引在实际使用过程中，通常你指定 3～4 台就足以了。因为 Producer 一旦连接到集群中的任一台 Broker，就能拿到整个集群的 Broker 信息，故没必要为 bootstrap.servers 指定所有的 Broker。
+> 在实际使用过程中，通常你指定 3～4 台就足以了。因为 Producer 一旦连接到集群中的任一台 Broker，就能拿到整个集群的 Broker 信息，故没必要为 bootstrap.servers 指定所有的 Broker。
 
 日志输出中的最后一行表明 Producer 向某一台 Broker 发送了 METADATA 请求，尝试获取集群的元数据信息。
 
