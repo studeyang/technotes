@@ -228,11 +228,224 @@ void myMethod(@SpanTag("mykey") String param);
 
 作为一个完整的微服务套件，Spring Cloud 也提供了 Spring Cloud Contract 作为消费者驱动契约测试的开发框架。
 
+# 33 | 组件测试：使用 Mock 和注解实施组件级别测试
 
+**组件级别的测试方案**
 
+Spring Boot 内置了一个测试模块可以用于组件级别的测试场景，提供了一批非常有用的注解来简化测试过程。
 
+首先引入依赖：
 
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-test</artifactId>
+    <scope>test</scope>
+</dependency>
+```
 
+@SpringBootTest 注解主要用于测试基于自动配置的 ApplicationContext，它允许你来设置测试上下文中的 Servlet 环境。
+
+```java
+@SpringBootTest(classes = UserApplication.class, 
+                webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+```
+
+在多数场景下，一个真实的 Servlet 环境对于测试而言过于重量级，所以我们一般通过 WebEnvironment.MOCK 环境来模拟测试环境。
+
+对于 Repository 层而言，主要的交互媒介是数据库，所以 Spring Boot 专门提供了一个 @DataJpaTest 注解来模拟基于 JPA 规范的数据访问过程。同样，对于 Controller 层而言，Spring Boot 也提供了一个 @WebMvcTest 注解来模拟 Web 交互的测试场景。
+
+1. Repository 层：@DataJpaTest 注解
+
+我们首先从数据持久化的角度出发讨论如何对 Repository 层进行测试。
+
+引入依赖：
+
+```xml
+<dependency>
+    <groupId>com.h2database</groupId>
+    <artifactId>h2</artifactId>
+</dependency>
+<dependency>
+    <groupId>mysql</groupId>
+    <artifactId>mysql-connector-java</artifactId>
+    <scope>runtime</scope>
+</dependency>
+```
+
+SpringHealth 案例系统中的 intervention-service 中的 InterventionRepository 接口，如下所示：
+
+```java
+public interface InterventionRepository extends JpaRepository<Intervention, Long> {
+
+    List<Intervention> findInterventionsByUserId(@Param("userId") String userId);
+}
+```
+
+针对该 InterventionRepository 接口的测试用例如下所示：
+
+```java
+@RunWith(SpringRunner.class)
+@DataJpaTest
+public class InterventionRepositoryTest {
+
+    @Autowired
+    private TestEntityManager entityManager;
+ 
+    @Autowired
+    private InterventionRepository interventionRepository;
+ 
+    @Test
+    public void testFindInterventionByUserId() throws Exception {
+        this.entityManager.persist(new Intervention(1L, 1L, 100F, "Intervention1", new Date()));
+        this.entityManager.persist(new Intervention(1L, 2L, 200F, "Intervention2", new Date()));
+
+        Long userId = 1L;
+        List<Intervention> interventions = this.interventionRepository.findInterventionsByUserId(userId);
+        assertThat(interventions).size().isEqualTo(2);
+        Intervention actual = interventions.get(0);
+        assertThat(actual.getUserId()).isEqualTo(userId);
+    }
+}
+```
+
+这里使用了 @DataJpaTest 以完成 InterventionRepository 的注入。TestEntityManager 的效果相当于不使用真正的 InterventionRepository 来完成数据的持久化，从而提供了一种数据与环境之间的隔离机制。
+
+2. Service 层：Mock
+
+InterventionService 类的 generateIntervention 方法如下：
+
+```java
+public Intervention generateIntervention(String userName, String deviceCode) {
+
+    logger.debug("Generate intervention record with user: {} from device: {}", userName, deviceCode);
+
+    Intervention intervention = new Intervention();
+ 
+    //获取远程 User 信息
+    UserMapper user = getUser(userName);
+    if (user == null) {
+        return intervention;
+    }
+    logger.debug("Get remote user: {} is successful", userName);
+
+    //获取远程 Device 信息
+    DeviceMapper device = getDevice(deviceCode);
+    if (device == null) {
+        return intervention;
+    }
+    logger.debug("Get remote device: {} is successful", deviceCode);
+
+    //创建并保存 Intervention 信息
+    intervention.setUserId(user.getId());
+    intervention.setDeviceId(device.getId());
+    intervention.setHealthData(device.getHealthData());
+    intervention.setIntervention("InterventionForDemo");
+    intervention.setCreateTime(new Date());
+
+    interventionRepository.save(intervention);
+
+    return intervention;
+}
+```
+
+getUser 和 getDevice 方法分别使用 userClient 和 deviceClient 封装了远程 http 调用方法，测试方式如下：
+
+```java
+@RunWith(SpringRunner.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+public class InterventionServiceTests {
+ 
+    @MockBean
+    private UserServiceClient userClient;
+ 
+    @MockBean
+    private DeviceServiceClient deviceClient;
+ 
+    @MockBean
+    private InterventionRepository interventionRepository;
+ 
+    @Autowired
+    private InterventionService interventionService;
+
+    @Test
+    public void testGenerateIntervention() throws Exception {
+        String userName = "springhealth_user1";
+        String deviceCode = "device1";
+
+        given(this.userClient.getUserByUserName(userName))
+            .willReturn(new UserMapper(1L, "user1", userName));
+        given(this.deviceClient.getDevice(deviceCode))
+            .willReturn(new DeviceMapper(1L, "便携式血压计", "device1", "Sphygmomanometer", 100F));
+ 
+        Intervention actual = interventionService.generateIntervention(userName, deviceCode);
+ 
+        assertThat(actual.getHealthData()).isEqualTo(100L);
+    }
+}
+```
+
+这里基于 mockito 对 UserServiceClient 和 DeviceServiceClient 这两个远程访问类的返回结果做了模拟。
+
+3. Controller 层：@WebMvcTest 注解
+
+代码如下所示：
+
+```java
+@RestController
+@RequestMapping(value="interventions")
+public class InterventionController {
+
+    @Autowired
+    private InterventionService interventionService;
+
+    @RequestMapping(value = "/{userName}/{deviceCode}", method = RequestMethod.POST)
+    public Intervention generateIntervention( @PathVariable("userName") String userName,
+            @PathVariable("deviceCode") String deviceCode) {
+        Intervention intervention = interventionService.generateIntervention(userName, deviceCode);
+
+        return intervention;
+    }
+}
+```
+
+测试用例如下所示：
+
+```java
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ 
+@RunWith(SpringRunner.class)
+@WebMvcTest(InterventionController.class)
+public class InterventionControllerTests {
+ 
+    @Autowired
+    private MockMvc mvc;
+ 
+    @MockBean
+    private InterventionService interventionService;
+ 
+    @Test
+    public void testGenerateIntervention() throws Exception {
+        String userName = "springhealth_user1";
+        String deviceCode = "device1";
+        Intervention intervention = new Intervention(100L, 1L, 1L, 100F, "Intervention1", new Date());
+ 
+        given(this.interventionService.generateIntervention(userName, deviceCode))
+                .willReturn(intervention);
+ 
+        this.mvc.perform(
+                post("/interventions/" + userName+ "/" + deviceCode)
+                .accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk());
+    }
+}
+```
+
+MockMvc 类中的一组 get/post/put/delete 方法用来初始化一个 HTTP 请求，然后可以使用 param 方法来为该请求添加参数。
 
 
 
