@@ -125,29 +125,64 @@ customer-service 一般会与用户服务 account-service 进行交互，生成�
 
 <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210401224346.png" alt="image-20210401224346130" style="zoom:50%;" />
 
+# 03 | 多维配置：Spring Boot 中的配置体系
 
+在 Spring Boot 中，其核心设计理念是对配置信息的管理采用约定优于配置。
 
+**配置文件与 Profile**
 
+为了达到集中化管理的目的，Spring Boot 对配置文件的命名也做了一定的约定，分别使用 label 和 profile 概念来指定配置信息的版本以及运行环境，其中 label 表示配置版本控制信息，而 profile 则用来指定该配置文件所对应的环境。
 
+```
+/{application}.yml
+/{application}-{profile}.yml
+/{label}/{application}-{profile}.yml
+/{application}-{profile}.properties
+/{label}/{application}-{profile}.properties
+```
 
+**代码控制与Profile**
 
+先来看一个简单的示例。
 
+```java
+@Configuration
+public class DataSourceConfig {
+ 
+    @Bean
+    @Profile("dev")
+    public DataSource devDataSource() {
+        //创建 dev 环境下的 DataSource 
+    }
+ 
+    @Bean()
+    @Profile("prod")
+    public DataSource prodDataSource(){
+        //创建 prod 环境下的 DataSource 
+    }
+}
+```
 
+这里使用 @Profile 注解来指定具体所需要执行的 DataSource 创建代码，通过这种方式，可以达到与使用配置文件相同的效果。
 
+在日常开发过程中，一个常见的需求是根据不同的运行环境初始化数据。基于 @Profile 注解，我们就可以将这一过程包含在代码中并做到自动化，如下所示：
 
+```java
+@Profile("dev")
+@Configuration
+public class DevDataInitConfig {
+ 
+  @Bean
+  public CommandLineRunner dataInit() { 
+    return new CommandLineRunner() {
+      @Override
+      public void run(String... args) throws Exception {
+        //执行 Dev 环境的数据初始化
+    };  
+}
+```
 
-
-
-
-
-
-
-
-
-
-
-
-
+这里用到了 Spring Boot 所提供了启动时任务接口 CommandLineRunner，实现了该接口的代码会在 Spring Boot 应用程序启动时自动进行执行。
 
 
 
