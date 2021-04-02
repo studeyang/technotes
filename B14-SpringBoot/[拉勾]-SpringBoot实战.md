@@ -29,9 +29,9 @@ Web 应用程序总体可以拆分为下图的维度。
 - 第 7 部分（20~22），使用 Spring Boot 构建系统监控层
 - 第 8 部分（23~24），测试 Spring Boot 应用程序
 
-# 第1部分
+# 开启学习之旅
 
-# 01 | 家族生态：Spring 家族的技术体系
+# 01 | Spring 家族的技术体系
 
 **Spring 家族技术生态全景图**
 
@@ -59,7 +59,7 @@ Spring 从诞生之初就被认为是一种容器，上图中的“核心容器�
 
 从开发语言上讲，虽然 Spring 应用最广泛的是在 Java EE 领域，但在当前的版本中，也支持 Kotlin、Groovy 以及各种动态开发语言。
 
-# 02 | 案例驱动：一个 Spring Web 应用程序
+# 02 | 一个 Spring Web 应用程序
 
 **一个 Spring Web 应用程序**
 
@@ -125,7 +125,9 @@ customer-service 一般会与用户服务 account-service 进行交互，生成�
 
 <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210401224346.png" alt="image-20210401224346130" style="zoom:50%;" />
 
-# 03 | 多维配置：Spring Boot 中的配置体系
+# 构建多维度配置层
+
+# 03 | Spring Boot 中的配置体系
 
 在 Spring Boot 中，其核心设计理念是对配置信息的管理采用约定优于配置。
 
@@ -183,6 +185,202 @@ public class DevDataInitConfig {
 ```
 
 这里用到了 Spring Boot 所提供了启动时任务接口 CommandLineRunner，实现了该接口的代码会在 Spring Boot 应用程序启动时自动进行执行。
+
+# 04 | 如何创建和管理自定义的配置信息？
+
+**如何在配置文件中嵌入系统配置信息？**
+
+通过 ${} 占位符可以引用配置文件中的其他配置项内容，如下列配置：
+
+```properties
+system.name=springcss
+system.domain=health
+system.description=The system ${name} is used for ${domain}.
+```
+
+最终“system.description”配置项的值就是“The system springcss is used for health”。
+
+再来看一种场景，假设我们使用 Maven 来构建应用程序，那么可以按如下所示的配置项来动态获取与系统构建过程相关的信息：
+
+```yaml
+info: 
+  app:
+    encoding: @project.build.sourceEncoding@
+    java:
+      source: @java.version@
+      target: @java.version@
+```
+
+上述配置项的效果与如下所示的静态配置是一样的：
+
+```yaml
+info:
+  app:
+    encoding: UTF-8
+    java:
+        source: 1.8.0_31
+        target: 1.8.0_31
+```
+
+**如何创建和使用自定义配置信息？**
+
+例如，对于现在的配置：
+
+```properties
+springcss.order.point=10
+```
+
+想要获取这个配置项的内容，通常有两种方法。
+
+1. 使用 @Value 注解
+
+我们可以构建一个 SpringCssConfig 类，如下所示：
+
+```java
+@Component
+public class SpringCssConfig {
+ 
+    @Value("${springcss.order.point}")
+    private int point;
+}
+```
+
+2. 使用 @ConfigurationProperties 注解
+
+在使用该注解时，我们通常会设置一个“prefix”属性用来指定配置项的前缀，如下所示：
+
+```java
+@Component
+@ConfigurationProperties(prefix = "springcss.order")
+public class SpringCsshConfig {
+ 
+    private int point;
+
+    //省略 getter/setter
+}
+```
+
+考虑一种更常见也更复杂的场景：假设用户根据下单操作获取的积分并不是固定的，而是根据每个不同类型的订单有不同的积分，那么现在的配置项的内容，如果使用 Yaml 格式的话就应该是这样：
+
+```yaml
+springcss:
+  points:
+    orderType[1]: 10
+    orderType[2]: 20
+    orderType[3]: 30
+```
+
+把这些配置项全部加载到业务代码中：
+
+```java
+@Component
+@ConfigurationProperties(prefix="springcss.points")
+public class SpringCssConfig {
+ 
+    private Map<String, Integer> orderType = new HashMap<>();
+
+    //省略 getter/setter
+}
+```
+
+> 这里的 Map Key 会是什么样的数据？
+
+当我们输入某一个配置项的前缀时，诸如 IDEA、Eclipse 这样的 IDE 就会自动弹出该前缀下的所有配置信息供你进行选择，效果如下：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210402222532.png" alt="image-20210402222532470" style="zoom:50%;" />
+
+如何实现这种效果呢？
+
+我们需要生成配置元数据。通过 IDE 的“Create metadata for 'springcss.order.point'”按钮，就可以选择创建配置元数据文件。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210402222817.png" alt="image-20210402222817447" style="zoom:50%;" />
+
+这个文件的名称为 additional-spring-configuration-metadata.json，文件内容如下所示：
+
+```json
+{
+  "properties": [
+    {
+      "name": "springcss.order.point",
+      "type": "java.lang.String",
+      "description": "A description for 'springcss.order.point'"
+      "defaultValue": 10
+    }
+  ]
+}
+```
+
+效果如下所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210402223055.png" alt="image-20210402223055622" style="zoom:50%;" />
+
+**如何组织和整合配置信息？**
+
+1. 使用 @PropertySources 注解
+
+在使用 @ConfigurationProperties 注解时，我们可以和 @PropertySource 注解一起进行使用，从而指定从哪个具体的配置文件中获取配置信息。
+
+```java
+@Component
+@ConfigurationProperties(prefix = "springcss.order")
+@PropertySources({
+        @PropertySource("classpath:application.properties "),
+        @PropertySource("classpath:redis.properties"),
+        @PropertySource("classpath:mq.properties")
+})
+public class SpringCssConfig {
+}
+```
+
+我们也可以通过配置 spring.config.location 来改变配置文件的默认加载位置，从而实现对多个配置文件的同时加载。
+
+```
+java -jar customerservice-0.0.1-SNAPSHOT.jar --spring.config.location=file:///D:/application.properties, classpath:/config/
+```
+
+通过 spring.config.location 指定多个配置文件路径也是组织和整合配置信息的一种有效的实现方式。
+
+通过前面的示例，我们看到可以把配置文件保存在多个路径，而这些路径在加载配置文件时具有一定的顺序。Spring Boot 在启动时会扫描以下位置的 application.properties 或者 application.yml 文件作为全局配置文件：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210402223922.png" alt="image-20210402223922742" style="zoom:50%;" />
+
+**如何覆写内置的配置类？**
+
+Spring Boot 内置了大量的自动配置，如果我们不想使用这些配置，就需要对它们进行覆写。
+
+在 Spring Security 体系中，设置用户认证信息所依赖的配置类是 WebSecurityConfigurer 类。这是一个设置 Web 安全的配置类。Spring Security 提供了 WebSecurityConfigurerAdapter 这个适配器类来简化该配置类的使用方式，我们可以继承 WebSecurityConfigurerAdapter 类并且覆写其中的 configure() 的方法来完成自定义的用户认证配置工作。
+
+```java
+@Configuration
+public class SpringHCssWebSecurityConfigurer extends WebSecurityConfigurerAdapter {
+ 
+    @Override
+    @Bean
+    public AuthenticationManager authenticationManagerBean() throws Exception {
+        return super.authenticationManagerBean();
+    }
+ 
+    @Override
+    @Bean
+    public UserDetailsService userDetailsServiceBean() throws Exception {
+        return super.userDetailsServiceBean();
+    }
+ 
+    @Override
+    protected void configure(AuthenticationManagerBuilder builder) throws Exception {
+        builder.inMemoryAuthentication()
+          .withUser("springcss_user")
+          .password("{noop}password1")
+          .roles("USER")
+          .and()
+          .withUser("springcss_admin")
+          .password("{noop}password2")
+          .roles("USER", "ADMIN");
+    }
+}
+```
+
+开发人员可以通过构建诸如上述所示的 SpringCssWebSecurityConfigurer 类来对这些内置配置类进行覆写，从而实现自定义的配置信息。
 
 
 
