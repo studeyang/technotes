@@ -382,6 +382,154 @@ public class SpringHCssWebSecurityConfigurer extends WebSecurityConfigurerAdapte
 
 开发人员可以通过构建诸如上述所示的 SpringCssWebSecurityConfigurer 类来对这些内置配置类进行覆写，从而实现自定义的配置信息。
 
+# 05 | Spring Boot 自动配置的实现原理
+
+我们先从 @SpringBootApplication 注解开始。
+
+**@SpringBootApplication 注解**
+
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Inherited
+@SpringBootConfiguration
+@EnableAutoConfiguration
+@ComponentScan(excludeFilters = {
+        @Filter(type = FilterType.CUSTOM, classes = TypeExcludeFilter.class),
+        @Filter(type = FilterType.CUSTOM, classes = AutoConfigurationExcludeFilter.class) })
+public @interface SpringBootApplication {
+    @AliasFor(annotation = EnableAutoConfiguration.class)
+    Class<?>[] exclude() default {};
+ 
+    @AliasFor(annotation = EnableAutoConfiguration.class)
+    String[] excludeName() default {};
+ 
+    @AliasFor(annotation = ComponentScan.class, attribute = "basePackages")
+    String[] scanBasePackages() default {};
+ 
+    @AliasFor(annotation = ComponentScan.class, attribute = "basePackageClasses")
+    Class<?>[] scanBasePackageClasses() default {};
+}
+```
+
+我们可以通过 exclude 和 excludeName 属性来配置不需要实现自动装配的类或类名，也可以通过 scanBasePackages 和 scanBasePackageClasses 属性来配置需要进行扫描的包路径和类路径。
+
+@SpringBootApplication 注解实际上是一个组合注解，它由三个注解组合而成，分别是 @SpringBootConfiguration、@EnableAutoConfiguration 和 @ComponentScan。
+
+1. @ComponentScan 注解
+
+扫描基于 @Component 等注解所标注的类所在包下的所有需要注入的类，并把相关 Bean 定义批量加载到容器中。
+
+2. @SpringBootConfiguration 注解
+
+它是一个空注解，只是使用了 Spring 中的 @Configuration 注解。
+
+3. @EnableAutoConfiguration 注解
+
+该注解的定义如下代码所示：
+
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Inherited
+@AutoConfigurationPackage
+@Import(AutoConfigurationImportSelector.class)
+public @interface EnableAutoConfiguration {
+ 
+    String ENABLED_OVERRIDE_PROPERTY = "spring.boot.enableautoconfiguration";
+ 
+    Class<?>[] exclude() default {};
+ 
+    String[] excludeName() default {};
+}
+```
+
+这里我们关注两个新注解，@AutoConfigurationPackage 和 @Import(AutoConfigurationImportSelector.class)。
+
+@AutoConfigurationPackage 对该注解所在包下的类进行自动配置。AutoConfigurationImportSelector 类会执行 selectImports 方法，核心是获取 configurations 集合并进行过滤。
+
+AutoConfigurationImportSelector 类是一种选择器，负责从各种配置项中找到需要导入的具体配置类。该类的结构如下图所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210406225204.png" alt="image-20210406225204010" style="zoom: 33%;" />
+
+**SPI 机制**
+
+JDK 提供了用于服务查找的一个工具类 java.util.ServiceLoader 来实现 SPI 机制。可以在 jar 包的 META-INF/services/ 目录下创建一个以服务接口命名的文件。JDK 中 SPI 机制开发流程如下图所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210406225433.png" alt="image-20210406225433071" style="zoom:50%;" />
+
+**SpringFactoriesLoader**
+
+SpringFactoriesLoader 类似这种 SPI 机制，只不过以服务接口命名的文件是放在 META-INF/spring.factories 文件夹下。
+
+spring.factories 配置文件片段如下：
+
+```factories
+# Auto Configure
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+org.springframework.boot.autoconfigure.admin.SpringApplicationAdminJmxAutoConfiguration,\
+org.springframework.boot.autoconfigure.aop.AopAutoConfiguration,\
+org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration,\
+org.springframework.boot.autoconfigure.MessageSourceAutoConfiguration,\
+org.springframework.boot.autoconfigure.PropertyPlaceholderAutoConfiguration,\
+org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration,\
+org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration,\
+org.springframework.boot.autoconfigure.cassandra.CassandraAutoConfiguration,\
+org.springframework.boot.autoconfigure.cloud.CloudAutoConfiguration,\
+org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAutoConfiguration,\
+…
+```
+
+以上就是 Spring Boot 中基于 @SpringBootApplication 注解实现自动配置的基本过程和原理。
+
+**@ConditionalOn 系列条件注解**
+
+Spring Boot 中提供了一系列的条件注解，常见的包括：
+
+- @ConditionalOnProperty：只有当所提供的属性属于 true 时才会实例化 Bean
+- @ConditionalOnBean：只有在当前上下文中存在某个对象时才会实例化 Bean
+- @ConditionalOnClass：只有当某个 Class 位于类路径上时才会实例化 Bean
+- @ConditionalOnExpression：只有当表达式为 true 的时候才会实例化 Bean
+- @ConditionalOnMissingBean：只有在当前上下文中不存在某个对象时才会实例化 Bean
+- @ConditionalOnMissingClass：只有当某个 Class 在类路径上不存在的时候才会实例化 Bean
+- @ConditionalOnNotWebApplication：只有当不是 Web 应用时才会实例化 Bean
+
+这些注解的实现原理大致相同，我们挑选 @ConditionalOnClass 注解进行展开，该注解定义如下：
+
+```java
+@Target({ ElementType.TYPE, ElementType.METHOD })
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Conditional(OnClassCondition.class)
+public @interface ConditionalOnClass {
+  Class<?>[] value() default {};
+  String[] name() default {};
+}
+```
+
+OnClassCondition 是 SpringBootCondition 的子类，SpringBootCondition 中的 matches 方法实现如下：：
+
+```java
+@Override
+public final boolean matches(ConditionContext context,
+            AnnotatedTypeMetadata metadata) {
+    String classOrMethodName = getClassOrMethodName(metadata);
+    try {
+        ConditionOutcome outcome = getMatchOutcome(context, metadata);
+        logOutcome(classOrMethodName, outcome);
+        recordEvaluation(context, classOrMethodName, outcome);
+        return outcome.isMatch();
+    }
+    //省略其他方法
+}
+```
+
+
+
+
+
 
 
 
