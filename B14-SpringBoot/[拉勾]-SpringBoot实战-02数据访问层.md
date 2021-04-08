@@ -131,29 +131,144 @@ connection.close();
 
 # 07 | 使用 JdbcTemplate 访问关系型数据库
 
+**订单数据模型**
 
+Order 类的定义如下代码所示：
 
+```java
+public class Order{
 
+    private Long id; //订单Id
+    private String orderNumber; //订单编号
+    private String deliveryAddress; //物流地址
+    private List<Goods> goodsList;  //商品列表
+    //省略了 getter/setter
+}
+```
 
+Order 对应的数据库 Schema 定义如下代码所示：
 
+```sql
+DROP TABLE IF EXISTS `order`;
+ 
+create table `order` (
+    `id` bigint(20) NOT NULL AUTO_INCREMENT,
+    `order_number` varchar(50) not null,
+    `delivery_address` varchar(100) not null,
+  `create_time` timestamp not null DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`)
+);
+```
 
+**使用 JdbcTemplate 实现查询**
 
+首先我们需要引入对它的依赖：
 
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-jdbc</artifactId>
+</dependency>
+```
 
+首先设计一个 OrderRepository 接口，用来抽象数据库访问的入口，如下代码所示：
 
+```java
+public interface OrderRepository {
+    Order getOrderById(Long orderId);
+}
+```
 
+构建一个 OrderJdbcRepository 类并实现 OrderRepository 接口，如下代码所示：
 
+```java
+@Repository("orderJdbcRepository")
+public class OrderJdbcRepository implements OrderRepository {
+ 
+    private JdbcTemplate jdbcTemplate;
+ 
+    @Autowired
+    public OrderJdbcRepository(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+  
+    @Override
+    public Order getOrderById(Long orderId) {
+        Order order = jdbcTemplate.queryForObject(
+          "select id, order_number, delivery_address from `order` where id=?", 
+          this::mapRowToOrder, 
+          orderId
+        );
+        return order;
+    }
+  
+    private Order mapRowToOrder(ResultSet rs, int rowNum) throws SQLException {
+        return new Order(
+            rs.getLong("id"),
+            rs.getString("order_number"),
+            rs.getString("delivery_address")
+        );
+    }
+}
+```
 
+**使用 JdbcTemplate 实现插入**
 
+```java
+public Long saveOrderWithJdbcTemplate(Order order) {
+ 
+    PreparedStatementCreator psc = new PreparedStatementCreator() {
+        @Override
+        public PreparedStatement createPreparedStatement(Connection con) throws SQLException {
+            PreparedStatement ps = con.prepareStatement(
+                "insert into `order` (order_number, delivery_address) values (?, ?)",
+                Statement.RETURN_GENERATED_KEYS
+            );
+            ps.setString(1, order.getOrderNumber());
+            ps.setString(2, order.getDeliveryAddress());
+            return ps;
+        }
+    };
+ 
+    KeyHolder keyHolder = new GeneratedKeyHolder();
+    jdbcTemplate.update(psc, keyHolder);
+  
+    return keyHolder.getKey().longValue();
+}
+```
 
+在 PreparedStatement 的创建过程中设置了 Statement.RETURN_GENERATED_KEYS 用于返回自增主键。然后构建了一个 GeneratedKeyHolder 对象用于保存所返回的自增主键。
 
+**使用 SimpleJdbcInsert 简化数据插入过程**
 
+Spring Boot 针对数据插入场景专门提供了一个 SimpleJdbcInsert 工具类，SimpleJdbcInsert 本质上是在 JdbcTemplate 的基础上添加了一层封装。
 
+对 SimpleJdbcInsert 初始化，代码如下：
 
+```java
+private SimpleJdbcInsert orderInserter;
+ 
+public OrderJdbcRepository(JdbcTemplate jdbcTemplate) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.orderInserter = new SimpleJdbcInsert(jdbcTemplate)
+      .withTableName("`order`")
+      .usingGeneratedKeyColumns("id");
+    this.orderGoodsInserter = new SimpleJdbcInsert(jdbcTemplate).withTableName("order_goods");
+}
+```
 
+实现 Order 对象的插入，代码如下：
 
+```javaß
+private Long saveOrderWithSimpleJdbcInsert(Order order) {
+    Map<String, Object> values = new HashMap<String, Object>();
+    values.put("order_number", order.getOrderNumber());
+    values.put("delivery_address", order.getDeliveryAddress());
 
+    Long orderId = orderInserter.executeAndReturnKey(values).longValue();
+    return orderId;
+}
+```
 
-
-
+# 08 | 数据访问：如何剖析 JdbcTemplate 数据访问实现原理？
 
