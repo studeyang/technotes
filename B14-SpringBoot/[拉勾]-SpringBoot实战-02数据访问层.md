@@ -270,5 +270,79 @@ private Long saveOrderWithSimpleJdbcInsert(Order order) {
 }
 ```
 
-# 08 | 数据访问：如何剖析 JdbcTemplate 数据访问实现原理？
+# 08 | JdbcTemplate 数据访问实现原理
+
+JdbcTemplate 是基于模板方法模式和回调机制，解决了原生 JDBC 中的复杂性问题。
+
+**JdbcTemplate 源码解析**
+
+JdbcTemplate 的 execute(StatementCallback action) 方法，如下所示：
+
+```java
+public <T> T execute(StatementCallback<T> action) throws DataAccessException {
+    Assert.notNull(action, "Callback object must not be null");
+
+    Connection con = DataSourceUtils.getConnection(obtainDataSource());
+    Statement stmt = null;
+    try {
+        stmt = con.createStatement();
+        applyStatementSettings(stmt);
+        T result = action.doInStatement(stmt);
+        handleWarnings(stmt);
+        return result;
+    } catch (SQLException ex) {
+        String sql = getSql(action);
+        JdbcUtils.closeStatement(stmt);
+        stmt = null;
+        DataSourceUtils.releaseConnection(con, getDataSource());
+        con = null;
+        throw translateException("StatementCallback", sql, ex);
+    } finally {
+        JdbcUtils.closeStatement(stmt);
+        DataSourceUtils.releaseConnection(con, getDataSource());
+    }
+}
+```
+
+> catch 与 finally 重复代码有必要吗？
+
+StatementCallback 回调接口定义代码如下：
+
+```java
+public interface StatementCallback<T> {
+ 
+    T doInStatement(Statement stmt) throws SQLException, DataAccessException;
+}
+```
+
+在 JdbcTemplate 中，还存在另一个 execute(final String sql) 方法，该方法中恰恰使用了 execute(StatementCallback action) 方法，代码如下：
+
+```java
+class ExecuteStatementCallback implements StatementCallback<Object>, SqlProvider {
+    @Override
+    @Nullable
+    public Object doInStatement(Statement stmt) throws SQLException {
+        stmt.execute(sql);
+        return null;
+    }
+    @Override
+    public String getSql() {
+        return sql;
+    }
+}
+
+public void execute(final String sql) throws DataAccessException {
+    if (logger.isDebugEnabled()) {
+        logger.debug("Executing SQL statement [" + sql + "]");
+    }
+
+    execute(new ExecuteStatementCallback());
+}
+```
+
+JdbcTemplate 基于 JDBC 的原生 API，把模板方法和回调机制结合在了一起，为我们提供了简洁且高扩展的实现方案，值得我们分析和应用。
+
+
+
+
 
