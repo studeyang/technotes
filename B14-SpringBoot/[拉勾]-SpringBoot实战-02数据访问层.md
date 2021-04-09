@@ -448,25 +448,173 @@ USE_DECLARED_QUERY 指的是声明方式，即使用 @Query 注解。
 
 CREATE_IF_NOT_FOUND 会先查找 @Query 注解，如果查到没有，会再去找与方法名相匹配的查询。
 
+- QueryByExample 机制
+
+如果查询条件中使用的字段非常多，怎么办呢？
+
+QueryByExample 可以翻译为按示例查询，是一种用户友好的查询技术。它允许我们动态创建查询，且不需要编写包含字段名称的查询方法。
+
+QueryByExample 包括 Probe、ExampleMatcher 和 Example 这三个基本组件。
+
+首先，我们需要在 OrderJpaRepository 接口的定义中继承 QueryByExampleExecutor 接口，如下代码所示：
+
+```java
+@Repository("orderJpaRepository")
+public interface OrderJpaRepository extends JpaRepository<JpaOrder, Long>, QueryByExampleExecutor<JpaOrder> {
+}
+```
+
+然后，我们在 JpaOrderService 中实现如下代码所示的 getOrderByOrderNumberByExample 方法：
+
+```java
+public JpaOrder getOrderByOrderNumberByExample(String orderNumber) {
+    JpaOrder order = new JpaOrder();
+    order.setOrderNumber(orderNumber);
+ 
+    ExampleMatcher matcher = ExampleMatcher
+      .matching()
+      .withIgnoreCase()
+      .withMatcher("orderNumber", GenericPropertyMatchers.exact())
+      .withIncludeNullValues();
+ 
+    Example<JpaOrder> example = Example.of(order, matcher);
+ 
+    return orderJpaRepository.findOne(example).orElse(new JpaOrder());
+}
+```
+
+- Specification 机制
+
+如果我们要查询某个实体，但是给定的查询条件不固定，该怎么办呢？
+
+这时我们通过动态构建相应的查询语句即可，而在 Spring Data JPA 中可以通过 JpaSpecificationExecutor 接口实现这类查询。
+
+继承了 JpaSpecificationExecutor 的 OrderJpaRepository 定义如下代码所示：
+
+```java
+@Repository("orderJpaRepository")
+public interface OrderJpaRepository 
+  extends JpaRepository<JpaOrder, Long>, JpaSpecificationExecutor<JpaOrder> {
+}
+```
+
+对于 JpaSpecificationExecutor 接口而言，它背后使用的就是 Specification 接口：
+
+```java
+public interface Specification {
+    Predicate toPredicate(
+      Root<T> root, 
+      CriteriaQuery<?> query, 
+      CriteriaBuilder criteriaBuilder
+    );
+}
+```
+
+Root 对象代表所查询的根对象，我们可以通过 Root 获取实体的属性。
+CriteriaQuery 代表一个顶层查询对象，用来实现自定义查询。
+CriteriaBuilder 用来构建查询条件。
+
+重构后的 getOrderByOrderNumberBySpecification 方法如下代码所示：
+
+```java
+public JpaOrder getOrderByOrderNumberBySpecification(String orderNumber) {
+    JpaOrder order = new JpaOrder();
+    order.setOrderNumber(orderNumber);
+
+    @SuppressWarnings("serial")
+    Specification<JpaOrder> spec = new Specification<JpaOrder>() {
+        @Override
+        public Predicate toPredicate(Root<JpaOrder> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+            Path<Object> orderNumberPath = root.get("orderNumber");
+
+            Predicate predicate = cb.equal(orderNumberPath, orderNumber);
+            return predicate;
+        }
+    };
+
+    return orderJpaRepository.findOne(spec).orElse(new JpaOrder());     
+}
+```
+
+首先我们从 root 对象中获取了“orderNumber”属性，然后通过 cb.equal 方法将该属性与传入的 orderNumber 参数进行了比对，从而实现了查询条件的构建过程。
+
 # 10 | 使用 Spring Data JPA 访问关系型数据库
 
+JPA 全称是 JPA Persistence API，即 Java 持久化 API，它是一种 ORM（Object Relational Mapping，对象关系映射）技术。
 
+**引入 Spring Data JPA**
 
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+```
 
+**定义实体类**
 
+order-service 中存在两个主要领域对象，即 Order 和 Goods。这两个领域对象分别命名为 JpaOrder 和 JpaGoods。
 
+JpaGoods 定义如下代码所示：
 
+```java
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Table;
+ 
+@Entity
+@Table(name="goods")
+public class JpaGoods {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;    
+    private String goodsCode;
+    private String goodsName;
+    private Float price;    
+    //省略 getter/setter
+}
+```
 
+JpaOrder 定义如下代码所示：
 
+```java
+@Entity
+@Table(name="`order`")
+public class JpaOrder implements Serializable {
+    private static final long serialVersionUID = 1L;
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String orderNumber;
+    private String deliveryAddress;
+ 
+    @ManyToMany(targetEntity=JpaGoods.class)
+    @JoinTable(
+      name = "order_goods", 
+      joinColumns = @JoinColumn(name = "order_id", referencedColumnName = "id"), 
+      inverseJoinColumns = @JoinColumn(name = "goods_id", referencedColumnName = "id")
+    )
+    private List<JpaGoods> goods = new ArrayList<>();
+ 
+    //省略 getter/setter
+}
+```
 
+这里使用了 @JoinTable 注解指定 order_goods 中间表，并通过 joinColumns 和 inverseJoinColumns 注解分别指定中间表中的字段名称以及引用两张主表中的外键名称。
 
+**定义 Repository**
 
+OrderJpaRepository 的定义如下代码所示：
 
+```java
+@Repository("orderJpaRepository")
+public interface OrderJpaRepository extends JpaRepository<JpaOrder, Long> {
+}
+```
 
-
-
-
-
-
-
+OrderJpaRepository 实际上已经具备了访问数据库的基本 CRUD 功能。
 
