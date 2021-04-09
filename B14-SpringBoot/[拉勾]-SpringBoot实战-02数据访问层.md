@@ -342,6 +342,130 @@ public void execute(final String sql) throws DataAccessException {
 
 JdbcTemplate 基于 JDBC 的原生 API，把模板方法和回调机制结合在了一起，为我们提供了简洁且高扩展的实现方案，值得我们分析和应用。
 
+# 09 | Spring Data 如何对数据访问过程统一抽象？
+
+Spring Data 是 Spring 家族中专门用于数据访问的开源框架，其对数据访问过程的抽象主要体现在两个方面：① 提供了一套 Repository 接口定义及实现；② 实现了各种多样化的查询支持，接下来我们分别看一下。
+
+**Repository 接口及实现**
+
+Repository 接口是 Spring Data 中对数据访问的最高层抽象，接口定义如下所示：
+
+```java
+public interface Repository<T, ID> {
+}
+```
+
+在 Spring Data 中，存在一大批 Repository 接口的子接口和实现类：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210409215021.png" alt="image-20210409215021417" style="zoom:67%;" />
+
+其中 SimpleJpaRepository 类的 save 方法如下代码所示：
+
+```java
+private final JpaEntityInformation<T, ?> entityInformation;
+private final EntityManager em;
+ 
+@Transactional
+public <S extends T> S save(S entity) {
+    if (entityInformation.isNew(entity)) {
+        em.persist(entity);
+        return entity;
+    } else {
+        return em.merge(entity);
+    }
+}
+```
+
+上述 save 方法依赖于 JPA 规范中的 EntityManager。
+
+**多样化查询支持**
+
+- @Query 注解
+
+这个注解位于 org.springframework.data.jpa.repository 包中，如下所示：
+
+```java
+package org.springframework.data.jpa.repository;
+ 
+public @interface Query {
+    String value() default "";
+    String countQuery() default "";
+    String countProjection() default "";
+    boolean nativeQuery() default false;
+    String name() default "";
+    String countName() default "";
+}
+```
+
+使用 @Query 注解查询的典型例子如下：
+
+```java
+public interface AccountRepository extends JpaRepository<Account, Long> {
+    @Query("select a from Account a where a.userName = ?1") 
+    Account findByUserName(String userName);
+}
+```
+
+因我们使用的是 JpaRepository，所以这种类似 SQL 语句的语法实际上是一种 JPA 查询语言，也就是所谓的 JPQL（Java Persistence Query Language）。
+
+JPQL 与原生的 SQL 唯一的区别就是 JPQL FROM 语句后面跟的是对象，而原生 SQL 语句中对应的是数据表。
+
+如果将 @Query 注解的 nativeQuery 设置为 true，那么 value 属性则需要指定具体的原生 SQL 语句。
+
+- 方法名衍生查询
+
+方法名衍生查询通过在方法命名上直接使用查询字段和参数，Spring Data 就能自动识别相应的查询条件并组装对应的查询语句。
+
+想要使用方法名实现衍生查询，我们需要对 Repository 中定义的方法名进行一定约束。首先我们需要指定一些查询关键字，常见的关键字如下表所示：
+
+![Lark20201215-174017.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210409221850.png)
+
+其次需要指定查询字段和一些限制性条件，例如“firstname”和“lastname”。
+
+如果我们在一个 Repository 中同时指定了 @Query 注解和方法名衍生查询，那么 Spring Data 会具体执行哪一个呢？
+
+在 Spring Data 中，可以定义查询策略，如下代码所示：
+
+```java
+public interface QueryLookupStrategy {
+ 
+    public static enum Key {
+        CREATE, USE_DECLARED_QUERY, CREATE_IF_NOT_FOUND;
+
+        public static Key create(String xml) {
+            if (!StringUtils.hasText(xml)) {
+                return null;
+            }
+            return valueOf(xml.toUpperCase(Locale.US).replace("-", "_"));
+        }
+    }
+}
+```
+
+CREATE 策略指的是根据方法名创建查询，即方法名衍生查询。
+
+USE_DECLARED_QUERY 指的是声明方式，即使用 @Query 注解。
+
+CREATE_IF_NOT_FOUND 会先查找 @Query 注解，如果查到没有，会再去找与方法名相匹配的查询。
+
+# 10 | 使用 Spring Data JPA 访问关系型数据库
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
