@@ -50,15 +50,158 @@ REST（Representational State Transfer，表述性状态转移）这种架构风
 
 如果我们想创建一个 RestTemplate 对象，最简单且最常见的方法是直接 new 一个该类的实例，如下代码所示：
 
+```java
+@Bean
+public RestTemplate restTemplate(){
+    return new RestTemplate();
+}
+```
 
+我们查看下 RestTemplate 的无参构造函数，如下代码所示：
 
+```java
+public RestTemplate() {
+    this.messageConverters.add(new ByteArrayHttpMessageConverter());
+    this.messageConverters.add(new StringHttpMessageConverter());
+    this.messageConverters.add(new ResourceHttpMessageConverter(false));
+    this.messageConverters.add(new SourceHttpMessageConverter<>());
+    this.messageConverters.add(new AllEncompassingFormHttpMessageConverter());
+ 
+    //省略其他添加 HttpMessageConverter 的代码
+}
+```
 
+RestTemplate 的无参构造函数添加了一批用于实现消息转换的 HttpMessageConverter 对象。
+
+RestTemplate 还有另外一个更强大的有参构造函数，如下代码所示：
+
+```java
+public RestTemplate(ClientHttpRequestFactory requestFactory) {
+    this();
+    setRequestFactory(requestFactory);
+}
+```
+
+可以用来设置 HTTP 请求的超时时间等属性，如下代码所示：
+
+```java
+@Bean
+public RestTemplate customRestTemplate(){
+    HttpComponentsClientHttpRequestFactory httpRequestFactory = new HttpComponentsClientHttpRequestFactory();
+    // 连接请求超时时间
+    httpRequestFactory.setConnectionRequestTimeout(3000);
+    // 连接超时时间
+    httpRequestFactory.setConnectTimeout(3000);
+    httpRequestFactory.setReadTimeout(3000);
+
+    return new RestTemplate(httpRequestFactory);
+}
+```
 
 **使用 RestTemplate 访问 Web 服务**
 
+- GET
 
+```java
+public <T> T getForObject(URI url, Class<T> responseType)
+public <T> T getForObject(String url, Class<T> responseType, Object... uriVariables)
+public <T> T getForObject(String url, Class<T> responseType, Map<String, ?> uriVariables)
+```
+
+也可以使用 getForEntity 方法返回一个 ResponseEntity 对象。
+
+- POST
+
+```java
+Order order = new Order();
+order.setOrderNumber("Order0001");
+order.setDeliveryAddress("DemoAddress");
+ResponseEntity<Order> responseEntity = restTemplate.postForEntity("http://localhost:8082/orders", order, Order.class);
+return responseEntity.getBody();
+```
+
+postForObject 的操作方式也与此类似。
+
+- exchange
+
+```java
+ResponseEntity<Order> result = restTemplate.exchange("http://localhost:8082/orders/{orderNumber}", HttpMethod.GET, null, Order.class, orderNumber);
+```
+
+```java
+//设置 HTTP Header
+HttpHeaders headers = new HttpHeaders();
+headers.setContentType(MediaType.APPLICATION_JSON_UTF8);
+ 
+//设置访问参数
+HashMap<String, Object> params = new HashMap<>();
+params.put("orderNumber", orderNumber);
+ 
+//设置请求 Entity
+HttpEntity entity = new HttpEntity<>(params, headers);
+ResponseEntity<Order> result = restTemplate.exchange(url, HttpMethod.GET, entity, Order.class);
+```
 
 **RestTemplate 其他使用技巧**
+
+- 指定消息转换器
+
+假如，我们希望把支持 Gson 的 GsonHttpMessageConverter 加载到 RestTemplate 中，就可以使用如下所示的代码。
+
+```java
+@Bean
+public RestTemplate restTemplate() {
+    List<HttpMessageConverter<?>> messageConverters = new ArrayList<HttpMessageConverter<?>>();
+    messageConverters.add(new GsonHttpMessageConverter());
+    RestTemplate restTemplate = new RestTemplate(messageConverters);
+    return restTemplate;
+}
+```
+
+- 设置拦截器
+
+这方面最典型的应用场景是在 Spring Cloud 中通过 @LoadBalanced 注解为 RestTemplate 添加负载均衡机制。我们可以在 LoadBalanceAutoConfiguration 自动配置类中找到如下代码。
+
+```java
+@Bean
+@ConditionalOnMissingBean
+public RestTemplateCustomizer restTemplateCustomizer(
+    final LoadBalancerInterceptor loadBalancerInterceptor) {
+    return new RestTemplateCustomizer() {
+        @Override
+        public void customize(RestTemplate restTemplate) {
+            List<ClientHttpRequestInterceptor> list = new ArrayList<>(
+                    restTemplate.getInterceptors());
+            list.add(loadBalancerInterceptor);
+            restTemplate.setInterceptors(list);
+        }
+    };
+}
+```
+
+- 处理异常
+
+请求状态码不是返回 200 时，RestTemplate 在默认情况下会抛出异常，并中断接下来的操作，如果我们不想采用这个处理过程，那么就需要覆盖默认的 ResponseErrorHandler。示例代码结构如下所示：
+
+```java
+RestTemplate restTemplate = new RestTemplate();
+ 
+ResponseErrorHandler responseErrorHandler = new ResponseErrorHandler() {
+    @Override
+    public boolean hasError(ClientHttpResponse clientHttpResponse) throws IOException {
+        return true;
+    }
+
+    @Override
+    public void handleError(ClientHttpResponse clientHttpResponse) throws IOException {
+        //添加定制化的异常处理代码
+    }
+};
+ 
+restTemplate.setErrorHandler(responseErrorHandler);
+```
+
+
 
 
 
