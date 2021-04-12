@@ -201,11 +201,141 @@ ResponseErrorHandler responseErrorHandler = new ResponseErrorHandler() {
 restTemplate.setErrorHandler(responseErrorHandler);
 ```
 
+# 13 | RestTemplate 远程调用的实现原理
 
+RestTemplate 的类层结构，如下图所示：
 
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210412233815.png" alt="image-20210412233815363" style="zoom:50%;" />
 
+整个类层结构清晰地分成两条支线，左边支线用于完成与 HTTP 请求相关的实现机制，而右边支线提供了基于 RESTful 风格的操作入口，并使用了面向对象中的接口和抽象类完成这两部分功能的聚合。
 
+**InterceptingHttpAccessor**
 
+它是一个抽象类，包含的核心变量如下代码所示：
+
+```java
+public abstract class InterceptingHttpAccessor extends HttpAccessor {
+ 
+    private final List<ClientHttpRequestInterceptor> interceptors = new ArrayList<>();
+ 
+    private volatile ClientHttpRequestFactory interceptingRequestFactory;
+    …
+}
+```
+
+interceptors 负责设置和管理请求拦截器；interceptingRequestFactory 负责创建客户端 HTTP 请求。
+
+InterceptingHttpAccessor 同样存在一个父类 HttpAccessor：
+
+```java
+public abstract class HttpAccessor {
+ 
+    private ClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+    …
+}
+```
+
+HttpAccessor 中创建了 SimpleClientHttpRequestFactory 作为系统默认的 ClientHttpRequestFactory。
+
+**RestOperations**
+
+RestOperations 接口的定义，如下代码所示：
+
+```java
+public interface RestOperations {
+ 
+    <T> T getForObject(String url, Class<T> responseType, Object... uriVariables) throws RestClientException;
+    <T> ResponseEntity<T> getForEntity(String url, Class<T> responseType, Object... uriVariables) throws RestClientException;
+
+    <T> T postForObject(String url, @Nullable Object request, Class<T> responseType,Object... uriVariables) throws RestClientException;
+ 
+    void put(String url, @Nullable Object request, Object... uriVariables) throws RestClientException;
+	 
+    void delete(String url, Object... uriVariables) throws RestClientException;
+    <T> ResponseEntity<T> exchange(String url, HttpMethod method, @Nullable HttpEntity<?> requestEntity,
+	 
+    Class<T> responseType, Object... uriVariables) throws RestClientException;
+    …
+}
+```
+
+**RestTemplate 核心执行流程**
+
+我们可以从具备多种请求方式的 exchange 方法入手，该方法的定义如下代码所示：
+
+```java
+@Override
+public <T> ResponseEntity<T> exchange(String url, 
+                                      HttpMethod method,
+                                      @Nullable HttpEntity<?> requestEntity, Class<T> responseType, 
+                                      Object... uriVariables)
+    throws RestClientException {
+
+    //构建请求回调
+    RequestCallback requestCallback = httpEntityCallback(requestEntity, responseType);
+    //构建响应体抽取器
+    ResponseExtractor<ResponseEntity<T>> responseExtractor = responseEntityExtractor(responseType);
+    //执行远程调用
+    return nonNull(execute(url, method, requestCallback, responseExtractor, uriVariables));
+}
+```
+
+execute 方法定义如下代码所示：
+
+```java
+@Override
+@Nullable
+public <T> T execute(String url, 
+                     HttpMethod method, 
+                     @Nullable RequestCallback requestCallback, 
+                     @Nullable ResponseExtractor<T> responseExtractor, 
+                     Object... uriVariables) throws RestClientException {
+    URI expanded = getUriTemplateHandler().expand(url, uriVariables);
+    return doExecute(expanded, method, requestCallback, responseExtractor);
+}
+```
+
+doExecute 方法定义如下代码所示：
+
+```java
+protected <T> T doExecute(URI url, 
+                          @Nullable HttpMethod method, 
+                          @Nullable RequestCallback requestCallback,
+                          @Nullable ResponseExtractor<T> responseExtractor) 
+    throws RestClientException {
+    Assert.notNull(url, "URI is required");
+    Assert.notNull(method, "HttpMethod is required");
+    ClientHttpResponse response = null;
+    try {
+        // 1. 创建请求对象
+        ClientHttpRequest request = createRequest(url, method);
+        if (requestCallback != null) {
+            //执行对请求的回调
+            requestCallback.doWithRequest(request);
+        }
+      
+        // 2. 获取调用结果
+        response = request.execute();
+        
+        // 3. 处理调用结果
+        handleResponse(url, method, response);
+        //使用结果提取从结果中提取数据
+        return (responseExtractor != null ? responseExtractor.extractData(response) : null);
+    } catch (IOException ex) {
+        String resource = url.toString();
+        String query = url.getRawQuery();
+        resource = (query != null ? resource.substring(0, resource.indexOf('?')) : resource);
+        throw new ResourceAccessException("I/O error on " 
+                                          + method.name() +
+                                          " request for \"" + resource + "\": " 
+                                          + ex.getMessage(), ex);
+    } finally {
+        if (response != null) {
+            response.close();
+        }
+    }
+}
+```
 
 
 
