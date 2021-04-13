@@ -337,5 +337,87 @@ protected <T> T doExecute(URI url,
 }
 ```
 
+# 消息通信层
+
+# 14 | 使用 KafkaTemplate 集成 Kafka
+
+与 JdbcTemplate 和 RestTemplate 类似，Spring Boot 作为一款支持快速开发的集成性框架，同样提供了一批以 -Template 命名的模板工具类用于实现消息通信。
+
+对于 Kafka 而言，这个工具类就是 KafkaTemplate。
+
+**使用 KafkaTemplate 发送消息**
+
+引入依赖：
+
+```xml
+<dependency>
+    <groupId>org.springframework.kafka</groupId>
+    <artifactId>spring-kafka</artifactId>
+</dependency>
+```
+
+KafkaTemplate 提供了一系列 send 方法用来发送消息，典型的 send 方法定义如下代码所示：
+
+```java
+@Override
+public ListenableFuture<SendResult<K, V>> send(String topic, @Nullable V data) {
+}
+```
+
+**使用 @KafkaListener 注解消费消息**
+
+Kafka 的消费者在消费消息时，需要提供一个监听器（Listener）对某个 Topic 实现监听，从而获取消息。
+
+在 Spring 中提供了一个 @KafkaListener 注解实现监听器，该注解定义如下代码所示：
+
+```java
+@Target({ ElementType.TYPE, ElementType.METHOD, ElementType.ANNOTATION_TYPE })
+@Retention(RetentionPolicy.RUNTIME)
+@MessageMapping
+@Documented
+@Repeatable(KafkaListeners.class)
+public @interface KafkaListener {
+    String id() default "";
+    String containerFactory() default "";
+    //消息 Topic
+    String[] topics() default {};
+    //Topic 的模式匹配表达式
+    String topicPattern() default "";
+	  //Topic 分区
+    TopicPartition[] topicPartitions() default {};
+    String containerGroup() default "";
+    String errorHandler() default "";
+	  //消息分组 Id
+    String groupId() default "";
+    boolean idIsGroup() default true;
+    String clientIdPrefix() default "";
+    String beanRef() default "__listener";
+}
+```
+
+使用 @KafkaListener 注解时，我们把它直接添加在处理消息的方法上即可，如下代码所示：
+
+```java
+@KafkaListener(topics = “demo.topic”)
+public void handlerEvent(DemoEvent event) {
+    //TODO：添加消息处理逻辑
+}
+```
+
+此外，还需要在消费者的配置文件中指定用于消息消费的配置项：
+
+```yaml
+spring:      
+  kafka:
+    bootstrap-servers:
+    - localhost:9092
+    template:
+      default-topic: demo.topic
+    consumer:
+      group-id: demo.group
+```
+
+
+
 
 
