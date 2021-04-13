@@ -417,7 +417,97 @@ spring:     
       group-id: demo.group
 ```
 
+# 15 | 使用 JmsTemplate 集成 ActiveMQ
 
+**JMS 规范**
 
+JMS 规范提供了一批核心接口供开发人员使用，而这些接口构成了客户端的 API 体系，如下图所示：
 
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210413232148.png" alt="image-20210413232148719" style="zoom:50%;" />
+
+JMS 规范存在 ActiveMQ、WMQ、TIBCO 等多种第三方实现方式，其中较主流的是 ActiveMQ。
+
+针对 ActiveMQ，目前有两个实现项目可供选择，一个是经典的 5.x 版本，另一个是下一代的 Artemis。
+
+**使用 JmsTemplate 集成 ActiveMQ**
+
+引入依赖：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-artemis</artifactId>
+</dependency>
+```
+
+ActiveMQ 消费方式有推送型消费者（Push Consumer）和拉取型消费者（Pull Consumer）。
+
+**使用 JmsTemplate 发送消息**
+
+JmsTemplate 中存在一批 send 方法用来实现消息发送，如下代码所示：
+
+```java
+@Override
+public void send(MessageCreator messageCreator) throws JmsException {
+}
+ 
+@Override
+public void send(final Destination destination, final MessageCreator messageCreator) throws JmsException {
+}
+ 
+@Override
+public void send(final String destinationName, final MessageCreator messageCreator) throws JmsException {
+}
+```
+
+这些方法提供了一个用于创建消息对象的 MessageCreator 接口。通过 send 方法发送消息的典型实现方式如下代码所示：
+
+```java
+public void sendDemoObject(DemoObject demoObject) { 
+    jmsTemplate.send("demo.queue", new MessageCreator() { 
+        @Override 
+        public Message createMessage(Session session) throws JMSException { 
+	          return session.createObjectMessage(demoObject); 
+ 	      } 
+}
+```
+
+JmsTemplate 还提供了一组更为简便的方法实现消息发送，即 convertAndSend 方法，如下代码所示：
+
+```java
+public void sendDemoObject(DemoObject demoObject) {
+    jmsTemplate.convertAndSend("demo.queue", demoObject, new MessagePostProcessor() {
+        @Override
+        public Message postProcessMessage(Message message) throws JMSException {
+	          //针对 Message 的处理
+            return message;
+        } 
+});
+```
+
+**使用 JmsTemplate 消费消息**
+
+我们先来看一下如何实现拉取型消费模式。
+
+在 JmsTemplate 中提供了一批 receive 方法供我们从 artemis 中拉取消息，如下代码所示：
+
+```java
+public Message receive() throws JmsException {
+}
+ 
+public Message receive(Destination destination) throws JmsException {
+}
+ 
+public Message receive(String destinationName) throws JmsException {
+}
+```
+
+推模式下的消息消费方法，如下代码所示：
+
+```java
+@JmsListener(queues = “demo.queue”)
+public void handlerEvent(DemoEvent event) {
+    //TODO：添加消息处理逻辑
+}
+```
 
