@@ -511,3 +511,92 @@ public void handlerEvent(DemoEvent event) {
 }
 ```
 
+# 16 | 使用 RabbitTemplate 集成 RabbitMQ
+
+AMQP（Advanced Message Queuing Protocol）是一个提供统一消息服务的应用层标准高级消息队列规范。
+
+**AMQP 规范**
+
+在 AMQP 规范中存在三个核心组件，分别是交换器（Exchange）、消息队列（Queue）和绑定（Binding）。
+
+如果存在多个 Queue，Exchange 如何知道把消息发送到哪个 Queue 中呢？
+
+消息中包含一个路由键（Routing Key），它由消息发送者产生，并提供给 Exchange 路由这条消息的标准。而 Exchange 会检查 Routing Key，并结合路由算法决定将消息路由发送到哪个 Queue 中。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210415225317.png" alt="image-20210415225316968" style="zoom:50%;" />
+
+上图中，不同的路由算法存在不同的 Exchange 类型，AMQP 规范中指定了直接式交换器（Direct Exchange）、广播式交换器（Fanout Exchange）、主题式交换器（Topic Exchange）和消息头式交换器（Header Exchange）。
+
+**使用 RabbitTemplate 发送消息**
+
+引领依赖：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-amqp</artifactId>
+</dependency>
+```
+
+配置 RabbitMQ 服务器的地址、端口、用户名和密码等信息，如下代码所示：
+
+```yaml
+spring:
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: DemoHost
+```
+
+在与业务代码进行集成时，我们需要将业务对象转换为 Message 对象，示例代码如下所示：
+
+```java
+public void sendDemoObject(DemoObject demoObject) {
+    MessageConverter converter = rabbitTemplate.getMessageConverter();
+    MessageProperties props = new MessageProperties();
+    Message message = converter.toMessage(demoObject, props);
+    rabbitTemplate.send("demo.queue", message);
+}
+```
+
+也可以使用 RabbitTemplate 的 convertAndSend 方法组进行实现，如下代码所示：
+
+```java
+public void sendDemoObject(DemoObject demoObject) { 
+    rabbitTemplate.convertAndSend("demo.queue", demoObject); 
+}
+```
+
+有时候我们需要在消息发送的过程中为消息添加一些属性，如下代码所示：
+
+```java
+rabbitTemplate.convertAndSend(“demo.queue”, event, new MessagePostProcessor() {
+    @Override
+    public Message postProcessMessage(Message message) throws AmqpException {
+        //针对 Message 的处理
+        return message;
+    }
+});
+```
+
+**使用 RabbitTemplate 消费消息**
+
+在拉模式下，使用 RabbitTemplate 的典型示例如下代码所示：
+
+```java
+public DemoEvent receiveEvent() {
+    return (DemoEvent) rabbitTemplate.receiveAndConvert(“demo.queue”);
+}
+```
+
+推模式的实现方法也很简单，如下代码所示：
+
+```java
+@RabbitListener(queues = "demo.queue")
+public void handlerEvent(DemoEvent event) {
+    //TODO：添加消息处理逻辑
+}
+```
+
