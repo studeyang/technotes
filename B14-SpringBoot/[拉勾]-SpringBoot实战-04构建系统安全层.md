@@ -66,7 +66,7 @@ AuthenticationManager 是一个接口，其实现类 ProviderManager 会进一�
 
 在 Spring Security 中存在一大批 AuthenticationProvider 接口的实现类，分别完成各种认证操作。在执行具体的认证工作时，Spring Security 势必会使用用户详细信息，UserDetailsService 服务就是用来对用户详细信息实现管理。
 
-# 18 | 如何基于 Spring Security 构建用户认证体系？
+# 18 | 基于 Spring Security 构建用户认证体系
 
 在 Spring Boot 中整合 Spring Security 框架首先需要引入依赖：
 
@@ -215,13 +215,123 @@ public class SpringCssSecurityConfig extends WebSecurityConfigurerAdapter {
 }
 ```
 
+# 19 | 基于 Spring Security 实现安全访问
 
+在日常开发过程中，我们需要对 Web 应用中的不同 HTTP 端点进行不同粒度的权限控制。
 
+**对 HTTP 端点进行访问授权管理**
 
+- 使用配置方法
 
+配置方法也是位于 WebSecurityConfigurerAdapter 类中，但使用的是 configure(HttpSecurity http) 方法，如下代码所示：
 
+```java
+protected void configure(HttpSecurity http) throws Exception {
+    http.authorizeRequests()
+        // 所有请求都需要认证
+        .anyRequest()
+        // 允许认证用户访问
+        .authenticated()
+        .and()
+        // 需要使用表单进行登录
+        .formLogin()
+        .and()
+        // 使用 HTTP Basic Authentication 方法完成认证
+        .httpBasic();
+}
+```
 
+Spring Security 还提供了一个 access() 方法，允许开发人员传入一个表达式进行更细粒度的权限控制，这里，我们将引入Spring 框架提供的一种动态表达式语言—— SpEL（Spring Expression Language 的简称）。
 
+只要 SpEL 表达式的返回值为 true，access() 方法就允许用户访问，如下代码所示：
 
+```java
+@Override
+public void configure(HttpSecurity http) throws Exception {
+ 
+    http.authorizeRequests()
+        .antMatchers("/orders")
+        .access("hasRole('ROLE_USER')");
+}
+```
 
+- 使用注解
+
+Spring Security 提供了 @PreAuthorize 注解也可以实现类似的效果，使用该注解代码如下所示：
+
+```java
+@RestController
+@RequestMapping(value="orders")
+public class OrderController {
+ 
+    @PostMapping(value = "/")
+    @PreAuthorize("hasRole(ROLE_ADMIN)")
+    public void addOrder(@RequestBody Order order) {
+        …
+    }
+}
+```
+
+@PostAuthorize 主要用于请求结束之后检查权限。
+
+**实现多维度访问授权方案**
+
+- 使用用户级别保护服务访问
+
+该级别是最基本的资源保护级别，只要是认证用户就可能访问服务内的各种资源。
+
+```java
+@Configuration
+public class SpringCssSecurityConfig extends WebSecurityConfigurerAdapter {
+
+    protected void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests()
+            .anyRequest()
+            .authenticated();
+    }
+}
+```
+
+- 使用用户+角色级别保护服务访问
+
+该级别在认证用户级别的基础上，还要求用户属于某一个或多个特定角色。
+
+```java
+@Configuration
+public class SpringCssSecurityConfig extends WebSecurityConfigurerAdapter {
+ 
+    @Override
+    public void configure(HttpSecurity http) throws Exception {
+ 
+        http.authorizeRequests()
+            .antMatchers("/customers/**")
+            .hasRole("ADMIN")
+            .anyRequest()
+            .authenticated();
+    }
+}
+```
+
+上述代码表示只有"ADMIN"角色的认证用户才能访问以"/customers/"为根地址的所有 URL。
+
+- 使用用户+角色+操作级别保护服务访问
+
+该级别在认证用户+角色级别的基础上，对某些 HTTP 操作方法做了访问限制。
+
+```java
+@Configuration
+public class SpringCssSecurityConfig extends WebSecurityConfigurerAdapter {
+ 
+    @Override
+    public void configure(HttpSecurity http) throws Exception{
+        http.authorizeRequests()
+                .antMatchers(HttpMethod.DELETE, "/customers/**")
+                .hasRole("ADMIN")
+                .anyRequest()
+                .authenticated();
+    }
+}
+```
+
+上述代码的效果在于对“/customers”端点执行删除操作时，我们需要使用具有“ADMIN”角色的“springcss_admin”用户，否则会出现“access_denied”错误信息。。
 
