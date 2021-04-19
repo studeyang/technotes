@@ -335,3 +335,291 @@ public class SpringCssSecurityConfig extends WebSecurityConfigurerAdapter {
 
 上述代码的效果在于对“/customers”端点执行删除操作时，我们需要使用具有“ADMIN”角色的“springcss_admin”用户，否则会出现“access_denied”错误信息。。
 
+# 构建系统监控层
+
+# 20 | 使用 Actuator 组件实现系统监控
+
+**引入 Spring Boot Actuator 组件**
+
+引入依赖：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+服务启动后，访问 http://localhost:8080/actuator 可以看到如下结果：
+
+```json
+{
+  "_links":{
+    "self":{
+      "href":"http://localhost:8080/actuator",
+      "templated":false
+    },
+    "health-path":{
+      "href":"http://localhost:8080/actuator/health/{*path}",
+      "templated":true
+    },
+    "health":{
+      "href":"http://localhost:8080/actuator/health",
+      "templated":false
+    },
+    "info":{
+      "href":"http://localhost:8080/actuator/info",
+      "templated":false
+    },
+    
+    // 上面是默认暴露信息，加上下面就是所有的信息
+    
+    "beans":{
+      "href":"http://localhost:8080/actuator/beans",
+      "templated":false
+    },
+    "conditions":{
+      "href":"http://localhost:8080/actuator/conditions",
+      "templated":false
+    },
+    "configprops":{
+      "href":"http://localhost:8080/actuator/configprops",
+      "templated":false
+    },
+    "env":{
+      "href":"http://localhost:8080/actuator/env",
+      "templated":false
+    },
+    "env-toMatch":{
+      "href":"http://localhost:8080/actuator/env/{toMatch}",
+      "templated":true
+    },
+    "loggers":{
+      "href":"http://localhost:8080/actuator/loggers",
+      "templated":false
+    },
+    "loggers-name":{
+      "href":"http://localhost:8080/actuator/loggers/{name}",
+      "templated":true
+    },
+    "heapdump":{
+      "href":"http://localhost:8080/actuator/heapdump",
+      "templated":false
+    },
+    "threaddump":{
+      "href":"http://localhost:8080/actuator/threaddump",
+      "templated":false
+    },
+    "metrics-requiredMetricName":{
+      "href":"http://localhost:8080/actuator/metrics/{requiredMetricName}",
+      "templated":true
+    },
+    "metrics":{
+      "href":"http://localhost:8080/actuator/metrics",
+      "templated":false
+    },
+    "scheduledtasks":{
+      "href":"http://localhost:8080/actuator/scheduledtasks",
+      "templated":false
+    },
+    "mappings":{
+      "href":"http://localhost:8080/actuator/mappings",
+      "templated":false
+    }
+  }
+}
+```
+
+如果我们想看到所有端点，可以在配置文件中配置：
+
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+```
+
+常见端点梳理如下：
+
+![image-20210419231958588](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210419231958.png)
+
+通过访问上表中的各个端点，我们就可以获取自己感兴趣的监控信息了。
+
+**health 端点**
+
+访问 http://localhost:8082/actuator/health 端点，就可以得到服务的基本状态：
+
+```json
+{
+  "status":"UP",
+  // 下面是更详细的信息
+  "components":{
+    "diskSpace":{
+      "status":"UP",
+      "details":{
+        "total":201649549312,
+        "free":3434250240,
+        "threshold":10485760
+      }
+    },
+    "ping":{
+      "status":"UP"
+    }
+  }
+}
+```
+
+如果想获取更详细的状态信息，可在配置文件中配置：
+
+```yaml
+management: 
+  endpoint:
+    health:
+      show-details: always
+```
+
+**扩展 Actuator 端点**
+
+Spring Boot 默认暴露了日常开发中最常见的两个端点：Info 端点和 Health 端点。接下来，我们讨论下如何对这两个端点进行扩展。
+
+- 扩展 Info 端点
+
+Info 端点用于暴露 Spring Boot 应用的自身信息。Spring Boot 中常见的 InfoContributor 如下表所示：
+
+| InfoContributor名称        | 描述                                                       |
+| -------------------------- | ---------------------------------------------------------- |
+| EnvironmentInfoContributor | 暴露 Environment 中 key 为 info 的所有 key                 |
+| GitInfoContributor         | 暴露 git 信息，如果存在 git.properties 文件                |
+| BuildInfoContributor       | 暴露构建信息，如果存在 META-INF/build-info.properties 文件 |
+
+EnvironmentInfoContributor 会收集 info 下的所有key，例如在 application.yml 中：
+
+```
+info:
+  app:
+	  encoding: UTF-8
+	  java:
+	    source: 1.8.0_31
+	    target: 1.8.0_31
+```
+
+我们也可以扩展 info 端点的信息：
+
+```java
+@Component
+public class CustomBuildInfoContributor implements InfoContributor {
+
+    @Override
+    public void contribute(Builder builder) {
+        builder.withDetail("build", Collections.singletonMap("timestamp", new Date())); 
+    }
+}
+```
+
+最终效果如下：
+
+```json
+{
+  "app":{
+    "encoding":"UTF-8",
+    "java":{
+      "source":"1.8.0_31",
+      "target":"1.8.0_31"
+    }
+  },
+  "build":{
+    "timestamp":1604307503710
+  }
+}
+```
+
+- 扩展 Health 端点
+
+Health 端点用于检查正在运行的应用程序健康状态，健康状态信息由 HealthIndicator 对象从 Spring 的 ApplicationContext 中获取。
+
+常见的 HealthIndicator 如下表所示：
+
+| HealthIndicator 名称         | 描述                            |
+| ---------------------------- | ------------------------------- |
+| DiskSpaceHealthIndicator     | 检查磁盘空间是否足够            |
+| DataSourceHealthIndicator    | 检查是否可以获得连接 DataSource |
+| ElasticsearchHealthIndicator | 检查 Elasticsearch 集群是否启动 |
+| JmsHealthIndicator           | 检查 JMS 代理是否启动           |
+| MailHealthIndicator          | 检查邮件服务器是否启动          |
+| MongoHealthIndicator         | 检查 Mongo 数据库是否启动       |
+| RabbitHealthIndicator        | 检查 RabbitMQ 服务器是否启动    |
+| RedisHealthIndicator         | 检查 Redis 服务器是否启动       |
+| SolrHealthIndicator          | 检查 Solr 服务器是否已启动      |
+
+为了明确某个服务的状态，我们可以自定义一个端点来展示这个服务的状态信息：
+
+```java
+@Component
+public class CustomerServiceHealthIndicator implements HealthIndicator {
+
+    @Override
+    public Health health() {
+        try {
+            URL url = new URL("http://localhost:8083/health/");
+            HttpURLConnection conn = (HttpURLConnection) 
+            url.openConnection();
+            int statusCode = conn.getResponseCode();
+            if (statusCode >= 200 && statusCode < 300) {
+                return Health.up().build();
+            } else {
+                return Health.down().withDetail("HTTP Status Code", statusCode).build();
+            }
+        } catch (IOException e) {
+            return Health.down(e).build();
+        }
+    }
+}
+```
+
+效果如下：
+
+```json
+{
+  "status": "UP",
+  "details": {
+    "customerservice": {
+      "status": "UP"
+    }
+    …
+  }
+}
+```
+
+```json
+{
+  "status": "DOWN",
+  "details": {
+    "customerservice": {
+      "status": "DOWN",
+      "details": {
+        "HTTP Status Code": "404"
+      }
+    },
+    …
+  }
+}
+```
+
+```json
+{
+  "status": "DOWN",
+  "details": {
+    "customerservice": {
+      "status": "DOWN",
+      "details": {
+        "error": "java.net.ConnectException: Connection refused: connect"
+      }
+    },
+    …
+  }
+}
+```
+
+
+
