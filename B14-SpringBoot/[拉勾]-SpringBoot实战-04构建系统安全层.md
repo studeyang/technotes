@@ -621,5 +621,226 @@ public class CustomerServiceHealthIndicator implements HealthIndicator {
 }
 ```
 
+# 21 | 实现自定义的度量指标和 Actuator 端点
+
+在 Spring Boot 中，它为我们提供了一个 Metrics 端点用于实现生产级的度量工具。访问 actuator/metrics 端点后，我们将得到如下所示的一系列度量指标。
+
+```json
+{
+  "names":[
+    "jvm.memory.max",
+    "jvm.threads.states",
+    "jdbc.connections.active",
+    "jvm.gc.memory.promoted",
+    "jvm.memory.used",
+    "jvm.gc.max.data.size",
+    "jdbc.connections.max",
+    "jdbc.connections.min",
+    "jvm.memory.committed",
+    "system.cpu.count",
+    "logback.events",
+    "http.server.requests",
+    "jvm.buffer.memory.used",
+    "tomcat.sessions.created",
+    "jvm.threads.daemon",
+    "system.cpu.usage",
+    "jvm.gc.memory.allocated",
+    "hikaricp.connections.idle",
+    "hikaricp.connections.pending",
+    "jdbc.connections.idle",
+    "tomcat.sessions.expired",
+    "hikaricp.connections",
+    "jvm.threads.live",
+    "jvm.threads.peak",
+    "hikaricp.connections.active",
+    "hikaricp.connections.creation",
+    "process.uptime",
+    "tomcat.sessions.rejected",
+    "process.cpu.usage",
+    "jvm.classes.loaded",
+    "hikaricp.connections.max",
+    "hikaricp.connections.min",
+    "jvm.gc.pause",
+    "jvm.classes.unloaded",
+    "tomcat.sessions.active.current",
+    "tomcat.sessions.alive.max",
+    "jvm.gc.live.data.size",
+    "hikaricp.connections.usage",
+    "hikaricp.connections.timeout",
+    "jvm.buffer.count",
+    "jvm.buffer.total.capacity",
+    "tomcat.sessions.active.max",
+    "hikaricp.connections.acquire",
+    "process.start.time"
+  ]
+}
+```
+
+例如我们想了解当前内存的使用情况，就可以通过 actuator/metrics/jvm.memory.used 端点进行获取，如下代码所示。
+
+```json
+{
+  "name":"jvm.memory.used",
+  "description":"The amount of used memory",
+  "baseUnit":"bytes",
+  "measurements":[
+    {
+      "statistic":"VALUE",
+      "value":115520544
+    }
+  ],
+  "availableTags":[
+    {
+      "tag":"area",
+      "values":[
+        "heap",
+        "nonheap"
+      ]
+    },
+    {
+      "tag":"id",
+      "values":[
+        "Compressed Class Space",
+        "PS Survivor Space",
+        "PS Old Gen",
+        "Metaspace",
+        "PS Eden Space",
+        "Code Cache"
+      ]
+    }
+  ]
+}
+```
+
+**扩展 Metrics 端点**
+
+Metrics 指标体系中包含支持 Counter 和 Gauge 这两种级别的度量指标。通过将 Counter 或 Gauge 注入业务代码中，我们就可以记录自己想要的度量指标。其中，Counter 用来暴露 increment() 方法，而 Gauge 用来提供一个 value() 方法。
+
+下面我们以 Counter 为例介绍在业务代码中嵌入自定义 Metrics 指标的方法，如下代码所示：
+
+```java
+@Component
+public class CounterService {
+
+    public CounterService() {
+        Metrics.addRegistry(new SimpleMeterRegistry());
+    }
+ 
+    public void counter(String name, String... tags) {
+        Counter counter = Metrics.counter(name, tags);
+        counter.increment();
+    }
+}
+```
+
+也可以使用 MeterRegistry 进行计数。比如我们希望系统每创建一个客服工单，就对所创建的工单进行计数：
+
+```java
+@Service
+public class CustomerTicketService {
+    
+    @Autowired
+    private MeterRegistry meterRegistry;
+
+    public CustomerTicket generateCustomerTicket(Long accountId, String orderNumber) {
+
+        CustomerTicket customerTicket = new CustomerTicket();
+        …
+        meterRegistry.summary("customertickets.generated.count").record(1);
+
+        return customerTicket;
+    }   
+}
+```
+
+现在访问 actuator/metrics/customertickets.generated.count 端点，就能看到如下信息：
+
+```json
+{
+  "name":"customertickets.generated.count",
+  "measurements":[
+    {
+      "statistic":"Count",
+      "value":1
+    },
+    {
+      "statistic":"Total",
+      "value":19
+    }
+  ]
+}
+```
+
+同样可以使用 AbstractRepositoryEventListener 实现上述的效果：
+
+```java
+@Component
+public class CustomerTicketMetrics extends AbstractRepositoryEventListener<CustomerTicket> {
+
+    private MeterRegistry meterRegistry;
+
+    public CustomerTicketMetrics(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
+
+    @Override
+    protected void onAfterCreate(CustomerTicket customerTicket) {
+        meterRegistry.counter("customerticket.created.count").increment();
+    }
+}
+```
+
+**自定义 Actuator 端点**
+
+假设我们需要提供一个监控端点以获取当前系统的用户信息和计算机名称，就可以通过一个独立的 MySystemEndPoint 进行实现，如下代码所示：
+
+```java
+@Configuration
+@Endpoint(id = "mysystem", enableByDefault=true)
+public class MySystemEndpoint { 
+ 
+    @ReadOperation
+    public Map<String, Object> getMySystemInfo() {
+        Map<String,Object> result= new HashMap<>();
+        Map<String, String> map = System.getenv();
+        result.put("username",map.get("USERNAME"));
+        result.put("computername",map.get("COMPUTERNAME"));
+        return result;
+    }
+}
+```
+
+@ReadOperation 注解用于标识读取数据操作。在 Actuator 中，还提供 @WriteOperation 和 @DeleteOperation 注解。
+
+现在，通过访问 http://localhost:8080/actuator/mysystem，我们就能获取如下所示监控信息。
+
+```json
+{
+  "computername":"LAPTOP-EQB59J5P",
+  "username":"user"
+}
+```
+
+有时为了获取特定的度量信息，我们需要对某个端点传递参数，而 Actuator 专门提供了一个 @Selector 注解标识输入参数，示例代码如下所示：
+
+```java
+@Configuration
+@Endpoint(id = "account", enableByDefault = true)
+public class AccountEndpoint {
+    
+    @Autowired
+    private AccountRepository accountRepository;    
+ 
+    @ReadOperation
+    public Map<String, Object> getMySystemInfo(@Selector String arg0) {
+        Map<String, Object> result = new HashMap<>();
+        result.put(accountName, accountRepository.findAccountByAccountName(arg0));
+        return result;
+    }
+}
+```
+
+接着，使用 http://localhost:8080/actuator/ account/account1 这样的端口地址就可以触发度量操作了。
+
 
 
