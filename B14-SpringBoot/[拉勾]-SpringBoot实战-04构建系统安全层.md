@@ -842,5 +842,122 @@ public class AccountEndpoint {
 
 接着，使用 http://localhost:8080/actuator/ account/account1 这样的端口地址就可以触发度量操作了。
 
+# 22 | 使用 Admin Server 管理 Spring 应用程序
 
+Spring Boot Admin 是一个用于监控 Spring Boot 的应用程序，它的基本原理是通过统计、集成 Spring Boot Actuator 中提供的各种 HTTP 端点，从而提供简洁的可视化 WEB UI。
+
+Spring Boot Admin 的整体架构中存在两大角色，服务器端组件 Admin Server 和客户端组件 Admin Client。Admin Client 实际上是一个普通的 Spring Boot 应用程序，而 Admin Server 则是一个独立服务，需要进行专门构建。如下图所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210421231437.png" alt="image-20210421231437846" style="zoom:50%;" />
+
+构建 Admin Server 的两种实现方式：一种是简单的基于独立的 Admin 服务；另一种需要依赖服务注册中心的服务注册和发现机制。
+
+**基于独立服务构建 Admin Server**
+
+创建 Spring Boot 应用程序并引入依赖：
+
+```xml
+<dependency>
+  <groupId>de.codecentric</groupId>
+  <artifactId>spring-boot-admin-server</artifactId>
+</dependency>
+
+<dependency>
+  <groupId>de.codecentric</groupId>
+  <artifactId>spring-boot-admin-server-ui</artifactId>
+</dependency>
+```
+
+在 Bootstrap 类上添加 @EnableAdminServer 注解：
+
+```java
+@SpringBootApplication
+@EnableAdminServer
+public class AdminApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AdminApplication.class, args);
+    }
+}
+```
+
+接下来我们将应用程序关联到 Admin Server。
+
+引入依赖：
+
+```xml
+<dependency>
+  <groupId>de.codecentric</groupId>
+  <artifactId>spring-boot-admin-starter-client</artifactId>
+</dependency>
+```
+
+然后，我们在配置文件中添加 Admin Server 的配置信息。
+
+```yaml
+spring:
+  boot:
+    admin:
+      client:
+        url: http://localhost:9000
+```
+
+启动应用程序和 Admin Server 后，可以看到如下效果：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210421233714.png" alt="image-20210421233714305"  />
+
+**基于注册中心构建 Admin Server**
+
+基于注册中心，Admin Server 与各个 Admin Client 之间的交互方式如下图所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210421232903.png" alt="image-20210421232903258" style="zoom:50%;" />
+
+引入注册中心的目的是降低 Admin Client 与 Admin Server 之间的耦合度。
+
+Admin Client 和 Admin Server 都需要使用如下所示的 Eureka 客户端组件。
+
+```xml
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+```
+
+接着在 Admin Server 的配置文件中配置如下：
+
+```yaml
+eureka:
+  client:
+    registerWithEureka: true
+    fetchRegistry: true
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+```
+
+**控制访问安全性**
+
+有些监控功能不应该暴露给所有的开发人员。因此，我们需要控制 Admin Server 的访问安全性。
+
+引入依赖：
+
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+```
+
+然后，我们在配置文件中添加如下配置项：
+
+```yaml
+spring:
+  security:
+    user:
+      name: "springcss_admin"
+      password: "springcss_password"
+```
+
+重启 Admin Server 后，再次访问 Web 界面时，就需要我们输入用户名和密码了，如下图所示：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210421234950.png" alt="image-20210421234949967" style="zoom:50%;" />
 
