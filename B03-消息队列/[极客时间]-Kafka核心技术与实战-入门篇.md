@@ -127,19 +127,15 @@ Kafka 将数据分割成多份保存在不同的 Broker 上，这种机制就是
 
 # 03 | Kafka 只是消息引擎系统吗？
 
-**了解一个系统或框架的前世今生有必要吗？**
+Apache Kafka 是消息引擎系统，也是一个分布式流处理平台（Distributed Streaming Platform）。
 
-不论是学习哪种技术，直接扎到具体的细节中，亦或是从一个很小的点开始学习，你很快就会感到厌烦。
-
-因为你无法建立全局的认知观，不能实现系统地学习。
-
-**Kafka 名字的由来**
-
-因为 Kafka 系统的写性能很强，所以找了个作家的名字来命名，Jay Kreps（Kafka 作者之一）大学期间上了很多文学课，非常喜欢 Franz Kafka 这个作家。
+> Kafka 名字的由来
+>
+> 因为 Kafka 系统的写性能很强，所以找了个作家的名字来命名，Jay Kreps（Kafka 作者之一）大学期间上了很多文学课，非常喜欢 Franz Kafka 这个作家。
 
 **Kafka 的诞生**
 
-Kafka 是 LinkedIn 公司内部孵化的项目。LinkedIn 最开始有强烈的数据强实时处理方面的需求。当时他们碰到的主要总是包括以下两点。
+Kafka 是 LinkedIn 公司内部孵化的项目。LinkedIn 最开始有强烈的数据强实时处理方面的需求。当时他们碰到的主要问题包括以下两点。
 
 - 数据正确性不足
 
@@ -167,7 +163,7 @@ Kafka 在承接上下游、串联数据流管道方面发挥了重要的作用�
 
 - 第一点是更容易实现端到端的正确性（Correctness）
 
-  实现正确性是流处理能够匹敌批处理的基石。正确性一直是批处理的强项，而实现正确性则要求框架能提供精确一次处理语义，即处理一条消息有且只有一次机会能够影响系统状态。
+  Kafka 可以实现端到端的精确一次（Exactly-once）处理语义。
 
 - 第二点是 Kafka 对于流式计算的定位
 
@@ -177,5 +173,57 @@ Kafka 在承接上下游、串联数据流管道方面发挥了重要的作用�
 
 **Kafka 分布式存储**
 
-Kafka 作者之一 Jay Kreps 曾经专门写过一篇文章阐述为什么能把[Kafka 用作分布式存储](https://www.confluent.io/blog/okay-store-data-apache-kafka/)。不过目前还少有人这么用。
+Kafka 作者之一 Jay Kreps 曾经专门写过一篇文章阐述为什么能把[Kafka 用作分布式存储](https://www.confluent.io/blog/okay-store-data-apache-kafka/)。不过目前很少有人这么用。
+
+# 04 | 我应该选择哪种Kafka？
+
+整个 Kafka 生态圈如下图所示。
+
+![image-20210424231049846](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210424231050.png)
+
+Kafka Connect 通过一个个具体的连接器（Connector），串联起上下游的外部系统。
+
+由于存在多个组织或公司发布不同的 Kafka，目前市面上主要有以下三种：
+
+**Apache Kafka**
+
+Apache Kafka 是最“正宗”的 Kafka，自 Kafka 开源伊始，它便在 Apache 基金会孵化并最终毕业成为顶级项目，它也被称为社区版 Kafka。
+
+Apache Kafka 的劣势在于它仅仅提供最最基础的组件，特别是对于前面提到的 Kafka Connect 而言，社区版 Kafka 只提供一种连接器，即读写磁盘文件的连接器，而没有与其他外部系统交互的连接器，在实际使用过程中需要自行编写代码实现，这是它的一个劣势。另外 Apache Kafka 没有提供任何监控框架或工具。显然在线上环境不加监控肯定是不可行的，你必然需要借助第三方的监控框架实现对 Kafka 的监控。好消息是目前有一些开源的监控框架可以帮助用于监控 Kafka（比如 Kafka manager）。
+
+如果你仅仅需要一个消息引擎系统亦或是简单的流处理应用场景，同时需要对系统有较大把控度，那么推荐使用 Apache Kafka。
+
+**Confluent Kafka**
+
+2014 年，Kafka 的 3 个创始人 Jay Kreps、Naha Narkhede 和饶军离开 LinkedIn 创办了 Confluent 公司，专注于提供基于 Kafka 的企业级流处理解决方案。Confluent 公司主要从事商业化 Kafka 工具开发，并在此基础上发布了 Confluent Kafka。Confluent Kafka 提供了一些 Apache Kafka 没有的高级特性，比如跨数据中心备份、Schema 注册中心以及集群监控工具等。
+
+Confluent Kafka 目前分为免费版和企业版两种。前者和 Apache Kafka 非常相像，除了常规的组件之外，免费版还包含 Schema 注册中心和 REST proxy 两大功能。前者是帮助你集中管理 Kafka 消息格式以实现数据前向 / 后向兼容；后者用开放 HTTP 接口的方式允许你通过网络访问 Kafka 的各种功能，这两个都是 Apache Kafka 所没有的。
+
+如果你需要用到 Kafka 的一些高级特性，那么推荐你使用 Confluent Kafka。
+
+**Cloudera/Hortonworks Kafka**
+
+Cloudera 提供的 CDH 和 Hortonworks 提供的 HDP 是非常著名的大数据平台，里面集成了目前主流的大数据框架，能够帮助用户实现从分布式存储、集群调度、流处理到机器学习、实时数据库等全方位的数据处理。
+
+CDH/HDP Kafka 天然集成了 Apache Kafka，通过便捷化的界面操作将 Kafka 的安装、运维、管理、监控全部统一在控制台中。如果你是这些平台的用户一定觉得非常方便，因为所有的操作都可以在前端 UI 界面上完成，而不必去执行复杂的 Kafka 命令。另外这些平台提供的监控界面也非常友好，你通常不需要进行任何配置就能有效地监控 Kafka。
+
+如果你需要快速地搭建消息引擎系统，或者你需要搭建的是多框架构成的数据平台且 Kafka 只是其中一个组件，那么我推荐你使用这些大数据云公司提供的 Kafka。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

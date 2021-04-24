@@ -333,7 +333,7 @@ public class SpringCssSecurityConfig extends WebSecurityConfigurerAdapter {
 }
 ```
 
-上述代码的效果在于对“/customers”端点执行删除操作时，我们需要使用具有“ADMIN”角色的“springcss_admin”用户，否则会出现“access_denied”错误信息。。
+上述代码的效果在于对“/customers”端点执行删除操作时，我们需要使用具有“ADMIN”角色的“springcss_admin”用户，否则会出现“access_denied”错误信息。
 
 # 构建系统监控层
 
