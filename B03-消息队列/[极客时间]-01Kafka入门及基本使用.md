@@ -319,7 +319,7 @@ Kafka 支持数据的压缩，假设压缩比是 0.75，那么最后你需要规
 > 291MB=291*8Mb=2330Mb
 > $$
 
-# 07 | 最最最重要的集群参数配置（上）
+# 07 | 08 最最最重要的集群参数配置
 
 这些配置并不单单指 Kafka 服务器端的配置，其中既有 Broker 端参数，也有 Topic 级别的参数、JVM 端参数和操作系统级别的参数。下面我先从 Broker 端参数说起。
 
@@ -328,23 +328,11 @@ Kafka 支持数据的压缩，假设压缩比是 0.75，那么最后你需要规
 - log.dirs：指定了 Broker 需要使用的若干个文件目录路径。这个参数是没有默认值的，它必须由你亲自指定。例如：/home/kafka1,/home/kafka2,/home/kafka3。
 - log.dir：它表示单个路径，是补充上一个参数用的。
 
-ZooKeeper 相关的设置
-
-ZooKeeper 负责协调管理并保存 Kafka 集群的所有元数据信息，比如集群都有哪些 Broker 在运行、创建了哪些 Topic，每个 Topic 都有多少分区以及这些分区的 Leader 副本都在哪些机器上等信息。
-
-- zookeeper.connect：比如指定它的值为`zk1:2181,zk2:2181,zk3:2181`。如果让多个 Kafka 集群使用同一套 ZooKeeper 集群，可以这样指定：`zk1:2181,zk2:2181,zk3:2181/kafka1`和`zk1:2181,zk2:2181,zk3:2181/kafka2`。
-
 连接 Broker 相关参数
 
 - listeners：告诉外部连接者要通过什么协议访问指定主机名和端口开放的 Kafka 服务。例如：CONTROLLER: //localhost:9092。
 - listener.security.protocol.map：一旦你自己定义了协议名称，你必须还要指定`listener.security.protocol.map`参数告诉这个协议底层使用了哪种安全协议，比如指定 CONTROLLER:PLAINTEXT 表示 CONTROLLER 这个自定义协议底层使用明文不加密传输数据。
 - advertised.listeners：Advertised 的含义表示宣称的、公布的，就是说这组监听器是 Broker 用于对外发布的。
-
-Topic 管理参数
-
-- `auto.create.topics.enable`：是否允许自动创建 Topic。建议设置成 false。
-- `unclean.leader.election.enable`：是否允许 Unclean Leader 选举。即让不让那些落后太多的副本竞选 Leader。建议设置成 false。
-- `auto.leader.rebalance.enable`：是否允许定期进行 Leader 选举。建议设置成 false。
 
 数据留存参数
 
@@ -360,5 +348,58 @@ Topic 管理参数
 
   实际场景中突破 1MB 的消息很常见，所以建议设置在一点。
 
+ZooKeeper 相关的设置
 
+ZooKeeper 负责协调管理并保存 Kafka 集群的所有元数据信息，比如集群都有哪些 Broker 在运行、创建了哪些 Topic，每个 Topic 都有多少分区以及这些分区的 Leader 副本都在哪些机器上等信息。
+
+- zookeeper.connect：比如指定它的值为`zk1:2181,zk2:2181,zk3:2181`。如果让多个 Kafka 集群使用同一套 ZooKeeper 集群，可以这样指定：`zk1:2181,zk2:2181,zk3:2181/kafka1`和`zk1:2181,zk2:2181,zk3:2181/kafka2`。
+
+**Topic 级别参数**
+
+Topic 管理参数
+
+- `auto.create.topics.enable`：是否允许自动创建 Topic。建议设置成 false。
+- `unclean.leader.election.enable`：是否允许 Unclean Leader 选举。即让不让那些落后太多的副本竞选 Leader。建议设置成 false。
+- `auto.leader.rebalance.enable`：是否允许定期进行 Leader 选举。建议设置成 false。
+
+Topic 级别参数会覆盖全局 Broker 参数的值。
+
+- `retention.ms`：规定了该 Topic 消息被保存的时长。默认是 7 天，即该 Topic 只保存最近 7 天的消息。一旦设置了这个值，它会覆盖掉 Broker 端的全局参数值。
+- `retention.bytes`：规定了要为该 Topic 预留多大的磁盘空间。和全局参数作用相似，这个值通常在多租户的 Kafka 集群中会有用武之地。当前默认值是 -1，表示可以无限使用磁盘空间。
+- max.message.bytes：Kafka Broker 能够正常接收该 Topic 的最大消息大小。
+
+如何在创建 Topic 时设置这些参数呢？
+
+方法一：
+
+```
+bin/kafka-topics.sh--bootstrap-serverlocalhost:9092--create--topictransaction--partitions1--replication-factor1--configretention.ms=15552000000--configmax.message.bytes=5242880
+```
+
+方法二（推荐）：
+
+```
+ bin/kafka-configs.sh--zookeeperlocalhost:2181--entity-typetopics--entity-nametransaction--alter--add-configmax.message.bytes=10485760
+```
+
+**JVM 参数**
+
+Kafka 自 2.0.0 版本开始，已经正式摒弃对 Java 7 的支持了，所以至少要使用 Java 8。
+
+- `KAFKA_HEAP_OPTS`：指定堆大小。建议设置成 6GB，因为 Kafka Broker 在与客户端进行交互时会在 JVM 堆上创建大量的 ByteBuffer 实例，Heap Size 不能太小。
+- `KAFKA_JVM_PERFORMANCE_OPTS`：指定 GC 参数。如果是 Java 7，且 CPU 资源非常充裕，建议使用 CMS 收集器，否则使用 ParallelGC；如果是 Java 8 则建议使用 G1。
+
+**操作系统参数**
+
+- 文件描述符限制：通常情况下将它设置成一个超大的值是合理的做法，比如`ulimit -n 1000000`。
+
+  其实设置这个参数一点都不重要，但不设置的话后果很严重，比如你会经常看到“Too many open files”的错误。
+
+- 文件系统类型：如 ext3、ext4 或 XFS。根据官网的测试报告，XFS 的性能要强于 ext4，所以生产环境最好还是使用 XFS。
+
+- swap 调优：可以设置成一个较小的值。如果设置成 0，表示将 swap 完全禁掉以防止 Kafka 进程使用 swap 空间。当物理内存耗尽时，操作系统会触发 OOM killer 这个组件，它会随机挑选一个进程然后 kill 掉，根本不给用户任何的预警。但如果设置成一个比较小的值，当开始使用 swap 空间时，能够观测到 Broker 性能开始出现急剧下降，从而给你进一步调优和诊断问题的时间。
+
+- 提交时间/Flush 落盘时间：默认是 5 秒，可适当调大，以提高写入性能。
+
+  向 Kafka 发送数据并不是真要等数据被写入磁盘才会认为成功，而是只要数据被写入到操作系统的页缓存（Page Cache）上就可以了，随后操作系统根据 LRU 算法会按照提交时间定期将页缓存上的“脏”数据落盘到物理磁盘上。
 
