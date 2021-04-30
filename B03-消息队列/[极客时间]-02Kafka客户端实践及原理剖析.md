@@ -231,8 +231,13 @@ Producer：
 Broker：
 
 1. 设置 unclean.leader.election.enable = false。它控制的是哪些 Broker 有资格竞选分区的 Leader。如果一个 Broker 落后原先的 Leader 太多，那么它一旦成为新的 Leader，必然会造成消息的丢失。故一般都要将该参数设置成 false，即不允许这种情况的发生。
+
 2. 设置 replication.factor >= 3。其实这里想表述的是，最好将消息多保存几份，毕竟目前防止消息丢失的主要机制就是冗余。
+
 3. 设置 min.insync.replicas > 1。控制的是消息至少要被写入到多少个副本才算是“已提交”。设置成大于 1 可以提升消息持久性。在实际环境中千万不要使用默认值 1。
+
+   > 这与 acks=all 不冲突。如果ISR中只有1个副本了，acks=all也就相当于acks=1了，引入min.insync.replicas的目的就是为了做一个下限的限制：不能只满足于ISR全部写入，还要保证ISR中的写入个数不少于min.insync.replicas。
+
 4. 确保 replication.factor > min.insync.replicas。如果两者相等，那么只要有一个副本挂机，整个分区就无法正常工作了。我们不仅要改善消息的持久性，防止数据丢失，还要在不降低可用性的基础上完成。推荐设置成 replication.factor = min.insync.replicas + 1。
 
 Consumer：
@@ -245,17 +250,17 @@ Consumer：
 
 拦截器的基本思想就是允许应用程序在不修改逻辑的情况下，动态地实现一组可插拔的事件处理逻辑链。
 
-它们插入的逻辑可以是修改待发送的消息，也可以是创建新的消息，甚至是丢弃消息。这些功能都是以配置拦截器类的方式动态插入到应用程序中的，故可以快速地切换不同的拦截器而不影响主程序逻辑。
+Spring MVC 拦截器的工作原理如下：
 
-作为一个非常小众的功能，Kafka 拦截器自 0.10.0.0 版本被引入后并未得到太多的实际应用。
+![image-20210430221833495](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210430221833.png)
+
+Kafka 拦截器借鉴了这样的设计思路。作为一个非常小众的功能，Kafka 拦截器自 0.10.0.0 版本被引入后并未得到太多的实际应用。
 
 **Kafka 拦截器**
 
 Kafka 拦截器分为生产者拦截器和消费者拦截器。
 
-生产者拦截器允许你在发送消息前以及消息提交成功后植入你的拦截器逻辑；
-
-而消费者拦截器支持在消费消息前以及提交位移后编写特定逻辑。
+生产者拦截器允许你在发送消息前以及消息提交成功后植入你的拦截器逻辑；而消费者拦截器支持在消费消息前以及提交位移后编写特定逻辑。
 
 添加拦截器的代码如下：
 
@@ -296,13 +301,11 @@ public interface ConsumerInterceptor {
 }
 ```
 
-**典型使用场景**
+**使用案例**
 
 Kafka 拦截器可以应用于包括客户端监控、端到端系统性能检测、消息审计等多种功能在内的场景。
 
-**使用案例**
-
-某公司的某个业务只有一个 Producer 和一个 Consumer，他们想知道该业务消息从被生产出来到最后被消费的平均总时长是多少。了解了拦截器后，可以用拦截器来满足这个需求。
+假设某公司的某个业务只有一个 Producer 和一个 Consumer，他们想知道该业务消息从被生产出来到最后被消费的平均总时长是多少。了解了拦截器后，可以用拦截器来满足这个需求。
 
 既然是要计算总延时，那么一定要有个公共的地方来保存它，并且这个公共的地方还是要让生产者和消费者程序都能访问的。在这个例子中，我们假设数据被保存在 Redis 中。
 
@@ -318,15 +321,7 @@ public class AvgLatencyProducerInterceptor implements ProducerInterceptor<String
         jedis.incr("totalSentMessage");
         return record;
     }
-    @Override
-    public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
-    }
-    @Override
-    public void close() {
-    }
-    @Override
-    public void configure(Map<java.lang.String, ?> configs) {
-    }
+    // 省略其他重写方法
 }
 ```
 
@@ -349,19 +344,11 @@ public class AvgLatencyConsumerInterceptor implements ConsumerInterceptor<String
         jedis.set("avgLatency", String.valueOf(totalLatency / totalSentMsgs));
         return records;
     }
-    @Override
-    public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
-    }
-    @Override
-    public void close() {
-    }
-    @Override
-    public void configure(Map<String, ?> configs) {
-    }
+    // 省略其他重写方法
 }
 ```
 
-# 13 | Java生产者是如何管理TCP连接的？
+# 13 | Java生产者何时创建/关闭TCP连接？
 
 Apache Kafka 的所有通信都是基于 TCP 的，而不是基于 HTTP 或其他协议。无论是生产者、消费者，还是 Broker 之间的通信都是如此。
 
@@ -369,30 +356,27 @@ Apache Kafka 的所有通信都是基于 TCP 的，而不是基于 HTTP 或其�
 
 从社区的角度来看，在开发客户端时，人们能够利用 TCP 本身提供的一些高级功能，比如多路复用请求以及同时轮询多个连接的能力。
 
-> 所谓的多路复用请求，即 multiplexing request，是指将两个或多个数据流合并到底层单一物理连接中的过程。TCP 的多路复用请求会在一条物理连接上创建若干个虚拟连接，每个虚拟连接负责流转各自对应的数据流。其实严格来说，TCP 并不能多路复用，它只是提供可靠的消息交付语义保证，比如自动重传丢失的报文。
->
-
-除了 TCP 提供的这些高级功能有可能被 Kafka 客户端的开发人员使用之外，社区还发现，目前已知的 HTTP 库在很多编程语言中都略显简陋。
+除了 TCP 提供的这些高级功能有可能被 Kafka 客户端的开发人员使用之外，社区还发现，目前已知的 HTTP 库在很多编程语言中都略显简陋。（这个理由有些牵强）
 
 基于这两个原因，Kafka 社区决定采用 TCP 协议作为所有请求通信的底层协议。
 
-**Kafka 生产者程序概览**
+**Kafka 生产消息的过程**
 
-Kafka 的 Java 生产者 API 主要的对象就是 KafkaProducer。通常我们开发一个生产者的步骤有 4 步。
+通常我们开发一个生产者的步骤有 4 步。
 
 ```java
 // 第 1 步：构造生产者对象所需的参数对象。
 Properties props = new Properties ();
-props.put"参数 1", "参数 1 的值");
+props.put("参数 1", "参数 1 的值");
 props.put("参数 2", "参数 2 的值");
 // ……
-// 第 2 步：利用第 1 步的参数对象，创建 KafkaProducer 对象实例。
+// 第 2 步：创建 KafkaProducer 对象实例。
 try (Producer<String, String> producer = new KafkaProducer<>(props)) {
-    // 第 3 步：使用 KafkaProducer 的 send 方法发送消息。
+    // 第 3 步：发送消息。
     producer.send(new ProducerRecord<String, String>(……), callback);
     // ……
 }
-// 第 4 步：调用 KafkaProducer 的 close 方法关闭生产者并释放各种系统资源。
+// 第 4 步：关闭生产者并释放各种系统资源。
 ```
 
 当我们开发一个 Producer 应用时，生产者会向 Kafka 集群中指定的主题（Topic）发送消息，这必然涉及与 Kafka Broker 创建 TCP 连接。那么，Kafka 的 Producer 客户端是如何管理这些 TCP 连接的呢？
@@ -401,27 +385,26 @@ try (Producer<String, String> producer = new KafkaProducer<>(props)) {
 
 **何时创建 TCP 连接？**
 
-在创建 KafkaProducer 实例时，生产者应用会在后台创建并启动一个名为 Sender 的线程，该 Sender 线程开始运行时首先会创建与 Broker 的连接。
+就上面的代码而言，可能创建 TCP 连接的地方有 2 和 3 处。
+
+实际上在创建 KafkaProducer 实例时，Producer 应用就开始创建与 Broker 的 TCP 连接了。调用消息发送方法后，Producer 向某一台 Broker 发送 METADATA 请求。
 
 为了说明这一点，测试环境中我为 bootstrap.servers 配置了 localhost:9092、localhost:9093 来模拟不同的 Broker。下面是测试环境的日志：
 
-```
+```verilog
+// 创建与 Broker 的连接
 [2018-12-09 09:35:45,620] DEBUG [Producer clientId=producer-1] Initialize connection to node localhost:9093 (id: -2 rack: null) for sending metadata request (org.apache.kafka.clients.NetworkClient:1084)
-```
-
-```
 [2018-12-09 09:35:45,622] DEBUG [Producer clientId=producer-1] Initiating connection to node localhost:9093 (id: -2 rack: null) using address localhost/127.0.0.1 (org.apache.kafka.clients.NetworkClient:914)
 ```
 
-```
+```verilog
+// 创建与 Broker 的连接
 [2018-12-09 09:35:45,814] DEBUG [Producer clientId=producer-1] Initialize connection to node localhost:9092 (id: -1 rack: null) for sending metadata request (org.apache.kafka.clients.NetworkClient:1084)
-```
-
-```
 [2018-12-09 09:35:45,815] DEBUG [Producer clientId=producer-1] Initiating connection to node localhost:9092 (id: -1 rack: null) using address localhost/127.0.0.1 (org.apache.kafka.clients.NetworkClient:914)
 ```
 
-```
+```verilog
+// 尝试获取集群的元数据信息
 [2018-12-09 09:35:45,828] DEBUG [Producer clientId=producer-1] Sending metadata request (type=MetadataRequest, topics=) to node localhost:9093 (id: -2 rack: null) (org.apache.kafka.clients.NetworkClient:1068)
 ```
 
@@ -431,19 +414,19 @@ Producer 会连接 bootstrap.servers 参数指定的所有 Broker。
 >
 > 在实际使用过程中，通常你指定 3～4 台就足以了。因为 Producer 一旦连接到集群中的任一台 Broker，就能拿到整个集群的 Broker 信息，故没必要为 bootstrap.servers 指定所有的 Broker。
 
-日志输出中的最后一行表明 Producer 向某一台 Broker 发送了 METADATA 请求，尝试获取集群的元数据信息。
-
 目前我们的结论是这样的：TCP 连接是在创建 KafkaProducer 实例时建立的。
 
 TCP 连接还可能在两个地方被创建：一个是在更新元数据后，另一个是在消息发送时。当 Producer 更新了集群的元数据信息之后，如果发现与某些 Broker 当前没有连接，那么它就会创建一个 TCP 连接。同样地，当要发送消息时，Producer 发现尚不存在与目标 Broker 的连接，也会创建一个。
 
 > 为什么说是可能？因为这两个地方并非总是创建 TCP 连接。
 
+（总结：创建 TCP 连接有 3 个时机）
+
 接下来，我们来看看 Producer 更新集群元数据信息的两个场景。
 
 场景一：当 Producer 尝试给一个不存在的主题发送消息时，Broker 会告诉 Producer 说这个主题不存在。此时 Producer 会发送 METADATA 请求给 Kafka 集群，去尝试获取最新的元数据信息。
 
-场景二：Producer 通过 metadata.max.age.ms 参数定期地去更新元数据信息。该参数的默认值是 300000，即 5 分钟，也就是说不管集群那边是否有变化，Producer 每 5 分钟都会强制刷新一次元数据以保证它是最及时的数据。
+场景二：Producer 通过 metadata.max.age.ms 参数定期地去更新元数据信息。该参数的默认值是 300000 (ms)，即 5 分钟，也就是说不管集群那边是否有变化，Producer 每 5 分钟都会强制刷新一次元数据以保证它是最及时的数据。
 
 **何时关闭 TCP 连接？**
 
@@ -454,6 +437,8 @@ Producer 端关闭 TCP 连接的方式有两种：一种是用户主动关闭；
 第二种是 Kafka 帮你关闭，这与 Producer 端参数 connections.max.idle.ms 的值有关。默认情况下该参数值是 9 分钟，即如果在 9 分钟内没有任何请求“流过”某个 TCP 连接，那么 Kafka 会主动帮你把该 TCP 连接关闭。用户可以在 Producer 端设置 connections.max.idle.ms=-1 禁掉这种机制。一旦被设置成 -1，TCP 连接将成为永久长连接。当然这只是软件层面的“长连接”机制，由于 Kafka 创建的这些 Socket 连接都开启了 keepalive，因此 keepalive 探活机制还是会遵守的。
 
 值得注意的是，在第二种方式中，TCP 连接是在 Broker 端被关闭的，但其实这个 TCP 连接的发起方是客户端，因此在 TCP 看来，这属于被动关闭的场景，即 passive close。被动关闭的后果就是会产生大量的 CLOSE_WAIT 连接，因此 Producer 端或 Client 端没有机会显式地观测到此连接已被中断。
+
+（被动关闭为什么会出现 CLOSE_WAIT?）
 
 # 14 | 幂等生产者和事务生产者是一回事吗？
 
