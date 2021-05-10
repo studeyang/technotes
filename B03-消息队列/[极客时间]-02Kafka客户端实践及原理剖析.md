@@ -552,9 +552,7 @@ Kafka 的 Consumer Group 避开了这两种模型的缺陷，同时又兼具它�
 
 其实对于 Consumer Group 而言，它是一组 KV 对，Key 是分区，V 对应 Consumer 消费该分区的最新位移。可以认为是这样的数据结构 Map<TopicPartition, Long>。
 
-在新版本的 Consumer Group 中，Kafka 社区重新设计了 Consumer Group 的位移管理方式，采用了将位移保存在 Kafka 内部主题的方法。这个内部主题就是 __consumer_offsets。
-
-（哪个版本？）
+在新版本（ 0.9版本）的 Consumer Group 中，Kafka 社区重新设计了 Consumer Group 的位移管理方式，采用了将位移保存在 Kafka 内部主题的方法。这个内部主题就是 __consumer_offsets。
 
 **Consumer Group 端重平衡**
 
@@ -670,7 +668,7 @@ Group 下实例数减少是我们要关注的。Coordinator 会在什么情况�
 
 第一类非必要 Rebalance 是因为未能及时发送心跳，导致 Consumer 被“踢出”Group 而引发的。
 
-因此，你需要仔细地设置 session.timeout.ms 和 heartbeat.interval.ms的值。要保证 Consumer 实例在被判定为“dead”之前，能够发送至少 3 轮的心跳请求，即 session.timeout.ms >= 3 * heartbeat.interval.ms。
+因此，你需要仔细地设置 session.timeout.ms 和 heartbeat.interval.ms 的值。要保证 Consumer 实例在被判定为“dead”之前，能够发送至少 3 轮的心跳请求，即 session.timeout.ms >= 3 * heartbeat.interval.ms。
 
 我在这里给出一些推荐数值，你可以“无脑”地应用在你的生产环境中。
 
