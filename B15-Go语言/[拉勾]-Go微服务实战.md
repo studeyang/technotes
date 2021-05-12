@@ -199,15 +199,59 @@ func main() {
 
 # 07 | 如何使用 Go 更好地开发并发程序？
 
+**Go 的 MPG 线程模型**
+
+
+
+**goroutine 和 channel**
+
+1. select 多路复用
+
+2. Context 上下文
+
+
+
+# 08 | 如何基于 Go-kit 开发 Web 应用：从接口层到业务层再到数据层
+
+**使用 Go Modules 管理项目依赖**
+
+
+
+**一个基于 Go-kit 简单的 User 应用**
+
+https://github.com/longjoy/micro-go-course
+
+
+
+**使用 gorm 连接 My SQL 数据库**
+
+
+
+# 09 | 案例：货运平台应用的微服务划分
+
+
+
+# 10 | 案例：微服务 Docker 容器化部署和 Kubernetes 容器编排
+
+
+
+# 11 | 案例：如何结合 Jenkins 完成持续化集成和自动化测试？
 
 
 
 
 
+# 第三部分（12~35）
 
+# 12 | 服务注册与发现如何满足服务治理？
 
+![image-20210512221432993](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210512221603.png)
 
+# 13 | 案例：如何基于 Consul 给微服务添加服务注册与发现？
 
+# 14 | 案例：如何在 Go-kit 和 Service Mesh 中进行服务注册与发现？
+
+# 15 | 微服务间如何进行远程方法调用？
 
 
 
