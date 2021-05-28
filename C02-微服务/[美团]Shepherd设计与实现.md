@@ -1,5 +1,3 @@
-> 来源：https://tech.meituan.com/2021/05/20/shepherd-api-gateway.html
-
 # 01 | 背景介绍
 
 **1.1 API 网关是什么？**
@@ -151,3 +149,8 @@ Shepherd 在创建 API 时，支持这种服务编排的 API，以满足扩展�
 
 ![image-20210528142039740](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210528142039.png)
 
+# 参考资料
+
+- https://tech.meituan.com/2021/05/20/shepherd-api-gateway.html
+- https://tech.meituan.com/2018/07/26/sep-service-arrange.html
+- https://www.infoq.cn/article/qxcl87g3fsiubnvulkoi
