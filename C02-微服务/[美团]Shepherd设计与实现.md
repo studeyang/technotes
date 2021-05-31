@@ -4,6 +4,8 @@
 
 API网关是运行于外部请求与内部服务之间的一个流量入口，实现对外部请求的协议转换、鉴权、流控、参数校验、监控等通用功能。
 
+![image-20210531144242301](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210531144242.png)
+
 总结来说，网关主要解决两个问题：第一，统一 API 的管理；第二，整合微服务的重复功能；
 
 **1.2 为什么要做 Shepherd API 网关** 
@@ -63,6 +65,8 @@ API 测试完成后，为了保证上线稳定性，Shepherd 管理平台提供�
 当请求流量进入 Shepherd 服务端，具体处理逻辑由 API DSL 中配置的一系列功能组件完成。网关提供了 API 路由、功能组件集成、协议转换和服务调用。
 
 API 路由的实现：
+
+经过这样一些功能组件后，最终会路由到微服务。路由的实现原理可以简单的理解成一种 Map 结构，其中 Key 就是完整的域名和路径信息，Value 是具体的 API 配置。
 
 ![image-20210528161248763](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210528161248.png)
 
