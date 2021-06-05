@@ -320,7 +320,257 @@ public Map testRead() {
 
 # 02 | 代码加锁：不要让“锁”事成为烦心事
 
+**踩坑5：锁加在了不同层面上导致结果不符合预期**
 
+- 案例场景
+
+```java
+class Data {
+    @Getter
+    private static int counter = 0;
+
+    public static int reset() {
+        counter = 0;
+        return counter;
+    }
+  
+    public synchronized void wrong() {
+        counter++;
+    }
+}
+```
+
+测试代码如下：
+
+```java
+@GetMapping("wrong")
+public int wrong(@RequestParam(value = "count", defaultValue = "1000000") int count) {
+    Data.reset();
+    IntStream.rangeClosed(1, count).parallel().forEach(i -> new Data().wrong());
+    return Data.getCounter();
+}
+```
+
+预期执行后应该输出 100 万，但页面输出的是 639242。
+
+- 原因分析
+
+静态字段属于类，类级别的锁才能保护；而非静态字段属于类实例，实例级别的锁才可以保护。
+
+- 解决方案
+
+把锁都加在类对象上。
+
+```java
+class Data {
+    @Getter
+    private static int counter = 0;
+    private static Object locker = new Object();
+
+    public static int reset() {
+        counter = 0;
+        return counter;
+    }
+  
+    public void right() {
+        synchronized (locker) {
+            counter++;
+        }
+    }
+}
+```
+
+**踩坑6：锁的粒度过大导致性能问题**
+
+- 案例场景
+
+在业务代码中，有一个 ArrayList 因为会被多个线程操作而需要保护，又有一段比较耗时的操作（代码中的 slow 方法）不涉及线程安全问题。具体代码如下：
+
+```java
+private List<Integer> data = new ArrayList<>();
+
+private void slow() {
+    try {
+        TimeUnit.MILLISECONDS.sleep(10);
+    } catch (InterruptedException e) {
+    }
+}
+
+@GetMapping("wrong")
+public int wrong() {
+    long begin = System.currentTimeMillis();
+    IntStream.rangeClosed(1, 1000).parallel().forEach(i -> {
+        synchronized (this) {
+            slow();
+            data.add(i);
+        }
+    });
+    log.info("took:{}", System.currentTimeMillis() - begin);
+    return data.size();
+}
+```
+
+这样加锁性能很低。
+
+- 原因分析
+
+即使我们确实有一些共享资源需要保护，也要尽可能降低锁的粒度，仅对必要的代码块甚至是需要保护的资源本身加锁。
+
+- 解决方案
+
+```java
+@GetMapping("right")
+public int right() {
+    long begin = System.currentTimeMillis();
+    IntStream.rangeClosed(1, 1000).parallel().forEach(i -> {
+        slow();
+        synchronized (data) {
+            data.add(i);
+        }
+    });
+    log.info("took:{}", System.currentTimeMillis() - begin);
+    return data.size();
+}
+```
+
+同样是 1000 次业务操作，个性前后对比耗时分别是 11 秒和 1.4 秒。
+
+**踩坑7：下单时出现了死锁导致下单失败率很高**
+
+- 案例场景
+
+下单操作需要锁定订单中多个商品的库存，拿到所有商品的锁之后进行下单扣减库存操作，全部操作完成之后释放所有的锁。代码上线后发现，下单失败概率很高，失败后需要用户重新下单，极大影响了用户体验，还影响到了销量。
+
+商品定义：
+
+```java
+@Data
+@RequiredArgsConstructor
+static class Item {
+    final String name;
+    int remaining = 1000;
+    @ToString.Exclude
+    ReentrantLock lock = new ReentrantLock();
+}
+```
+
+购物车添加商品：
+
+```java
+private ConcurrentHashMap<String, Item> items = new ConcurrentHashMap<>();
+
+public DeadLockController() {
+    IntStream.range(0, 10).forEach(i -> items.put("item" + i, new Item("item" + i)));
+}
+
+private List<Item> createCart() {
+    return IntStream.rangeClosed(1, 3)
+            .mapToObj(i -> "item" + ThreadLocalRandom.current().nextInt(items.size()))
+            .map(name -> items.get(name)).collect(Collectors.toList());
+}
+```
+
+下单：
+
+```java
+private boolean createOrder(List<Item> order) {
+    List<ReentrantLock> locks = new ArrayList<>();
+
+    for (Item item : order) {
+        try {
+            if (item.lock.tryLock(10, TimeUnit.SECONDS)) {
+                locks.add(item.lock);
+            } else {
+                locks.forEach(ReentrantLock::unlock);
+                return false;
+            }
+        } catch (InterruptedException e) {
+        }
+    }
+    try {
+        order.forEach(item -> item.remaining--);
+    } finally {
+        locks.forEach(ReentrantLock::unlock);
+    }
+    return true;
+}
+```
+
+测试代码：
+
+```java
+@GetMapping("wrong")
+public long wrong() {
+    long begin = System.currentTimeMillis();
+    long success = IntStream.rangeClosed(1, 100).parallel()
+            .mapToObj(i -> {
+                List<Item> cart = createCart();
+                return createOrder(cart);
+            })
+            .filter(result -> result)
+            .count();
+    log.info("success:{} totalRemaining:{} took:{}ms items:{}",
+            success,
+            items.entrySet().stream().map(item -> item.getValue().remaining).reduce(0, Integer::sum),
+            System.currentTimeMillis() - begin, items);
+    return success;
+}
+```
+
+输出日志如下：
+
+![image-20210605232953516](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210605232953.png)
+
+可以看到，100 次下单操作成功了 65 次，10 种商品总计 10000 件，库存总计为 9805， 消耗了 195 件符合预期（65 次下单成功，每次下单包含三件商品），总耗时 50 秒。
+
+- 原因分析
+
+使用 JDK 自带的 VisualVM 工具来跟踪一下，重新执行方法后不久就可以看到，线程 Tab 中提示了死锁问题，根据提示点击右侧线程 Dump 按钮进行线程抓取操作：
+
+![image-20210605233231724](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210605233231.png)
+
+查看抓取出的线程栈，在页面中部可以看到如下日志：
+
+![image-20210605233302370](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210605233302.png)
+
+为什么会有死锁问题呢?
+
+购物车添加商品，首先随机添加了三种商品，假设一个购物车中的商品 是 item1 和 item2，另一个购物车中的商品是 item2 和 item1，一个线程先获取到了 item1 的锁，同时另一个线程获取到了 item2 的锁，然后两个线程接下来要分别获取 item2 和 item1 的锁，这个时候锁已经被对方获取了，只能相互等待一直到 10 秒超时。
+
+- 解决方案
+
+为购物车中的商品排一下序，让所有的线程一定是先获取 item1 的锁然后获取 item2 的锁，就不会有问题了。
+
+```java
+@GetMapping("right")
+public long right() {
+    long begin = System.currentTimeMillis();
+    long success = IntStream.rangeClosed(1, 100).parallel()
+            .mapToObj(i -> {
+                List<Item> cart = createCart().stream()
+                        .sorted(Comparator.comparing(Item::getName))
+                        .collect(Collectors.toList());
+                return createOrder(cart);
+            })
+            .filter(result -> result)
+            .count();
+    log.info("success:{} totalRemaining:{} took:{}ms items:{}",
+            success,
+            items.entrySet().stream().map(item -> item.getValue().remaining).reduce(0, Integer::sum),
+            System.currentTimeMillis() - begin, items);
+    return success;
+}
+```
+
+测试一下 right 方法，不管执行多少次都是 100 次成功下单，而且性能相当高，达到了 3000 以上的 TPS：
+
+![image-20210605233946803](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210605233946.png)
+
+> 这里通过避免循环等待从而避免了死锁。
+
+
+
+**踩坑8：**
 
 - 案例场景
 - 原因分析
@@ -328,15 +578,7 @@ public Map testRead() {
 
 
 
-
-
-- 案例场景
-- 原因分析
-- 解决方案
-
-
-
-
+**踩坑8：**
 
 - 案例场景
 - 原因分析
@@ -344,7 +586,23 @@ public Map testRead() {
 
 
 
+**踩坑8：**
 
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑8：**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑8：**
 
 - 案例场景
 - 原因分析
