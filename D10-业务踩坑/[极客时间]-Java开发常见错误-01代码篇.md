@@ -97,6 +97,7 @@ public String right() throws InterruptedException {
     log.info("init size:{}", concurrentHashMap.size());
 
     ForkJoinPool forkJoinPool = new ForkJoinPool(THREAD_COUNT);
+    // parallel 默认是 cpu-1 个并发
     forkJoinPool.execute(() -> IntStream.rangeClosed(1, 10).parallel().forEach(i -> {
         synchronized (concurrentHashMap) {
             int gap = ITEM_COUNT - concurrentHashMap.size();
@@ -567,10 +568,243 @@ public long right() {
 ![image-20210605233946803](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210605233946.png)
 
 > 这里通过避免循环等待从而避免了死锁。
+>
+> [了解 wrk 压测工具](https://www.cnblogs.com/xinzhao/p/6233009.html)
+
+# 03 | 线程池使用最佳实践
+
+**实践8：线程池需要手动声明**
+
+- 案例场景
+
+使用 FixedThreadPool 的场景如下。
+
+```java
+@GetMapping("oom1")
+public void oom1() throws InterruptedException {
+
+    ThreadPoolExecutor threadPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
+    printStats(threadPool);
+    for (int i = 0; i < 100000000; i++) {
+        threadPool.execute(() -> {
+            String payload = IntStream.rangeClosed(1, 1000000)
+                    .mapToObj(__ -> "a")
+                    .collect(Collectors.joining("")) + UUID.randomUUID().toString();
+            try {
+                TimeUnit.HOURS.sleep(1);
+            } catch (InterruptedException e) {
+            }
+            log.info(payload);
+        });
+    }
+
+    threadPool.shutdown();
+    threadPool.awaitTermination(1, TimeUnit.HOURS);
+}
+```
+
+执行程序后不久，日志中就出现了如下 OOM：
+
+```log
+Exception in thread "http-nio-45678-ClientPoller" java.lang.OutOfMemoryError: GC overhead limit exceeded
+```
+
+使用 CachedThreadPool 场景如下。
+
+```java
+@GetMapping("oom2")
+public void oom2() throws InterruptedException {
+
+    ThreadPoolExecutor threadPool = (ThreadPoolExecutor) Executors.newCachedThreadPool();
+    printStats(threadPool);
+    for (int i = 0; i < 100000000; i++) {
+        threadPool.execute(() -> {
+            String payload = UUID.randomUUID().toString();
+            try {
+                TimeUnit.HOURS.sleep(1);
+            } catch (InterruptedException e) {
+            }
+            log.info(payload);
+        });
+    }
+    threadPool.shutdown();
+    threadPool.awaitTermination(1, TimeUnit.HOURS);
+}
+```
+
+程序执行不久后，同样有如下异常：
+
+```log
+[11:30:30.487] [http-nio-45678-exec-1] [ERROR] [.a.c.c.C.[.[.[/].[dispatcherServletrue]
+java.lang.OutOfMemoryError: unable to create new native thread
+```
+
+- 原因分析
+
+newFixedThreadPool 直接 new 了一个 LinkedBlockingQueue，长度是 Integer.MAX_VALUE，可以认为是无界的。如果任务较多并且执行较慢的话，队列可能会快速积压，撑爆内存导致 OOM。
+
+newCachedThreadPool 线程池的最大线程数是 Integer.MAX_VALUE，可以认为是没有上限的，而其工作队列 SynchronousQueue 是一个没有存储空间的阻塞队列。只要有请求到来，就会创建一条新的线程来处理。
+
+大量的任务进来后会创建大量的线程，而线程是需要分配一定的内存空间作为线程栈的，比如 1MB，因此无限制创建线程必然会导致 OOM。
+
+- 解决方案
+
+我们需要根据自己的场景、并发情况来评估线程池的几个核心参数，包括核心线程数、最大线程数、线程回收策略、工作队列的类型，以及拒绝策略，确保线程池的工作行为符合需求，一般都需要设置有界的工作队列和可控的线程数。
+
+任何时候，都应该为自定义线程池指定有意义的名称，以方便排查问题。当出现线程数量暴增、线程死锁、线程占用大量 CPU、线程执行出现异常等问题时，我们往往会抓取线程栈。此时，有意义的线程名称，就可以方便我们定位问题。
+
+我们还应该用一些监控手段来观察线程池的状态，提前观察线程池队列的积压，或者线程数量的快速膨胀，往往可以提早发现并解决问题。
+
+**实践8：务必确认清楚线程池本身是不是复用的**
+
+- 案例场景
+
+某项目生产环境时不时报警提示线程数过多，超过 2000 个，但过一会儿又会降下来，而应用的访问量变化并不大。
+
+为了定位问题，我们在线程数比较高的时候进行线程栈抓取，抓取后发现内存中有 1000 多个自定义线程池。
+
+在项目代码里，找到如下代码：
+
+```java
+@GetMapping("wrong")
+public String wrong() throws InterruptedException {
+    ThreadPoolExecutor threadPool = ThreadPoolHelper.getThreadPool();
+    IntStream.rangeClosed(1, 10).forEach(i -> {
+        threadPool.execute(() -> {
+            String payload = IntStream.rangeClosed(1, 1000000)
+                    .mapToObj(__ -> "a")
+                    .collect(Collectors.joining("")) + UUID.randomUUID().toString();
+            try {
+                TimeUnit.SECONDS.sleep(1);
+            } catch (InterruptedException e) {
+            }
+            log.debug(payload);
+        });
+    });
+    return "OK";
+}
+```
+
+```java
+static class ThreadPoolHelper {
+    public static ThreadPoolExecutor getThreadPool() {
+        return (ThreadPoolExecutor) Executors.newCachedThreadPool();
+    }
+}
+```
+
+- 原因分析
+
+为什么我们能在监控中看到线程数量会下降，而不会撑爆内存呢?
+
+newCachedThreadPool 的核心线程数是 0，而 keepAliveTime 是 60 秒，也就是在 60 秒之后所有的线程都是可以回收的。就因为这个特性，我们的业务程序死得没太难看。
+
+- 解决方案
+
+```java
+static class ThreadPoolHelper {
+    private static ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(
+            10, 50,
+            2, TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(1000),
+            new ThreadFactoryBuilder().setNameFormat("demo-threadpool-%d").get());
+
+    static ThreadPoolExecutor getRightThreadPool() {
+        return threadPoolExecutor;
+    }
+}
+```
+
+**实践9：仔细斟酌线程池的混用策略**
+
+- 案例场景
+
+某项目业务代码使用了线程池异步处理一些内存中的数据，但通过监控发现处理得非常慢，整个处理过程都是内存中的计算不涉及 IO 操作，也需要数秒的处理时间，应用程序 CPU 占用也不是特别高，有点不可思议。
+
+经排查发现，业务代码使用的线程池，还被一个后台的文件批处理任务用到了。
+
+线程池定义如下：
+
+```java
+private static ThreadPoolExecutor threadPool = new ThreadPoolExecutor(
+        2, 2,
+        1, TimeUnit.HOURS,
+        new ArrayBlockingQueue<>(100),
+        new ThreadFactoryBuilder().setNameFormat("batchfileprocess-threadpool-%d").get(),
+        new ThreadPoolExecutor.CallerRunsPolicy());
+```
+
+正常业务处理如下：
+
+```java
+private Callable<Integer> calcTask() {
+    return () -> {
+        TimeUnit.MILLISECONDS.sleep(10);
+        return 1;
+    };
+}
+
+@GetMapping("wrong")
+public int wrong() throws ExecutionException, InterruptedException {
+    return threadPool.submit(calcTask()).get();
+}
+```
+
+其他场景混用逻辑如下：
+
+```java
+@PostConstruct
+public void init() {
+    printStats(threadPool);
+
+    new Thread(() -> {
+        String payload = IntStream.rangeClosed(1, 1_000_000)
+                .mapToObj(__ -> "a")
+                .collect(Collectors.joining(""));
+        while (true) {
+            threadPool.execute(() -> {
+                try {
+                    Files.write(Paths.get("demo.txt"), Collections.singletonList(LocalTime.now().toString() + ":" + payload), UTF_8, CREATE, TRUNCATE_EXISTING);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                log.info("batch file processing done");
+            });
+        }
+    }).start();
+}
+```
+
+日志打印如下：
+
+![image-20210606233305715](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210606233305.png)
+
+- 原因分析
+
+线程池的 2 个线程始终处于活跃状态，队列也基本处于打满状态。因为开启了 CallerRunsPolicy 拒绝处理策略，所以当线程满载队列也满的情况下，任务会在提交任务的线程上执行。
+
+- 解决方案
+
+使用独立的线程池来做这样的任务即可。IO 密集型操作的的线程池线程数设置太小会限制吞吐能力。
+
+```java
+private static ThreadPoolExecutor asyncCalcThreadPool = new ThreadPoolExecutor(
+        200, 200,
+        1, TimeUnit.HOURS,
+        new ArrayBlockingQueue<>(1000),
+        new ThreadFactoryBuilder().setNameFormat("asynccalc-threadpool-%d").get());
+        
+@GetMapping("right")
+public int right() throws ExecutionException, InterruptedException {
+    return asyncCalcThreadPool.submit(calcTask()).get();
+}
+```
+
+调整后，TPS 从 75 增长到了 1737。
 
 
 
-**踩坑8：**
+**踩坑10：**
 
 - 案例场景
 - 原因分析
@@ -578,31 +812,7 @@ public long right() {
 
 
 
-**踩坑8：**
-
-- 案例场景
-- 原因分析
-- 解决方案
-
-
-
-**踩坑8：**
-
-- 案例场景
-- 原因分析
-- 解决方案
-
-
-
-**踩坑8：**
-
-- 案例场景
-- 原因分析
-- 解决方案
-
-
-
-**踩坑8：**
+**踩坑11：**
 
 - 案例场景
 - 原因分析
