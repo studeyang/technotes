@@ -802,9 +802,39 @@ public int right() throws ExecutionException, InterruptedException {
 
 调整后，TPS 从 75 增长到了 1737。
 
+# 04 | 连接池：别让连接池帮了倒忙
+
+**连接池的结构**
 
 
-**踩坑10：**
+
+**注意鉴别客户端SDK是否基于连接池**
+
+
+
+**案例：分析Jedis属于哪种类型的API**
+
+
+
+![image-20210607223205707](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210607223205.png)
+
+
+
+**案例：分析HttpClient属于哪种类型的API**
+
+
+
+**实践10：使用连接池务必确保复用**
+
+
+
+**实践11：使用连接池务必确保复用**
+
+
+
+
+
+**踩坑12：**
 
 - 案例场景
 - 原因分析
@@ -812,7 +842,7 @@ public int right() throws ExecutionException, InterruptedException {
 
 
 
-**踩坑11：**
+**踩坑13：**
 
 - 案例场景
 - 原因分析
