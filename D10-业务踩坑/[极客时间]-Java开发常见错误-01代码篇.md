@@ -806,35 +806,287 @@ public int right() throws ExecutionException, InterruptedException {
 
 **连接池的结构**
 
+连接池一般对客户端提供获得连接、归还连接的接口，并暴露最小空闲连接数、最大连接数等可配置参数，在内部则实现连接建立、连接心跳保持、连接管理、空闲连接回收、连接可用性检测等功能。连接池的结构示意图，如下所示：
 
+![image-20210608214800283](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608214800.png)
 
-**注意鉴别客户端SDK是否基于连接池**
+涉及 TCP 连接的客户端 SDK，对外提供 API 有三种方式。
 
+- 连接池和连接分离的 API
 
+XXXPool 类负责连接池实现，并且它是线程安全的；从连接池中可以获得连接 XXXConnection，非线程安全的。
 
-**案例：分析Jedis属于哪种类型的API**
+（对应上图“连接池”框）
 
+- 内部带有连接池的 API
 
+对外提供一个 XXXClient 类，这个类内部维护了连接池，并且它是线程安全的 。SDK 使用者无需考虑连接的获取和归还问题。
+
+（对应上图蓝色框包裹的部分）
+
+- 非连接池的 API
+
+一般命名为 XXXConnection，每次使 用都需要创建和断开连接，性能一般，且通常不是线程安全的。
+
+（对应上图去掉“连接池”的框）
+
+我们今天就以数据库连接池、Redis 连接池和 HTTP 连接池为例，聊聊使用和配置连接池容易出错的地方。
+
+**踩坑10：误用 Jedis API 导致程序错误**
+
+- 案例场景
+
+先通过一个案例来分析一下 Jedis 属于哪种类型的 API。
+
+数据初始化代码如下：
+
+```java
+@PostConstruct
+public void init() {
+    // 初始化数据
+    try (Jedis jedis = new Jedis("127.0.0.1", 6379)) {
+        Assert.isTrue("OK".equals(jedis.set("a", "1")), "set a = 1 return OK");
+        Assert.isTrue("OK".equals(jedis.set("b", "2")), "set b = 2 return OK");
+    }
+}
+```
+
+测试代码如下：
+
+```java
+@GetMapping("/wrong")
+public void wrong() throws InterruptedException {
+    Jedis jedis = new Jedis("127.0.0.1", 6379);
+    new Thread(() -> {
+        for (int i = 0; i < 1000; i++) {
+            String result = jedis.get("a");
+            if (!"1".equals(result)) {
+                log.warn("Expect a to be 1 but found {}", result);
+                return;
+            }
+        }
+    }).start();
+    new Thread(() -> {
+        for (int i = 0; i < 1000; i++) {
+            String result = jedis.get("b");
+            if (!"2".equals(result)) {
+                log.warn("Expect b to be 2 but found {}", result);
+                return;
+            }
+        }
+    }).start();
+    TimeUnit.SECONDS.sleep(5);
+}
+```
+
+程序执行结果如下：
+
+```java
+// 错误1：数据错乱
+[14:56:19.069] [Thread-28] [WARN ] [.t.c.c.redis.JedisMisreuseController:45  ] - Expect b to be 2 but found 1
+
+// 错误2：流未正常关闭
+redis.clients.jedis.exceptions.JedisConnectionException: Unexpected end of  stream.
+  at redis.clients.jedis.util.RedisInputStream.ensureFill(RedisInputStream.java:202)
+  at redis.clients.jedis.util.RedisInputStream.readLine(RedisInputStream.java:50)
+  at redis.clients.jedis.Protocol.processError(Protocol.java:114)
+  at redis.clients.jedis.Protocol.process(Protocol.java:166)
+  at redis.clients.jedis.Protocol.read(Protocol.java:220)
+  at redis.clients.jedis.Connection.readProtocolWithCheckingBroken(Connection.java:318)
+  at redis.clients.jedis.Connection.getBinaryBulkReply(Connection.java:255)
+  at redis.clients.jedis.Connection.getBulkReply(Connection.java:245)
+  at redis.clients.jedis.Jedis.get(Jedis.java:181)
+  at org.geekbang.time.commonmistakes.connectionpool.redis.JedisMisreuseController.lambda$wrong$1(JedisMisreuseController.java:43)
+  at java.lang.Thread.run(Thread.java:748)
+
+// 错误3：Redis关闭客户端连接
+java.io.IOException: Socket Closed
+  at java.net.AbstractPlainSocketImpl.getOutputStream(AbstractPlainSocketImpl.java:440)
+  at java.net.Socket$3.run(Socket.java:954)
+  at java.net.Socket$3.run(Socket.java:952)
+  at java.security.AccessController.doPrivileged(Native Method)
+  at java.net.Socket.getOutputStream(Socket.java:951)
+  at redis.clients.jedis.Connection.connect(Connection.java:200)
+  ... 7 more
+```
+
+- 原因分析
+
+对源码分析后，类结构图如下：
 
 ![image-20210607223205707](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210607223205.png)
 
+Jedis 继承了 BinaryJedis，BinaryJedis 中保存了单个 Client 的实例，Client 最终继承了 Connection，Connection 中保存了单个 Socket 的实例，和 Socket 对应的两个读写流。
+
+- 解决方案
+
+```java
+private static JedisPool jedisPool = new JedisPool("127.0.0.1", 6379);
+
+@GetMapping("/right")
+public void right() throws InterruptedException {
+
+    new Thread(() -> {
+        try (Jedis jedis = jedisPool.getResource()) {
+            for (int i = 0; i < 1000; i++) {
+                String result = jedis.get("a");
+                if (!"1".equals(result)) {
+                    log.warn("Expect a to be 1 but found {}", result);
+                    return;
+                }
+            }
+        }
+    }).start();
+    new Thread(() -> {
+        try (Jedis jedis = jedisPool.getResource()) {
+            for (int i = 0; i < 1000; i++) {
+                String result = jedis.get("b");
+                if (!"2".equals(result)) {
+                    log.warn("Expect b to be 2 but found {}", result);
+                    return;
+                }
+            }
+        }
+    }).start();
+    TimeUnit.SECONDS.sleep(5);
+
+}
+```
+
+**踩坑11：使用连接池务必确保复用**
+
+- 案例场景
+
+```java
+@GetMapping("wrong1")
+public String wrong1() {
+    CloseableHttpClient client = HttpClients.custom()
+            .setConnectionManager(new PoolingHttpClientConnectionManager())
+            // 空闲时间
+            .evictIdleConnections(60, TimeUnit.SECONDS).build();
+    try (CloseableHttpResponse response = client.execute(new HttpGet("http://127.0.0.1:45678/httpclientnotreuse/test"))) {
+        return EntityUtils.toString(response.getEntity());
+    } catch (Exception ex) {
+        ex.printStackTrace();
+    }
+    return null;
+}
+```
+
+访问这个接口几次后查看应用线程情况，可以看到有大量叫作 Connection evictor 的线程，且这些线程不会销毁：
+
+![image-20210608223510845](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608223510.png)
+
+- 原因分析
+
+对这个接口进行几秒的压测（压测使用 wrk，1 个并发 1 个连接），可以看到，已经建立了三千多个 TCP 连接到 45678 端口（其中有 1 个是压测客户端到 Tomcat 的连接，大部分都是 HttpClient 到 Tomcat 的连接）：
+
+```shell
+~ lsof -nP -i4TCP:45678 | wc -l
+3686
+```
+
+60 秒之后连接处于 CLOSE_WAIT 状态，最终彻底关闭。
+
+![image-20210608224132693](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608224132.png)
+
+这 2 点证明，CloseableHttpClient 属于第二种模式，即内部带有连接池的 API，其背后是 连接池，最佳实践一定是复用。
+
+- 解决方案
+
+```java
+private static CloseableHttpClient httpClient;
+
+static {
+    httpClient = HttpClients.custom().setMaxConnPerRoute(1).setMaxConnTotal(1).evictIdleConnections(60, TimeUnit.SECONDS).build();
+
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        try {
+            httpClient.close();
+        } catch (IOException ignored) {
+        }
+    }));
+}
+
+@GetMapping("right")
+public String right() {
+    try (CloseableHttpResponse response = httpClient.execute(new HttpGet("http://127.0.0.1:45678/httpclientnotreuse/test"))) {
+        return EntityUtils.toString(response.getEntity());
+    } catch (Exception ex) {
+        ex.printStackTrace();
+    }
+    return null;
+}
+```
+
+**踩坑12：Hikari 连接池配置的调优过程**
+
+连接池提供了许多参数，包括最小（闲置）连接、最大连接、闲置连接生存时间、连接生存时间等。
+
+其中，最重要的参数是最大连接数。但如果最大连接数太大，客户端需要耗费过多的资源维护连接。且每个客户端都保持大量的连接，会给服务端带来更大的压力。
+
+如果最大连接数太小，很可能会因为获取连接的等待时间太长，导致吞吐量低下，甚至超时无法获取连接。
+
+- 案例场景
+
+我们模拟下压力增大导致数据库连接池打满的情况，来实践下如何确认连接池的使用情况，以及有针对性地进行参数优化。
+
+首先，定义一个用户注册方法，通过 @Transactional 注解为方法开启事务。其中包含了 500 毫秒的休眠，一个数据库事务对应一个 TCP 连接，所以 500 多毫秒的时间都会占用数据库连接：
+
+```java
+@Transactional
+public User register() {
+    User user = new User();
+    user.setName("new-user-" + System.currentTimeMillis());
+    userRepository.save(user);
+    try {
+        TimeUnit.MILLISECONDS.sleep(500);
+    } catch (InterruptedException e) {
+        e.printStackTrace();
+    }
+    return user;
+}
+```
+
+随后，修改配置文件启用 register-mbeans，使 Hikari 连接池能通过 JMX MBean 注册连 接池相关统计信息，方便观察连接池：
+
+```properties
+spring.datasource.hikari.register-mbeans=true
+```
+
+- 原因分析
+
+启动程序并通过 JConsole 连接进程后，可以看到默认情况下最大连接数为 10：
+
+![image-20210608225553808](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608225553.png)
+
+使用 wrk 对应用进行压测，可以看到连接数一下子从 0 到了 10，有 20 个线程在等待获取连接:
+
+![image-20210608225629304](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608225629.png)
+
+不久就出现了无法获取数据库连接的异常，如下所示：
+
+```java
+[15:37:56.156] [http-nio-45678-exec-15] [ERROR] [.a.c.c.C.[.[.[/].[dispatcherServlet]:175 ] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception [Request processing failed; nested exception is org.springframework.dao.DataAccessResourceFailureException: unable to obtain isolated JDBC connection; nested exception is org.hibernate.exception.JDBCConnectionException: unable to obtain isolated JDBC connection] with root cause java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not  available, request timed out after 30000ms.
+```
+
+- 解决方案
+
+修改一下配置文件，调整数据库连接池最大连接参数到 50 即可。
+
+```properties
+spring.datasource.hikari.maximum-pool-size=50
+```
+
+然后，再观察一下这个参数是否适合当前压力，满足需求的同时也不占用过多资源。从监控来看这个调整是合理的，有一半的富余资源，再也没有线程需要等待连接了：
+
+![image-20210608230846125](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608230846.png)
+
+> 其实，看到错误日志后再调整已经有点儿晚了。更合适的做法是，对类似数据库连接池的重要资源进行持续检测，并设置一半的使用量作为报警阈值，出现预警后及时扩容。
 
 
-**案例：分析HttpClient属于哪种类型的API**
 
-
-
-**实践10：使用连接池务必确保复用**
-
-
-
-**实践11：使用连接池务必确保复用**
-
-
-
-
-
-**踩坑12：**
+**踩坑13：**
 
 - 案例场景
 - 原因分析
@@ -842,7 +1094,7 @@ public int right() throws ExecutionException, InterruptedException {
 
 
 
-**踩坑13：**
+**踩坑14：**
 
 - 案例场景
 - 原因分析
