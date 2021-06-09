@@ -1084,6 +1084,58 @@ spring.datasource.hikari.maximum-pool-size=50
 
 > 其实，看到错误日志后再调整已经有点儿晚了。更合适的做法是，对类似数据库连接池的重要资源进行持续检测，并设置一半的使用量作为报警阈值，出现预警后及时扩容。
 
+# 05 | HTTP调用：你考虑到超时、重试、并发了吗?
+
+**连接超时参数**
+
+
+
+
+
+**读取超时参数**
+
+客户端读取超时，服务端的执行会中断吗？
+
+
+
+读取超时可以设置得很短，比如 100ms 吗？
+
+
+
+读取超时配置得越长越好吗？
+
+
+
+**Feign 和 Ribbon 如何配置超时？**
+
+坑点一：默认情况下 Feign 的读取超时是 1 秒。可以通过以下配置设置超时时间：
+
+```properties
+feign.client.config.default.readTimeout=300
+feign.client.config.default.connectTimeout=300
+```
+
+坑点二：如果要配置 Feign 的读取超时，就必须同时配置连接超时。
+
+
+
+坑点三：Ribbon 两个超时参数首字母要大写。
+
+```properties
+ribbon.ReadTimeout=400
+ribbon.ConnectTimeout=400
+```
+
+如果同时配置了 Feign 和 Ribbon 参数，最终生效的是 Feign 的超时。
+
+
+
+**Ribbon 的重试请求**
+
+Ribbon 客户端读取超时是 1 秒，那么 2 秒后才会出现超时错误。因为客户端会自动进行重试。
+
+
+
 
 
 **踩坑13：**
