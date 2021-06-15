@@ -1088,51 +1088,232 @@ spring.datasource.hikari.maximum-pool-size=50
 
 **连接超时参数**
 
+连接超时参数 ConnectTimeout 是建立连阶的最长等待时间。
 
+- 连接超时配置得很长（60秒）可以吗？
 
-
+如果几秒连接不上，那么可能永远也连接不上。设置特别长的连接超时意义不大，将其配置得短一些（比如 1~5 秒）即可。在下游服务离线无法连接的时候，可以快速失败。
 
 **读取超时参数**
 
-客户端读取超时，服务端的执行会中断吗？
+读取超时参数 ReadTimeout 是用来控制从 Socket 上读取数据的最长等待时间。也就是向 Socket 写入数据后，我们等到 Socket 返回数据的超时时间，其中绝大部分的时间是服务端处理业务逻辑的时间。
 
+- 客户端读取超时，服务端的执行会中断吗？
 
+类似 Tomcat 的 Web 服务器都是把服务端请求提交到线程池处理的，只要服务端收到了请求，网络层面的超时和断开便不会影响服务端的执行。
 
-读取超时可以设置得很短，比如 100ms 吗？
+- 读取超时配置得越长成功率越高吗？
 
-
-
-读取超时配置得越长越好吗？
-
-
+进行 HTTP 请求一般是需要获得结果的，属于同步调用。如果超时时间很长，在等待服务端返回数据的同时，客户端线程也在等待，当下游服务出现大量超时的时候，程序可能也会受到拖累创建大量线程，最终崩溃。
 
 **Feign 和 Ribbon 如何配置超时？**
 
-坑点一：默认情况下 Feign 的读取超时是 1 秒。可以通过以下配置设置超时时间：
+坑点一：默认情况下 Feign 的读取超时是 1 秒。
+
+RibbonClientConfiguration 类如下：
+
+```java
+/**
+ * Ribbon client default connect timeout.
+ */
+public static final int DEFAULT_CONNECT_TIMEOUT = 1000;
+
+/**
+ * Ribbon client default read timeout.
+ */
+public static final int DEFAULT_READ_TIMEOUT = 1000;
+
+@Bean
+@ConditionalOnMissingBean
+public IClientConfig ribbonClientConfig() {
+    DefaultClientConfigImpl config = new DefaultClientConfigImpl();
+    config.loadProperties(this.name);
+    config.set(CommonClientConfigKey.ConnectTimeout, DEFAULT_CONNECT_TIMEOUT);
+    config.set(CommonClientConfigKey.ReadTimeout, DEFAULT_READ_TIMEOUT);
+    config.set(CommonClientConfigKey.GZipPayload, DEFAULT_GZIP_PAYLOAD);
+    return config;
+}
+```
+
+读取超时太短，可以通过以下配置设置超时时间：
 
 ```properties
-feign.client.config.default.readTimeout=300
-feign.client.config.default.connectTimeout=300
+feign.client.config.default.readTimeout=3000
+feign.client.config.default.connectTimeout=3000
 ```
 
 坑点二：如果要配置 Feign 的读取超时，就必须同时配置连接超时。
 
+打开 FeignClientFactoryBean 可以看到，只有同时设置 ConnectTimeout 和 ReadTimeout，Request.Options 才会被覆盖：
 
+```java
+protected void configureUsingProperties(
+        FeignClientProperties.FeignClientConfiguration config,
+        Feign.Builder builder) {
+    // ...
+    if (config.getConnectTimeout() != null && config.getReadTimeout() != null) {
+        builder.options(new Request.Options(config.getConnectTimeout(),
+                config.getReadTimeout()));
+    }
+    // ...
+}
+```
 
-坑点三：Ribbon 两个超时参数首字母要大写。
+坑点三：如果同时配置了 Feign 和 Ribbon 参数，最终生效的是 Feign 的超时。
+
+配置 Ribbon 时，两个超时参数首字母要大写。
 
 ```properties
 ribbon.ReadTimeout=400
 ribbon.ConnectTimeout=400
 ```
 
-如果同时配置了 Feign 和 Ribbon 参数，最终生效的是 Feign 的超时。
+在 LoadBalancerFeignClient 源码中可以看到，如果 Request.Options 不是默认值，就会创建一个 FeignOptionsClientConfig 代替原来 Ribbon 的 DefaultClientConfigImpl，导致 Ribbon 的配置被 Feign 覆盖：
 
-
+```java
+IClientConfig getClientConfig(Request.Options options, String clientName) {
+    IClientConfig requestConfig;
+    if (options == DEFAULT_OPTIONS) {
+        requestConfig = this.clientFactory.getClientConfig(clientName);
+    }
+    else {
+        requestConfig = new FeignOptionsClientConfig(options);
+    }
+    return requestConfig;
+}
+```
 
 **Ribbon 的重试请求**
 
-Ribbon 客户端读取超时是 1 秒，那么 2 秒后才会出现超时错误。因为客户端会自动进行重试。
+HTTP 协议认为 Get 请求是数据查询操作，是无状态的，又考虑到网络出现丢包是比较常见的事情，有些 HTTP 客户端或代理服务器会自动重试 Get/Head 请求。
+
+源码如下：
+
+```java
+// DefaultClientConfigImpl
+public static final int DEFAULT_MAX_AUTO_RETRIES_NEXT_SERVER = 1;
+public static final int DEFAULT_MAX_AUTO_RETRIES = 0;
+
+// RibbonLoadBalancedRetryPolicy
+public boolean canRetry(LoadBalancedRetryContext context) {
+    HttpMethod method = context.getRequest().getMethod();
+    return HttpMethod.GET == method || lbContext.isOkToRetryOnAllOperations();
+}
+
+@Override
+public boolean canRetrySameServer(LoadBalancedRetryContext context) {
+    return sameServerCount < lbContext.getRetryHandler().getMaxRetriesOnSameServer()
+            && canRetry(context);
+}
+
+@Override
+public boolean canRetryNextServer(LoadBalancedRetryContext context) {
+    // this will be called after a failure occurs and we increment the counter
+    // so we check that the count is less than or equals to too make sure
+    // we try the next server the right number of times
+    return nextServerCount <= lbContext.getRetryHandler().getMaxRetriesOnNextServer()
+            && canRetry(context);
+}
+```
+
+如果想关闭自动重试，可将 Get 改为 Post，也可将 MaxAutoRetriesNextServer 参数配置为 0：
+
+```properties
+ribbon.MaxAutoRetriesNextServer=0
+```
+
+**踩坑13：并发数限制了程序的处理能力**
+
+- 案例场景
+
+我之前遇到过一个爬虫项目，整体爬取数据的效率很低，增加线程池数量也无济于事，只能堆更多的机器做分布式的爬虫。现在，我们就来模拟下这个场景，看看问题出在了哪里。
+
+模拟代码如下：
+
+```java
+static CloseableHttpClient httpClient1;
+
+static {
+    httpClient1 = HttpClients.custom().setConnectionManager(new PoolingHttpClientConnectionManager()).build();
+}
+
+@GetMapping("wrong")
+public int wrong(@RequestParam(value = "count", defaultValue = "10") int count) throws InterruptedException {
+    return sendRequest(count, () -> httpClient1);
+}
+
+private int sendRequest(int count, Supplier<CloseableHttpClient> client) throws InterruptedException {
+    AtomicInteger atomicInteger = new AtomicInteger();
+    ExecutorService threadPool = Executors.newCachedThreadPool();
+    long begin = System.currentTimeMillis();
+    IntStream.rangeClosed(1, count).forEach(i -> {
+        threadPool.execute(() -> {
+            try (CloseableHttpResponse response = client.get().execute(
+                    new HttpGet("http://127.0.0.1:45678/routelimit/server"))
+            ) {
+                atomicInteger.addAndGet(Integer.parseInt(EntityUtils.toString(response.getEntity())));
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+    });
+    threadPool.shutdown();
+    threadPool.awaitTermination(1, TimeUnit.HOURS);
+    log.info("发送 {} 次请求，耗时 {} ms", atomicInteger.get(), System.currentTimeMillis() - begin);
+    return atomicInteger.get();
+}
+
+@GetMapping("server")
+public int server() throws InterruptedException {
+    TimeUnit.SECONDS.sleep(1);
+    return 1;
+}
+```
+
+按道理说，10 个请求并发处理的时间基本相当于 1 个请求的处理时间，也就是 1 秒，但日志中显示实际耗时 5 秒。
+
+- 原因分析
+
+查看 PoolingHttpClientConnectionManager 源码：
+
+```java
+// PoolingHttpClientConnectionManager
+public PoolingHttpClientConnectionManager(
+    final HttpClientConnectionOperator httpClientConnectionOperator,
+    final HttpConnectionFactory<HttpRoute, ManagedHttpClientConnection> connFactory,
+    final long timeToLive, final TimeUnit timeUnit) {
+    // ...
+    this.pool = new CPool(new InternalConnectionFactory(
+            this.configData, connFactory), 2, 20, timeToLive, timeUnit);
+   // ...
+}
+
+// CPool
+public CPool(
+        final ConnFactory<HttpRoute, ManagedHttpClientConnection> connFactory,
+        final int defaultMaxPerRoute, final int maxTotal,
+        final long timeToLive, final TimeUnit timeUnit) {
+    // ...
+}
+```
+
+可以注意到有两个重要参数：
+
+defaultMaxPerRoute=2，也就是同一个主机 / 域名的最大并发请求数为 2。我们的爬虫需要 10 个并发，显然是默认值太小限制了爬虫的效率。
+
+maxTotal=20，也就是所有主机整体最大并发为 20，这也是 HttpClient 整体的并发度。目前，我们请求数是 10，最大并发是 10，20 不会成为瓶颈。
+
+限制同一个域名两个并发请求其实是 HTTP 1.1 协议要求的。
+
+- 解决方案
+
+声明一个新的 HttpClient：
+
+```java
+httpClient2 = HttpClients.custom().setMaxConnPerRoute(10).setMaxConnTotal(20).build();
+```
+
+结果 10 次请求在 1 秒左右执行完成。
 
 
 
