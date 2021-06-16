@@ -1315,19 +1315,245 @@ httpClient2 = HttpClients.custom().setMaxConnPerRoute(10).setMaxConnTotal(20).bu
 
 结果 10 次请求在 1 秒左右执行完成。
 
+# 06 | 20%的业务代码的Spring声明式事务，可能都没处理正确
 
-
-
-
-**踩坑13：**
+**踩坑14：因为配置不正确，导致方法上的事务没生效**
 
 - 案例场景
+
+Controller 实现如下：
+
+```java
+@Autowired
+private UserService userService;
+
+@GetMapping("wrong1")
+public int wrong1(@RequestParam("name") String name) {
+    userService.createUserWrong1(name);
+    return userService.getUserCount(name);
+}
+```
+
+UserService 实现如下：
+
+```java
+@Autowired
+private UserRepository userRepository;
+
+public int createUserWrong1(String name) {
+    try {
+        this.createUserPrivate(new UserEntity(name));
+    } catch (Exception ex) {
+        log.error("create user failed because {}", ex.getMessage());
+    }
+    return userRepository.findByName(name).size();
+}
+
+@Transactional
+private void createUserPrivate(UserEntity entity) {
+    userRepository.save(entity);
+    if (entity.getName().contains("test")) {
+        throw new RuntimeException("invalid username!");
+    }
+}
+
+public int getUserCount(String name) {
+    return userRepository.findByName(name).size();
+}
+```
+
+调用接口后发现，即便用户名不合法，用户也能创建成功。
+
 - 原因分析
+
+@Transactional 生效原则 1，除非特殊配置（比如使用 AspectJ 静态织入实现 AOP），否则只有定义在 public 方法上的 @Transactional 才能生效。原因是 Spring 默认通过动态代理的方式实现 AOP，对目标方法进行增强，private 方法无法代理到， Spring 自然也无法动态增强事务处理逻辑。
+
+然而改为 createUserPublic 后：
+
+```java
+@Transactional
+public void createUserPublic(UserEntity entity) {
+    userRepository.save(entity);
+    if (entity.getName().contains("test"))
+}
+```
+
+这是因为 @Transactional 生效的原则 2，必须通过代理过的类从外部调用目标方法才能生效。
+
 - 解决方案
 
+将 UserService 修改一下：
+
+```java
+@Autowired
+private UserService self;
+
+public int createUserWrong1(String name) {
+    try {
+        self.createUserPrivate(new UserEntity(name));
+    } catch (Exception ex) {
+        log.error("create user failed because {}", ex.getMessage());
+    }
+    return userRepository.findByName(name).size();
+}
+```
+
+把 this 改为 self 后测试发现，在 Controller 中调用可以验证事务是生效的。
+
+我们务必确认调用 @Transactional 注解标记的方法是 public 的，并且是通过 Spring 注入的 Bean 进行调用的。
+
+**踩坑15：因为异常处理不正确，导致事务虽然生效但出现异常时没回滚**
+
+- 案例场景
+
+事务不生效的 UserService 实现如下：
+
+```java
+@Autowired
+private UserRepository userRepository;
+
+// 异常无法传播出方法，导致事务无法回滚 @Transactional
+public void createUserWrong1(String name) {
+    try {
+        userRepository.save(new UserEntity(name));
+        throw new RuntimeException("error");
+    } catch (Exception ex) {
+        log.error("create user failed", ex);
+    }
+}
+```
+
+或者下面的实现：
+
+```java
+// 即使出了受检异常也无法让事务回滚
+@Transactional
+public void createUserWrong2(String name) throws IOException {
+    userRepository.save(new UserEntity(name));
+    otherTask();
+}
+
+// 因为文件不存在，一定会抛出一个IOException
+private void otherTask() throws IOException {
+    Files.readAllLines(Paths.get("file-that-not-exist"));
+}
+```
+
+这 2 种方法的实现和调用，因为异常处理不当，导致程序没有如我们期望的文件操作出现异常时回滚事务。
+
+- 原因分析
+
+第一，只有异常传播出了标记了 @Transactional 注解的方法，事务才能回滚。
+
+第二，默认情况下，出现 RuntimeException 或 Error 的时候，Spring 才会回滚事务。
+
+- 解决方案
+
+第一，手动设置让当前事务处于回滚状态：
+
+```java
+@Transactional
+public void createUserWrong1(String name) {
+    try {
+        userRepository.save(new UserEntity(name));
+        throw new RuntimeException("error");
+    } catch (Exception ex) {
+        log.error("create user failed", ex);
+        TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+    }
+}
+```
+
+第二，在注解中声明，期望遇到所有的 Exception 都回滚事务：
+
+```java
+@Transactional(rollbackFor = Exception.class)
+public void createUserRight2(String name) throws IOException {
+    userRepository.save(new UserEntity(name));
+    otherTask();
+}
+```
+
+**踩坑16：事务传播配置不当导致事务回滚**
+
+- 案例场景
+
+一个用户注册的操作，会插入一个主用户到用户表，还会注册一个关联的子用户。我们希望将子用户注册的数据库操作作为一个独立事务来处理，即使失败也不会影响主流程，即不影响主用户的注册。
+
+Controller 的实现如下：
+
+```java
+@GetMappin("wrong")
+public int wrong(@RequestParam("name") String name) {
+    try {
+        userService.createUserWrong(new UserEntity(name));
+    } catch (Exception e) {
+        log.error("createUserWrong failed, reason:{}", e.getMessage());
+    }
+}
+```
+
+UserService 的实现如下：
+
+```java
+@Autowired
+private UserRepository userRepository;
+@Autowired
+private SubUserService subUserService;
+
+@Transactional
+public void createUserWrong(UserEntity entity) {
+    createMainUser(entity);
+    try {
+        subUserService.createSubUserWithExceptionWrong(entity);
+    } catch (Exception e) {
+        log.error("create sub user error:{}", ex.getMessage());
+    }
+}
+
+private void createMainUser(UserEntity entity) {
+    userRepository.save(entity);
+    log.info("createMainUser finish");
+}
+```
+
+SubUserService 的实现如下：
+
+```java
+@Transactional
+public void createSubUserWithExceptionWrong(UserEntity entity) {
+    log.info("createSubUserWithExceptionWrong start");
+    userRepository.save(entity);
+    throw new RuntimeException("invalid status");
+}
+```
+
+结果 Controller 里出现了一个 UnexpectedRollbackException，异常描述提示最终这个事务回滚了，而且是静默回滚的。之所以说是静默，是因为 createUserWrong 方法本身并没有出异常，只不过提交后发现子方法已经把当前事务设置为了回滚，无法完成提交。
+
+- 原因分析
+
+虽然捕获了异常，但是因为没有开启新事务，而当前事务因为异常已经被标记为 rollback 了。
+
+- 解决方案
+
+想办法让子逻辑在独立事务中运行，也就是执行到这个方法时需要开启新的事务，并挂起当前事务：
+
+```java
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public void createSubUserWithExceptionRight(UserEntity entity) {
+    log.info("createSubUserWithExceptionRight start");
+    userRepository.save(entity);
+    throw new RuntimeException("invalid status");
+}
+```
 
 
-**踩坑14：**
+
+
+
+
+
+**踩坑17：**
 
 - 案例场景
 - 原因分析
