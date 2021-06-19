@@ -1696,6 +1696,209 @@ explain select NAME,SCORE from person where NAME='name1';
 
 应该 SELECT 必要的字段，甚至可以考虑使用联合索引来包含我们要搜索的字段（即索引覆盖），既能实现索引加速，又可以避免回表的开销。
 
+**索引失效的情况**
+
+第一，后模糊查询索引会失效。
+
+比如下面的 LIKE 语句：
+
+```sql
+EXPLAIN SELECT * FROM person WHERE NAME LIKE '%name123' LIMIT 100
+```
+
+![image-20210619215651693](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619215651.png)
+
+type=ALL 代表了全表扫描。
+
+把百分号放到后面：
+
+```sql
+EXPLAIN SELECT * FROM person WHERE NAME LIKE 'name123%' LIMIT 100
+```
+
+![image-20210619215815097](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619215815.png)
+
+type=range 表示走索引扫描，key=name_score 看到实际走了 name_score 索引。
+
+第二，条件涉及函数操作无法走索引。
+
+比如搜索条件用到了 LENGTH 函数：
+
+```sql
+EXPLAIN SELECT * FROM person WHERE LENGTH(NAME)=7
+```
+
+![image-20210619220237343](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619220237.png)
+
+索引保存的是索引列的原始值，而不是经过函数计算后的值。如果需要针对函数调用走数据库索引的话，只能保存一份函数变换后的值，然后重新针对这个计算列做索引。
+
+第三，索引中断不走索引。
+
+如果对 name 和 score 建了联合索引，但是仅按照 score 列搜索无法走索引：
+
+```sql
+EXPLAIN SELECT * FROM person WHERE SCORE>45678
+```
+
+![image-20210619220555444](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619220555.png)
+
+在联合索引的情况下，数据是按照索引第一列排序，第一列数据相同时才会按照第二列排序。尝试把搜索条件加入 name 列：
+
+```sql
+EXPLAIN SELECT * FROM person WHERE SCORE>45678 AND NAME LIKE 'NAME45%'
+```
+
+![image-20210619220819281](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619220819.png)
+
+可以看到走了 name_score 索引。
+
+> 因为有查询优化器，所以 name 作为 WHERE 子句的第几个条件并不是很 重要。
+
+> 建联合索引还是多个独立索引?
+>
+> 如果你的搜索条件经常会使用多个字段进行搜索，那么可以考虑针对这几个字段建联合索引。同时，针对多字段建立联合索引，使用索引覆盖的可能更大。
+>
+> 如果只会查询单个字段，可以考虑建单独的索引，毕竟联合索引保存了不必要字段也有成本。
+
+**数据库如何基于成本决定是否走索引？**
+
+- 案例场景
+
+我们用下面的 SQL 查询 name>‘name84059’ AND create_time>‘2020- 01-24 05:00:00’
+
+```sql
+explain select * from person where NAME>'name84059' and create_time>'2020-01-24 05:00:00'
+```
+
+![image-20210619223039194](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619223039.png)
+
+type=All，其执行计划是全表扫描。
+
+把 create_time 条件中的 5 点改为 6 点：
+
+```sql
+explain select * from person where NAME>'name84059' and create_time>'2020-01-24 06:00:00'
+```
+
+![image-20210619223258891](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619223259.png)
+
+type=range，key=create_time，走了 create_time 索引，而不是 name_score 联合索引。
+
+- 原因分析
+
+MySQL 在查询数据之前，会先对可能的方案做执行计划，然后依据成本决定走哪个执行计划。这里的成本，包括 IO 成本和 CPU 成本：
+
+IO 成本，是从磁盘把数据加载到内存的成本。默认情况下，读取数据页的 IO 成本常数是 1（也就是读取 1 个页成本是 1）。
+
+CPU 成本，是检测数据是否满足条件和排序等 CPU 操作的成本。默认情况下，检测记录的成本是 0.2。
+
+MySQL 维护了表的统计信息，可以使用下面的命令查看：
+
+```sql
+SHOW TABLE STATUS LIKE 'person'
+```
+
+![image-20210619223540752](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619223540.png)
+
+总行数是 100086 行，CPU 成本是 100086*0.2=20017 左右。
+
+> 为什么这里多了 86 行？MySQL 的统计信息是一个估算。
+
+数据长度是 4734976 字节。InnoDB 每个页面的大小是 16KB，大概计算出页的数量是 289，因此 IO 成本是 289 左右。
+
+> 对于 InnoDB 来说，4734976 就是聚簇索引占用的空间，等于聚簇索引的页数量 * 每个页面的大小。
+
+所以，全表扫描的总成本是 20306 左右。
+
+在 MySQL 5.6 及之后的版本中，我们可以使用 optimizer trace 功能查看优化器生成执行计划的整个过程。
+
+```sql
+SET optimizer_trace="enabled=on";
+explain select * from person where NAME >'name84059' and create_time>'2020-01-24 05:00:00';
+select * from information_schema.OPTIMIZER_TRACE;
+SET optimizer_trace="enabled=off";
+```
+
+对于按照 create_time>'2020-01-24 05:00:00’ 条件走全表扫描的 SQL，我从 OPTIMIZER_TRACE 的执行结果中，摘出了几个重要片段来重点分析：
+
+1. 使用 name_score 对 name84059<name 条件进行索引扫描需要扫描 25362 行，成本是 30435。
+
+   ```json
+   {
+     "index": "name_score",
+     "ranges": [
+       "name84059 < name"
+     ],
+     "rows": 25362,
+     "cost": 30435,
+     "chosen": false,
+     "cause": "cost"
+   }
+   ```
+
+   > 30435 是查询二级索引的 IO 成本和 CPU 成本之和，再加上回表查询聚簇索引的 IO 成本和 CPU 成本之和。
+
+2. 使用 create_time 进行索引扫描需要扫描 23758 行，成本是 28511。
+
+   ```json
+   {
+     "index": "create_time",
+     "ranges": [
+       "0x5e2a79d0 < create_time"
+     ],
+     "rows": 23758,
+     "cost": 28511,
+     "chosen": false,
+     "cause": "cost"
+   }
+   ```
+
+3. 全表扫描 100086 条记录的成本是 20306。（和上面计算的一致）
+
+   ```json
+   {
+     "considered_execution_plans": [{
+       "table": "`person`",
+       "best_access_path": {
+         "considered_access_paths": [{
+           "rows_to_scan": 100086,
+           "access_type": "scan",
+           "resulting_rows": 100086,
+           "cost": 20306,
+           "chosen": true
+         }]
+       },
+       "rows_for_plan": 100086,
+       "cost_for_plan": 20306,
+       "chosen": true
+     }]
+   }
+   ```
+
+所以 MySQL 最终选择了全表扫描方式作为执行计划。
+
+把 SQL 中的 create_time 条件从 05:00 改为 06:00，再次分析 OPTIMIZER_TRACE 可以看到：
+
+```json
+{
+  "index": "create_time",
+  "ranges": [
+    "0x5e2a87e0 < create_time"
+  ],
+  "rows": 16588,
+  "cost": 19907,
+  "chosen": true
+}
+```
+
+因为是查询更晚时间的数据，走 create_time 索引需要扫描的行数从 23758 减少到了 16588。这次走这个索引的成本 19907 小于全表扫描的 20306，更小于走 name_score 索引的 30435。
+
+所以这次执行计划选择的是走 create_time 索引。
+
+**总结**
+
+1、type 取值有：ref、all、range。
+
 
 
 
