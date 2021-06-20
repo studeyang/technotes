@@ -1895,15 +1895,319 @@ SET optimizer_trace="enabled=off";
 
 所以这次执行计划选择的是走 create_time 索引。
 
+- 解决方案
+
+有时会因为统计信息的不准确或成本估算的问题，实际开销会和 MySQL 统计出来的差距较大，导致 MySQL 选择错误的索引或是直接选择走全表扫描，这个时候就需要人工干预，使用强制索引了。
+
+比如，像这样强制走 name_score 索引：
+
+```sql
+explain select * from person FORCE INDEX(name_score) where NAME >'name84059' and create_time>'2020-01-24 00:00:00'
+```
+
 **总结**
 
 1、type 取值有：ref、all、range。
 
+# 08 | 判等问题：程序里如何确定你就是你？
+
+**踩坑17：滥用 String 的 intern 方法导致性能问题**
+
+- 案例场景
+
+虽然使用 new 声明的字符串调用 intern 方法，也可以让字符串进行驻留，但在业务代码中滥用 intern，可能会产生性能问题。
+
+```java
+List<String> list = new ArrayList<>();
+
+@GetMapping("internperformance")
+public int internperformance(@RequestParam(value = "size", defaultValue = "10000000") int size) {
+    //-XX:+PrintStringTableStatistics
+    //-XX:StringTableSize=10000000
+    long begin = System.currentTimeMillis();
+    list = IntStream.rangeClosed(1, size)
+            .mapToObj(i -> String.valueOf(i).intern())
+            .collect(Collectors.toList());
+    log.info("size:{} took:{}", size, System.currentTimeMillis() - begin);
+    return list.size();
+}
+```
+
+在启动程序时设置 JVM 参数 -XX:+PrintStringTableStatistic，程序退出时可以打印出字符串常量表的统计信息。调用接口后关闭程序，输出如下：
+
+```tex
+StringTable statistics:
+Number of buckets       :    60013 =    480104 bytes, avg   8.000
+Number of entries       : 10030230 = 240725520 bytes, avg  24.000
+Number of literals      : 10030230 = 563005568 bytes, avg  56.131
+Total footprint         :          = 804211192 bytes
+Average bucket size     : 167.134
+Variance of bucket size :  55.808
+Std. dev. of bucket size:   7.471
+Maximum bucket size     :     198
+```
+
+1000 万次 intern 操作耗时居然超过了 44 秒。
+
+- 原因分析
+
+原因在于字符串常量池是一个固定容量的 Map。如果容量太小（Number of buckets=60013）、字符串太多（1000 万个字符串），那么每一个桶中的字符串数量会非常多，所以搜索起来就很慢。输出结果中的 Average bucket size=167，代表了 Map 中桶的平均长度是 167。
+
+- 解决方案
+
+解决方式是，设置 JVM 参数 -XX:StringTableSize，指定更多的桶。设置 -XX:StringTableSize=10000000 后，重启应用：
+
+```tex
+StringTable statistics:
+Number of buckets       : 10000000 =  80000000 bytes, avg   8.000
+Number of entries       : 10030156 = 240723744 bytes, avg  24.000
+Number of literals      : 10030156 = 562999472 bytes, avg  56.131
+Total footprint         :          = 883723216 bytes
+Average bucket size     :    1.003
+Variance of bucket size :    1.587
+Std. dev. of bucket size:    1.260
+Maximum bucket size     :       10
+```
+
+可以看到，1000 万次调用耗时只有 5.5 秒，Average bucket size 降到了 1，效果明显。
+
+> 没事别轻易用 intern，如果要用一定要注意控制驻留的字符串的数量，并留意常量表的各项指标。
+
+**实现一个 equals 没有这么简单**
+
+假设有这样一个描述点的类 Point，有 x、y 和描述三个属性：
+
+```java
+class Point {
+    private final String desc;
+    private int x;
+    private int y;
+
+    public Point(int x, int y, String desc) {
+        this.x = x;
+        this.y = y;
+        this.desc = desc;
+    }
+}
+```
+
+我们期望的逻辑是，只要 x 和 y 这 2 个属性一致就代表是同一个点，所以重写了 equals 方法：
+
+```java
+@Override
+public boolean equals(Object o) {
+    PointWrong that = (PointWrong) o;
+    return x == that.x && y == that.y;
+}
+```
+
+为测试改进后的 Point 是否可以满足需求，我们定义了三个用例：
+
+```java
+// 用例1：比较一个 Point 对象和 null
+// 结果：空指针
+PointRight p1 = new PointRight(1, 2, "a");
+try {
+    log.info("p1.equals(null) ? {}", p1.equals(null));
+} catch (Exception ex) {
+    log.error(ex.toString());
+}
+
+// 用例2：比较一个 Object 对象和一个 Point 对象
+// 结果：类型转换异常
+Object o = new Object();
+try {
+    log.info("p1.equals(expression) ? {}", p1.equals(o));
+} catch (Exception ex) {
+    log.error(ex.toString());
+}
+
+// 用例3：比较两个 x 和 y 属性值相同的 Point 对象
+// 输出 true
+PointRight p2 = new PointRight(1, 2, "b");
+log.info("p1.equals(p2) ? {}", p1.equals(p2));
+
+HashSet<PointRight> points = new HashSet<>();
+points.add(p1);
+log.info("points.contains(p2) ? {}", points.contains(p2));
+```
+
+通过日志中的结果可以看到，第一次比较出现了空指针异常,第二次比较出现了类型转换异常，第三次比较符合预期输出了 true。
+
+通过这些失效的用例，我们大概可以总结出实现一个更好的 equals 应该注意的点：
+
+1. 考虑到性能，可以先进行指针判等，如果对象是同一个那么直接返回 true；
+2. 需要对另一方进行判空，空对象和自身进行比较，结果一定是 fasle；
+3. 需要判断两个对象的类型，如果类型都不同，那么直接返回 false；
+
+确保类型相同的情况下再进行类型强制转换，然后逐一判断所有字段。 修复和改进后的 equals 方法如下：
+
+```java
+@Override
+public boolean equals(Object o) {
+    if (this == o) {
+        return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+        return false;
+    }
+    PointRight that = (PointRight) o;
+    return x == that.x && y == that.y;
+}
+```
+
+**踩坑18：重写了 equals 但未重写 hashCode**
+
+- 案例场景
+
+```java
+PointWrong p1 = new PointWrong(1, 2, "a");
+PointWrong p2 = new PointWrong(1, 2, "b");
+
+HashSet<PointWrong> points = new HashSet<>();
+points.add(p1);
+log.info("points.contains(p2) ? {}", points.contains(p2));
+```
+
+重写了 equals 方法后，这 2 个对象可以认为是同一个，Set 中已经存在了 p1，那就应该包含 p2，但结果却是 false。
+
+- 原因分析
+
+出现这个 Bug 的原因是，散列表需要使用 hashCode 来定位元素放到哪个桶。如果自定义对象没有实现自定义的 hashCode 方法，就会使用 Object 超类的默认实现，得到的两个 hashCode 是不同的，导致无法满足需求。
+
+- 解决方案
+
+直接使用 Objects.hash 方法来重写 hashCode 方法：
+
+```java
+@Override
+public int hashCode() {
+    return Objects.hash(x, y);
+}
+```
+
+**踩坑19：重写了 equals 但未重写 compareTo**
+
+- 案例场景
+
+我之前遇到过这么一个问题，代码里本来使用了 ArrayList 的 indexOf 方法进行元素搜索，但是一位好心的开发同学觉得逐一比较的时间复杂度是 O(n)，效率太低了，于是改为了排序后通过 Collections.binarySearch 方法进行搜索，实现了 O(log n) 的时间复杂度。 
+
+```java
+@Data
+@AllArgsConstructor
+class Student implements Comparable<Student> {
+    private int id;
+    private String name;
+
+    @Override
+    public int compareTo(Student other) {
+        int result = Integer.compare(other.id, id);
+        if (result == 0)
+            log.info("this {} == other {}", this, other);
+        return result;
+    }
+}
+```
+
+```java
+@GetMapping("wrong")
+public void wrong() {
+    List<Student> list = new ArrayList<>();
+    list.add(new Student(1, "zhang"));
+    list.add(new Student(2, "wang"));
+    Student student = new Student(2, "li");
+
+    log.info("ArrayList.indexOf");
+    int index1 = list.indexOf(student);
+    Collections.sort(list);
+    log.info("Collections.binarySearch");
+    int index2 = Collections.binarySearch(list, student);
+
+    log.info("index1 = " + index1);// 搜索不到
+    log.info("index2 = " + index2);// 1
+}
+```
+
+没想到，这么一改却出现了 Bug。搜索到的结果是 id 为 2，name 是 wang 的学生。
+
+- 原因分析
+
+binarySearch 方法内部调用了元素的 compareTo 方法进行比较。
+
+- 解决方案
+
+```java
+@Override
+public int compareTo(StudentRight other) {
+    return Comparator.comparing(StudentRight::getName)
+            .thenComparingInt(StudentRight::getId)
+            .compare(this, other);
+}
+```
+
+**Lombok @Data 生成代码的坑**
+
+定义一个 Person 类型，包含姓名和身份证两个字段：
+
+```java
+@Data
+class Person {
+    private String name;
+    private String identity;
+
+    public Person(String name, String identity) {
+        this.name = name;
+        this.identity = identity;
+    }
+}
+```
+
+对于身份证相同、姓名不同的两个 Person 对象：
+
+```java
+Person person1 = new Person("zhuye", "001");
+Person person2 = new Person("Joseph", "001");
+log.info("person1.equals(person2) ? {}", person1.equals(person2)); // false
+```
+
+判等的结果是 false。如果希望只要身份证一致就认为是同一个人的话，可以使用下面的实现：
+
+```java
+@EqualsAndHashCode.Exclude
+private String name;
+```
+
+如果类型之间有继承：
+
+```java
+@Data
+class Employee extends Person {
+  
+    private String company;
+    public Employee(String name, String identity, String company) {
+        super(name, identity);
+        this.company = company;
+    }
+}
+```
+
+```java
+Employee employee1 = new Employee("zhuye", "001", "bkjk.com");
+Employee employee2 = new Employee("Joseph", "002", "bkjk.com");
+log.info("employee1.equals(employee2) ? {}", employee1.equals(employee2)); // true
+```
+
+然而结果是 true，显然是没有考虑父类的属性，而认为这两个员工是同一人。原因是 @Data 包含了 @EqualsAndHashCode 注解，而 @EqualsAndHashCode 默认实现没有使用父类属性。修改如下：
+
+```java
+@Data
+@EqualsAndHashCode(callSuper = true)
+class Employee extends Person {
+```
 
 
 
-
-**踩坑17：**
+**踩坑20：**
 
 - 案例场景
 - 原因分析
@@ -1911,16 +2215,9 @@ SET optimizer_trace="enabled=off";
 
 
 
-**踩坑18：**
+**踩坑21**
 
 - 案例场景
 - 原因分析
 - 解决方案
 
-
-
-**踩坑19：**
-
-- 案例场景
-- 原因分析
-- 解决方案
