@@ -2205,13 +2205,101 @@ log.info("employee1.equals(employee2) ? {}", employee1.equals(employee2)); // tr
 class Employee extends Person {
 ```
 
+# 09 | 数值计算：注意精度、舍入和溢出问题
 
+在人看来，浮点数只是具有小数点的数字，0.1 和 1 都是一样精确的数字。但计算机其实无法精确保存浮点数，因此浮点数的计算结果也不可能精确。
 
-**踩坑20：**
+在人看来，一个超大的数字只是位数多一点而已，多写几个 1 并不会让大脑死机。但计算机是把数值保存在了变量中，不同类型的数值变量能保存的数值范围不同，当数值超过类型能表达的数值上限则会发生溢出问题。
+
+接下来，我们就具体看看这些问题吧。
+
+**“危险”的 Double**
+
+对几个简单的浮点数进行加减乘除运算：
+
+```java
+// 0.30000000000000004
+System.out.println(0.1+0.2);
+// 0.19999999999999996
+System.out.println(1.0-0.8);
+// 401.49999999999994
+System.out.println(4.015*100);
+// 1.2329999999999999
+System.out.println(123.3/100);
+
+double amount1 = 2.15;
+double amount2 = 1.10;
+// false
+System.out.println(amount1 - amount2 == 1.05);
+```
+
+出现这种问题的主要原因是，计算机是以二进制存储数值的，浮点数也不例外。比如，0.1 的二进制表示为 0.0 0011 0011 0011... (0011 无限循环)，再转换为十进制就是 0.1000000000000000055511151231257827021181583404541015625。对于计算机而言，0.1 无法精确表达，这是浮点数计算造成精度损失的根源。
+
+浮点数精确表达和运算的场景一定要用 BigDecimal 这个类型。
+
+**踩坑20：使用 BigDecimal 表示和计算浮点数，务必使用字符串的构造方法来初始化 BigDecimal**
 
 - 案例场景
+
+我们用 BigDecimal 把之前的四则运算改 一下：
+
+```java
+//0.3000000000000000166533453693773481063544750213623046875
+System.out.println(new BigDecimal(0.1).add(new BigDecimal(0.2)));
+//0.1999999999999999555910790149937383830547332763671875
+System.out.println(new BigDecimal(1.0).subtract(new BigDecimal(0.8)));
+//401.49999999999996802557689079549163579940795898437500
+System.out.println(new BigDecimal(4.015).multiply(new BigDecimal(100)));
+//1.232999999999999971578290569595992565155029296875
+System.out.println(new BigDecimal(123.3).divide(new BigDecimal(100)));
+```
+
+可以看到，运算结果还是不精确，只不过是精度高了而已。
+
 - 原因分析
+
+使用 BigDecimal 表示和计算浮点数，务必使用字符串的构造方法来初始化 BigDecimal。
+
 - 解决方案
+
+```java
+// 0.3
+System.out.println(new BigDecimal("0.1").add(new BigDecimal("0.2")));
+// 0.2
+System.out.println(new BigDecimal("1.0").subtract(new BigDecimal("0.8")));
+// 401.500
+System.out.println(new BigDecimal("4.015").multiply(new BigDecimal("100")));
+// 1.233
+System.out.println(new BigDecimal("123.3").divide(new BigDecimal("100")));
+```
+
+改进后，就能得到我们想要的输出了。
+
+**BigDecimal 的 scale 和 precision**
+
+不能调用 BigDecimal 传入 Double 的构造方法，但手头只有 一个 Double，如何转换为精确表达的 BigDecimal 呢?
+
+我们试试用 Double.toString 把 double 转换为字符串：
+
+```java
+System.out.println(new BigDecimal("4.015").multiply(new BigDecimal(Double.toString(100));
+```
+
+输出为 401.5000。
+
+与上面字符串初始化 100 和 4.015 相乘得到的结果 401.500 相比，这里为什么多了一个 0 呢？原因是 BigDecimal 有 scale 和 precision 的概念，scale 表示小数点右边的位数，而 precision 表示精度，也就是有效数字的长度。
+
+调试一下可以发现，`new BigDecimal(Double.toString(100))`得到的 BigDecimal 的 scale=1、precision=4；而 `new BigDecimal(“100”)`得到的 BigDecimal 的 scale=0、 precision=3。对于 BigDecimal 乘法操作，返回值的 scale 是两个数的 scale 相加。
+
+所以，初始化 100 的两种不同方式，导致最后结果的 scale 分别是 4 和 3。
+
+如果一定要用 Double 来初始化 BigDecimal 的话，可以使用 `BigDecimal.valueOf()`方法，以确保其表现和字符串形式的构造方法一致，这也是官方文档更推荐的方式：
+
+```java
+System.out.println(new BigDecimal("4.015").multiply(BigDecimal.valueOf(100)));
+```
+
+
 
 
 
@@ -2221,3 +2309,26 @@ class Employee extends Person {
 - 原因分析
 - 解决方案
 
+
+
+**踩坑22**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑23**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑24**
+
+- 案例场景
+- 原因分析
+- 解决方案
