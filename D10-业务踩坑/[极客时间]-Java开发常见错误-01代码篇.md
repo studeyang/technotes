@@ -2299,6 +2299,128 @@ System.out.println(new BigDecimal("4.015").multiply(new BigDecimal(Double.toStri
 System.out.println(new BigDecimal("4.015").multiply(BigDecimal.valueOf(100)));
 ```
 
+**使用 BigDecimal 来格式化浮点数**
+
+我们看一个例子吧，对于一个浮点数，我们想要保留一位小数。
+
+```java
+double num1 = 3.35;
+float num2 = 3.35f;
+System.out.println(String.format("%.1f", num1));//四舍五入
+System.out.println(String.format("%.1f", num2));
+```
+
+得到的结果居然是 3.4 和 3.3。
+
+这就是由精度问题和舍入方式共同导致的，double 和 float 的 3.35 其实相当于 3.350xxx 和 3.349xxx:
+
+```tex
+3.350000000000000088817841970012523233890533447265625
+3.349999904632568359375
+```
+
+String.format 采用四舍五入的方式进行舍入，取 1 位小数，double 的 3.350 四舍五入为 3.4，而 float 的 3.349 四舍五入为 3.3。
+
+上面的方式无法精确存储浮点数，应该使用 BigDecimal 来格式化数字 3.35：
+
+```java
+BigDecimal num1 = new BigDecimal("3.35");
+BigDecimal num2 = num1.setScale(1, BigDecimal.ROUND_DOWN);
+System.out.println(num2);
+BigDecimal num3 = num1.setScale(1, BigDecimal.ROUND_HALF_UP);
+System.out.println(num3);
+```
+
+这次得到的结果是 3.3 和 3.4，符合预期。
+
+**BigDecimal 的判等问题**
+
+我们来看下面的例子。使用 equals 方法比较 1.0 和 1 这两个 BigDecimal：
+
+```java
+// false
+System.out.println(new BigDecimal("1.0").equals(new BigDecimal("1")))
+```
+
+BigDecimal 的 equals 方法的注释中说明了原因，equals 比较的是 BigDecimal 的 value 和 scale，1.0 的 scale 是 1，1 的 scale 是 0，所以结果一定是 false。
+
+如果我们希望只比较 BigDecimal 的 value，可以使用 compareTo 方法：
+
+```java
+// true
+System.out.println(new BigDecimal("1.0").compareTo(new BigDecimal("1"))==0);
+```
+
+BigDecimal 的 equals 和 hashCode 方法会同时考虑 value 和 scale，如果结合 HashSet 或 HashMap 使用的话就可能会出现问题。
+
+```java
+Set<BigDecimal> hashSet = new HashSet();
+hashSet.add(new BigDecimal("1.0"));
+// false
+System.out.println(hashSet.contains(new BigDecimal("1")));
+```
+
+解决这个问题的办法有两个：
+
+第一个方法是，使用 TreeSet 替换 HashSet。TreeSet 不使用 hashCode 方法，也不使 用 equals 比较元素，而是使用 compareTo 方法，所以不会有问题。
+
+```java
+Set<BigDecimal> treeSet = new TreeSet<>();
+treeSet.add(new BigDecimal("1.0"));
+// true
+System.out.println(treeSet.contains(new BigDecimal("1")));
+```
+
+第二个方法是，把 BigDecimal 存入 HashSet 或 HashMap 前，先使用 stripTrailingZeros 方法去掉尾部的零，比较的时候也去掉尾部的 0，确保 value 相同的 BigDecimal，scale 也是一致的：
+
+```java
+Set<BigDecimal> hashSet = new HashSet<>();
+hashSet.add(new BigDecimal("1.0").stripTrailingZeros());
+// true
+System.out.println(hashSet.contains(new BigDecimal("1.000").stripTrailingZeros()));
+```
+
+**如何避免数值溢出问题**
+
+数值计算还有一个要小心的点是溢出，不管是 int 还是 long，所有的基本数值类型都有超出表达范围的可能性。比如，对 Long 的最大值进行 +1 操作：
+
+```java
+long l = Long.MAX_VALUE;
+// -9223372036854775808
+System.out.println(l + 1);
+// true
+System.out.println(l + 1 == Long.MIN_VALUE);
+```
+
+输出结果是一个负数，因为 Long 的最大值 +1 变为了 Long 的最小值。显然这是发生了溢出，而且是默默的溢出，并没有任何异常。这类问题非常容易被忽略，改进方式有下面 2 种。
+
+方法一是，考虑使用 Math 类的 addExact、subtractExact 等 xxExact 方法进行数值运算，这些方法可以在数值溢出时主动抛出异常。
+
+```java
+try {
+    long l = Long.MAX_VALUE;
+    System.out.println(Math.addExact(l, 1));
+} catch (Exception ex) {
+    ex.printStackTrace();
+}
+```
+
+执行后，可以得到一个 ArithmeticException。
+
+方法二是，使用大数类 BigInteger。BigDecimal 是处理浮点数的专家，而 BigInteger 则是对大数进行科学计算的专家。
+
+```java
+BigInteger i = new BigInteger(String.valueOf(Long.MAX_VALUE));
+System.out.println(i.add(BigInteger.ONE).toString());
+try {
+    long l = i.add(BigInteger.ONE).longValueExact();
+} catch (Exception ex) {
+    ex.printStackTrace();
+}
+```
+
+在转换出现溢出时，同 样会抛出 ArithmeticException。
+
 
 
 
