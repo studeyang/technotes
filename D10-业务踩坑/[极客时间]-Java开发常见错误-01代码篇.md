@@ -2421,11 +2421,321 @@ try {
 
 在转换出现溢出时，同 样会抛出 ArithmeticException。
 
+# 10 | 集合类：坑满地的List列表操作
+
+今天，我们就从“把数组转换为 List 集合”、“对 List 进行切片操作”、“List 搜索的性能问题”等几个方面着手，来聊聊其中最可能遇到的一些坑。
+
+**踩坑21：不能直接使用 Arrays.asList 来转换基本类型数组**
+
+- 案例场景
+
+在业务开发中，我们常常会把原始的数组转换为 List 类数据结构，来继续展开各种 Stream 操作。
+
+在如下代码中，我们初始化三个数字的 int[] 数组，然后使用 Arrays.asList 把数组转换为 List：
+
+```java
+int[] arr = {1, 2, 3};
+List list = Arrays.asList(arr);
+log.info("list:{} size:{} class:{}", list, list.size(), list.get(0).getClass());
+```
+
+得到结果如下：
+
+```log
+22:00:21.553 [main] INFO org.geekbang.time.commonmistakes.collection.aslist.AsListApplication - list:[[I@8acd0f2a] size:1 class:class [I
+```
+
+通过日志可以发现，这个 List 包含的其实是一个 int 数组，整个 List 的元素个数是 1，元素类型是整数数组。
+
+- 原因分析
+
+Arrays.asList 方法传入的是一个泛型 T 类型可变参数，最终 int 数组整体作为了一个对象成为了泛型类型 T：
+
+```java
+public static <T> List<T> asList(T... a) {
+    return new ArrayList<>(a);
+}
+```
+
+- 解决方案
+
+Java8 以上版本可以使 用 Arrays.stream 方法来转换，也可以把 int 数组声明为包装类型 Integer 数组。
+
+```java
+int[] arr1 = {1, 2, 3};
+List list1 = Arrays.stream(arr1).boxed().collect(Collectors.toList());
+log.info("list:{} size:{} class:{}", list1, list1.size(), list1.get(0).getClass());
+
+Integer[] arr2 = {1, 2, 3};
+List list2 = Arrays.asList(arr2);
+log.info("list:{} size:{} class:{}", list2, list2.size(), list2.get(0).getClass());
+```
+
+得到结果如下：
+
+```log
+22:05:59.374 [main] INFO org.geekbang.time.commonmistakes.collection.aslist.AsListApplication - list:[1, 2, 3] size:3 class:class java.lang.Integer
+22:05:59.382 [main] INFO org.geekbang.time.commonmistakes.collection.aslist.AsListApplication - list:[1, 2, 3] size:3 class:class java.lang.Integer
+```
+
+**踩坑22：Arrays.asList 返回的 List 不支持增删操作**
+
+- 案例场景
+
+使用 Arrays.asList 转换为 List 后，进行以下操作：
+
+```java
+String[] arr = {"1", "2", "3"};
+List<String> list = Arrays.asList(arr);
+try {
+    // 为list添加一个字符串
+    list.add("5");
+} catch (Exception ex) {
+    ex.printStackTrace();
+}
+log.info("arr:{} list:{}", Arrays.toString(arr), list);
+```
+
+结果如下：
+
+```log
+java.lang.UnsupportedOperationException
+	at java.util.AbstractList.add(AbstractList.java:148)
+	at java.util.AbstractList.add(AbstractList.java:108)
+	at org.geekbang.time.commonmistakes.collection.aslist.AsListApplication.wrong2(AsListApplication.java:45)
+	at org.geekbang.time.commonmistakes.collection.aslist.AsListApplication.main(AsListApplication.java:18)
+22:14:22.765 [main] INFO org.geekbang.time.commonmistakes.collection.aslist.AsListApplication - arr:[1, 2, 3] list:[1, 4, 3]
+```
+
+可以看到，为 List 新增字符串的操作抛出了 UnsupportedOperationException 异常。
+
+- 原因分析
+
+Arrays.asList 返回的 List 并不是 java.util.ArrayList，而是 Arrays 的内部类 ArrayList。ArrayList 内部类继承自 AbstractList 类，并没有覆写父类的 add 方法，而父类中 add 方法的实现，就是抛出 UnsupportedOperationException。相关源码如下所示：
+
+```java
+public class Arrays {
+  
+    public static <T> List<T> asList(T... a) {
+        return new ArrayList<>(a);
+    }
+    
+    private static class ArrayList<E> extends AbstractList<E>
+        implements RandomAccess, java.io.Serializable {
+        //...
+    }
+}
+```
+
+```java
+public abstract class AbstractList<E> extends AbstractCollection<E> 
+    implements List<E> {
+  
+    public void add(int index, E element) {
+        throw new UnsupportedOperationException();
+    }
+}
+```
+
+- 解决方案
+
+同下。
+
+**踩坑23：对原始数组的修改会影响到我们获得的那个 List**
+
+- 案例场景
+
+使用 Arrays.asList 转换为 List 后，进行以下操作：
+
+```java
+String[] arr = {"1", "2", "3"};
+List<String> list = Arrays.asList(arr);
+// 修改数组的第二个字符串
+arr[1] = "4";
+log.info("arr:{} list:{}", Arrays.toString(arr), list);
+```
+
+结果如下：
+
+```log
+22:28:24.425 [main] INFO org.geekbang.time.commonmistakes.collection.aslist.AsListApplication - arr:[1, 4, 3] list:[1, 4, 3]
+```
+
+可以看到，把原始数组的第二个元素从 2 修改为 4 后，asList 获得的 List 中的第二个元素也被修改为 4 了。
+
+- 原因分析
+
+看一下 ArrayList 的实现，可以发现 ArrayList 其实是直接使用了原始的数组。
+
+```java
+private static class ArrayList<E> extends AbstractList<E>
+    implements RandomAccess, java.io.Serializable {
+    private final E[] a;
+    ArrayList(E[] array) {
+        a = Objects.requireNonNull(array);
+    }
+    //...
+}
+```
+
+所以，我们要特别小心，把通过 Arrays.asList 获得的 List 交给其他方法处理，很容易因为共享了数组，相互修改产生 Bug。
+
+- 解决方案
+
+重新 new 一个 ArrayList 初始化 Arrays.asList 返回的 List 即可。
+
+```java
+String[] arr = {"1", "2", "3"};
+List<String> list = new ArrayList<>(Arrays.asList(arr));
+arr[1] = "4";
+try {
+    list.add("5");
+} catch (Exception ex) {
+    ex.printStackTrace();
+}
+log.info("arr:{} list:{}", Arrays.toString(arr), list);
+```
+
+结果如下：
+
+```log
+22:36:54.375 [main] INFO org.geekbang.time.commonmistakes.collection.aslist.AsListApplication - arr:[1, 4, 3] list:[1, 2, 3, 5]
+```
 
 
 
+**一定要让合适的数据结构做合适的事情**
 
-**踩坑21**
+第一个误区是，使用数据结构不考虑平衡时间和空间。
+
+
+
+**踩坑24：使用 List.subList 进行切片操作居然会导致 OOM?**
+
+- 案例场景
+
+业务开发时常常要对 List 做切片处理，即取出其中部分元素构成一个新的 List。例如下面的操作：
+
+```java
+private static List<List<Integer>> data = new ArrayList<>();
+private static void oom() {
+    for (int i = 0; i < 1000; i++) {
+        List<Integer> rawList = IntStream.rangeClosed(1, 1000000).boxed().collect(Collectors.toList());
+        data.add(rawList.subList(0, 1));
+    }
+}
+```
+
+程序运行不久就出现了 OOM：
+
+```log
+Exception in thread "main" java.lang.OutOfMemoryError: Java heap space
+  at java.util.Arrays.copyOf(Arrays.java:3181)
+  at java.util.ArrayList.grow(ArrayList.java:265)
+```
+
+- 原因分析
+
+出现 OOM 的原因是，datas 中 1000 个 List 都具有 10 万个元素，且始终得不到回收，因为它始终被 subList 方法返回的 List 强引用。我们分析下 ArrayList 的源码：
+
+```java
+public class ArrayList<E> extends AbstractList<E>
+        implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+    // [1] 表示集合结构性修改的次数，即影响集合size修改的次数
+    protected transient int modCount = 0;
+    
+    private void ensureExplicitCapacity(int minCapacity) {
+        modCount++;
+        // overflow-conscious code
+        if (minCapacity - elementData.length > 0)
+            grow(minCapacity);
+    }
+  
+    public boolean add(E e) {
+        ensureCapacityInternal(size + 1);  // Increments modCount!!
+        elementData[size++] = e;
+        return true;
+    }
+  
+    // [2]<<
+    public List<E> subList(int fromIndex, int toIndex) {
+        subListRangeCheck(fromIndex, toIndex, size);
+        return new SubList(this, 0, fromIndex, toIndex);
+    } // [2]>>
+  
+    // [3]<<
+    private class SubList extends AbstractList<E> implements RandomAccess {
+        private final AbstractList<E> parent;
+        private final int parentOffset;
+        private final int offset;
+        int size;
+
+        SubList(AbstractList<E> parent,
+                int offset, int fromIndex, int toIndex) {
+            this.parent = parent;
+            this.parentOffset = fromIndex;
+            this.offset = offset + fromIndex;
+            this.size = toIndex - fromIndex;
+            this.modCount = ArrayList.this.modCount;
+        } // [3]>>
+
+        public E set(int index, E e) {
+            rangeCheck(index);
+            checkForComodification();
+            E oldValue = ArrayList.this.elementData(offset + index);
+            ArrayList.this.elementData[offset + index] = e;
+            return oldValue;
+        }
+        // [4]<<
+        public ListIterator<E> listIterator(final int index) {
+            checkForComodification();
+            // ...
+        }
+      
+        private void checkForComodification() {
+            if (ArrayList.this.modCount != this.modCount)
+                throw new ConcurrentModificationException();
+        } // [4]>>
+    }
+}
+```
+
+分析第 [2] 部分的 subList 方法可以看到，获得的 List 其实是内部类 SubList， 并不是普通的 ArrayList，在初始化的时候传入了 this。
+
+分析第 [3] 部分的代码可以发现，这个 SubList 中的 parent 字段就是原始的 List。SubList 初始化的时候，并没有把原始 List 中的元素复制到独立的变量中保存。SubList 强引用了原始的 List，所以大量保存这样的 SubList 会导致 OOM。
+
+> 如果进行下面代码操作，会抛出异常：
+>
+> ```java
+> List<Integer> list = IntStream.rangeClosed(1, 10).boxed().collect(Collectors.toList());
+> List<Integer> subList = list.subList(1, 4);
+> list.add(0);
+> try {
+>     subList.forEach(System.out::println);
+> } catch (Exception ex) {
+>     ex.printStackTrace();
+> }
+> ```
+>
+> 分析第 [4] 部分代码可以发现，遍历 SubList 的时候会先获得迭代器，比较原始 ArrayList modCount 的值和 SubList 当前 modCount 的值。获得了 SubList 后，我们为原始 List 新增了一个元素导致修改了其 modCount，所以会抛出 ConcurrentModificationException 异常。 
+
+- 解决方案
+
+避免相互影响的修复方式有两种：
+
+一种是，不直接使用 subList 方法返回的 SubList，而是重新使用 new ArrayList，在构造方法传入 SubList，来构建一个独立的 ArrayList；
+
+另一种是，对于 Java 8 使用 Stream 的 skip 和 limit API 来跳过流中的元素，以及限制流中元素的个数，同样可以达到 SubList 切片的目的。
+
+```java
+// 方式一
+List<Integer> subList = new ArrayList<>(list.subList(1, 4));
+
+// 方式二
+List<Integer> subList = list.stream().skip(1).limit(3).collect(Collectors.toList());
+```
+
+**踩坑25：**
 
 - 案例场景
 - 原因分析
@@ -2433,24 +2743,9 @@ try {
 
 
 
-**踩坑22**
+**踩坑26**
 
 - 案例场景
 - 原因分析
 - 解决方案
 
-
-
-**踩坑23**
-
-- 案例场景
-- 原因分析
-- 解决方案
-
-
-
-**踩坑24**
-
-- 案例场景
-- 原因分析
-- 解决方案
