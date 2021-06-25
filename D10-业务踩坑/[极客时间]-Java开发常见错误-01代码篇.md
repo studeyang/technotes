@@ -2602,14 +2602,6 @@ log.info("arr:{} list:{}", Arrays.toString(arr), list);
 22:36:54.375 [main] INFO org.geekbang.time.commonmistakes.collection.aslist.AsListApplication - arr:[1, 4, 3] list:[1, 2, 3, 5]
 ```
 
-
-
-**一定要让合适的数据结构做合适的事情**
-
-第一个误区是，使用数据结构不考虑平衡时间和空间。
-
-
-
 **踩坑24：使用 List.subList 进行切片操作居然会导致 OOM?**
 
 - 案例场景
@@ -2735,13 +2727,153 @@ List<Integer> subList = new ArrayList<>(list.subList(1, 4));
 List<Integer> subList = list.stream().skip(1).limit(3).collect(Collectors.toList());
 ```
 
-**踩坑25：**
+**如何分析类的内存占用？**
+
+现在有一个 ArrayList 和一个 HashMap 各存储 100 万个 Order 对象。代码如下：
+
+```java
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+static class Order {
+    private int orderId;
+}
+```
+
+```java
+List<Order> list = IntStream.rangeClosed(1, 1000_000)
+        .mapToObj(Order::new)
+        .collect(Collectors.toList());
+
+Map<Integer, Order> map = IntStream.rangeClosed(1, 1000_000)
+        .boxed()
+        .collect(Collectors.toMap(Function.identity(), Order::new));
+```
+
+我们使用 JDK ObjectSizeCalculator 工具打印 ArrayList 和 HashMap 的内存占用。
+
+```java
+System.out.println(ObjectSizeCalculator.getObjectSize(list)); // 21M
+System.out.println(ObjectSizeCalculator.getObjectSize(map)); // 72M
+```
+
+ArrayList 占用内存 21M，HashMap 占用的内存 72M。使用 MAT 工具进一步分析堆可以证明，ArrayList 在内存占用上性价比很高， 77% 是实际的数据（16000000/20861992）。
+
+![image-20210625222048765](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210625222048.png)
+
+而 HashMap 只有 22%（16000000/72386640）。
+
+![image-20210625222155881](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210625222155.png)
+
+**踩坑25：LinkedList 插入元素一定比 ArrayList 快吗？**
 
 - 案例场景
+
+对于数组，随机元素访问的时间复杂度是 O(1)，元素插入操作是 O(n)；
+
+对于链表，随机元素访问的时间复杂度是 O(n)，元素插入操作是 O(1)。
+
+我们分别来对 ArrayList 和 LinkedList 进行插入、访问操作。
+
+```java
+private static void linkedListGet(int elementCount, int loopCount) {
+    List<Integer> list = IntStream.rangeClosed(1, elementCount).boxed().collect(Collectors.toCollection(LinkedList::new));
+    IntStream.rangeClosed(1, loopCount).forEach(i -> list.get(ThreadLocalRandom.current().nextInt(elementCount)));
+}
+
+private static void arrayListGet(int elementCount, int loopCount) {
+    List<Integer> list = IntStream.rangeClosed(1, elementCount).boxed().collect(Collectors.toCollection(ArrayList::new));
+    IntStream.rangeClosed(1, loopCount).forEach(i -> list.get(ThreadLocalRandom.current().nextInt(elementCount)));
+}
+
+private static void linkedListAdd(int elementCount, int loopCount) {
+    List<Integer> list = IntStream.rangeClosed(1, elementCount).boxed().collect(Collectors.toCollection(LinkedList::new));
+    IntStream.rangeClosed(1, loopCount).forEach(i -> list.add(ThreadLocalRandom.current().nextInt(elementCount), 1));
+}
+
+private static void arrayListAdd(int elementCount, int loopCount) {
+    List<Integer> list = IntStream.rangeClosed(1, elementCount).boxed().collect(Collectors.toCollection(ArrayList::new));
+    IntStream.rangeClosed(1, loopCount).forEach(i -> list.add(ThreadLocalRandom.current().nextInt(elementCount), 1));
+}
+```
+
+测试代码如下：
+
+```java
+int elementCount = 100000;
+int loopCount = 100000;
+StopWatch stopWatch = new StopWatch();
+stopWatch.start("linkedListGet");
+linkedListGet(elementCount, loopCount);
+stopWatch.stop();
+stopWatch.start("arrayListGet");
+arrayListGet(elementCount, loopCount);
+stopWatch.stop();
+System.out.println(stopWatch.prettyPrint());
+
+StopWatch stopWatch2 = new StopWatch();
+stopWatch2.start("linkedListAdd");
+linkedListAdd(elementCount, loopCount);
+stopWatch2.stop();
+stopWatch2.start("arrayListAdd");
+arrayListAdd(elementCount, loopCount);
+stopWatch2.stop();
+System.out.println(stopWatch2.prettyPrint());
+```
+
+结果如下：
+
+```log
+--------------------------------------------
+ns        %        Task name
+--------------------------------------------
+6604199591 100% linkedListGet
+011494583 000% arrayListGet
+
+StopWatch '': running time = 10729378832 ns
+---------------------------------------------
+ns        %       Task name
+---------------------------------------------
+9253355484 086% linkedListAdd
+1476023348 014% arrayListAdd
+```
+
+可以看到，ArrayList 访问元素耗时 11 毫秒，而 LinkedList 耗时 6.6 秒，这符合上面我们所说的时间复杂度；但，随机插入操作居然也是 LinkedList 落败，耗时 9.3 秒，ArrayList 只要 1.5 秒。
+
 - 原因分析
+
+LinkedList 源码如下：
+
+```java
+public void add(int index, E element) {
+    checkPositionIndex(index);
+    if (index == size)
+        linkLast(element);
+    else
+        linkBefore(element, node(index));
+}
+
+Node<E> node(int index) {
+    // assert isElementIndex(index);
+    if (index < (size >> 1)) {
+        Node<E> x = first;
+        for (int i = 0; i < index; i++)
+            x = x.next;
+        return x;
+    } else {
+        Node<E> x = last;
+        for (int i = size - 1; i > index; i--
+            x = x.prev;
+        return x;
+    }
+}
+```
+
+可以看到，插入操作的时间复杂度是 O(1) 的前提是，你已经有了那个要插入节点的指针。但在实现的时候，我们需要先通过循环获取到那个节点的 Node，然后再执行插入操作。前者也是有开销的，不可能只考虑插入操作本身的代价。
+
 - 解决方案
 
-
+对于插入操作，LinkedList 的时间复杂度其实也是 O(n)。继续做更多实验的话你会发现，在各种常用场景下，LinkedList 几乎都不能在性能上胜出 ArrayList。
 
 **踩坑26**
 
