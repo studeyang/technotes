@@ -2875,9 +2875,141 @@ Node<E> node(int index) {
 
 对于插入操作，LinkedList 的时间复杂度其实也是 O(n)。继续做更多实验的话你会发现，在各种常用场景下，LinkedList 几乎都不能在性能上胜出 ArrayList。
 
+# 11 | 空值处理：分不清楚的null和恼人的空指针
+
+**如何修复空指针异常？**
+
+Java 代码中出现 NullPointerException 场景有以下 5 种：
+
+1. 包装类型拆箱：参数值是 Integer 等包装类型，使用时因为自动拆箱出现了空指针异常；
+
+   例如：i + 1。
+
+   解决：可以使用 Optional.ofNullable 来构造一个 Optional，然后使用 orElse(0) 把 null 替换为默认值再进行 +1 操作。
+
+2. 字符串比较：字符串比较出现空指针异常；
+
+   例如：s.equals("OK")。
+
+   解决：可以把字面量放在前面 "OK".equals(s)。
+
+3. 容器操作：使用不支持 Key 和 Value 为 null 的容器（例如 ConcurrentHashMap），强行 put null 的 Key 或 Value；
+
+   例如：new ConcurrentHashMap<String, String>().put(null, null)。
+
+4. 级联调用：A 对象包含了 B，在通过 A 对象的字段获得 B 之后，没有对字段判空就级联调用 B 的方法；
+
+   例如：fooService.getBarService().bar().equals(“OK”)。
+
+   解决：使用 Optional，如：
+
+   ```java
+   Optional.ofNullable(fooService)
+       .map(FooService::getBarService)
+       .filter(barService -> "OK".equals(barService.bar()))
+       .ifPresent(result -> log.info("OK"));
+   ```
+
+5. 容器为空：方法或远程服务返回的 List 不是空而是 null，没有进行判空就直接调用 List 的方法。
+
+**如何定位空指针问题？**
+
+线上可以使用 Arths。
+
+![image-20210627215345967](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210627215351.png)
+
+第二个红框表示，Arthas 启动后被附加到了 JVM 进程;
+
+第三个红框表示，通过 watch 命令监控 wrongMethod 方法的入参。
+
+**小心 MySQL 中有关 NULL 的三个坑**
+
+1. MySQL 中 sum 函数没统计到任何记录时，会返回 null 而不是 0，可以使用 IFNULL 函数把 null 转换为 0；
+
+   例如：
+
+   ```sql
+   SELECT SUM(score) FROM `user`
+   ```
+
+   解决：
+
+   ```sql
+   SELECT IFNULL(SUM(score),0) FROM `user`
+   ```
+
+2. MySQL 中 count 字段不统计 null 值，COUNT(*) 才是统计所有记录数量的正确方式。
+
+   例如：
+
+   ```sql
+   SELECT COUNT(score) FROM `user`
+   ```
+
+   解决：
+
+   ```sql
+   SELECT COUNT(*) FROM `user`
+   ```
+
+3. MySQL 中 =NULL 并不是判断条件而是赋值，对 NULL 进行判断只能使用 IS NULL 或 者 IS NOT NULL。
+
+   例如：
+
+   ```sql
+   SELECT * FROM `user` WHERE score=null
+   ```
+
+   解决：
+
+   ```sql
+   SELECT * FROM `user` WHERE score IS NULL
+   ```
+
+> 在 MySQL 的使用中，对于索引列，建议都设置为not null，因为如果有 null 的话，MySQL需要单独专门处理 null 值，会额外耗费性能。
+
+**思考与讨论**
+
+思考一：ConcurrentHashMap 的 Key 和 Value 都不能为 null，而 HashMap 却可以，你知道这么设计的原因是什么吗?TreeMap、Hashtable 等 Map 的 Key 和 Value 是否支持 null 呢?
+
+答：ConcurrentMaps（ConcurrentHashMaps，ConcurrentSkipListMaps）不允许使用null的主要原因是，无法容纳在非并行映射中几乎无法容忍的歧义。最主要的是，如果 map.get(key) return null，则无法检测到该键是否显式映射到 null 该键。在非并行映射中，您可以通过进行检查 map.contains(key)，但在并行映射中，两次调用之间的映射可能已更改。
+
+hashtable也是线程安全的，所以也是key和value也是不可以null的；
+
+treeMap 线程不安全，但是因为需要排序，进行key的compareTo方法，所以key是不能null中，value是可以的；
+
+思考二：对于 Hibernate 框架可以使用 @DynamicUpdate 注解实现字段的动态更新，对于 MyBatis 框架如何实现类似的动态 SQL 功能，实现插入和修改 SQL 只包含 POJO 中的 非空字段?
+
+答：MyBatis @Column注解的updateIfNull属性，可以控制，当对应的列value为null时，updateIfNull的true和false可以控制。
+
+
+
 **踩坑26**
 
 - 案例场景
 - 原因分析
 - 解决方案
 
+
+
+**踩坑27**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑28**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑29**
+
+- 案例场景
+- 原因分析
+- 解决方案
