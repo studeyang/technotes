@@ -2982,29 +2982,313 @@ treeMap 线程不安全，但是因为需要排序，进行key的compareTo方法
 
 答：MyBatis @Column注解的updateIfNull属性，可以控制，当对应的列value为null时，updateIfNull的true和false可以控制。
 
+# 12 | 异常处理：别让自己在出问题的时候变为瞎子
 
+**处理异常容易犯的错**
 
-**踩坑26**
+- 错误一：不在业务代码层面考虑异常处理，仅在框架层面粗犷捕获和处理异常
+
+Repository 层出现异常可以忽略。如果一律捕获异常仅记录日志，很可能业务逻辑已经出错，而用户和程序却完全感知不到。
+
+Service 层出现异常同样不适合捕获。该层往往涉及数据库事务，如果业务异常都被框架捕获了，业务功能就会不正常。
+
+Controller 层往往会给予用户友好提示，或是根据每一个 API 的异常表返回指定的异常类型，同样不能对所有异常一视同仁。
+
+例如下面的代码：
+
+```java
+@RestControllerAdvice
+@Slf4j
+public class RestControllerExceptionHandler {
+
+    private static int GENERIC_SERVER_ERROR_CODE = 2000;
+    private static String GENERIC_SERVER_ERROR_MESSAGE = "服务器忙，请稍后再试";
+
+    @ExceptionHandler
+    public APIResponse handle(HttpServletRequest req, 
+                              HandlerMethod method, Exception ex) {
+        if (ex instanceof BusinessException) {
+            BusinessException exception = (BusinessException) ex;
+            log.warn(String.format("访问 %s -> %s 出现业务异常！", req.getRequestURI(), 
+                                   method.toString()), ex);
+            return new APIResponse(false, null, exception.getCode(), exception.getMessage());
+        } else {
+            log.error(String.format("访问 %s -> %s 出现系统异常！", req.getRequestURI(), 
+                                    method.toString()), ex);
+            return new APIResponse(false, null, GENERIC_SERVER_ERROR_CODE, GENERIC_SERVER_ERROR_MESSAGE);
+        }
+    }
+}
+```
+
+- 错误二：捕获了异常后直接生吞
+
+在任何时候，我们捕获了异常都不应该生吞。
+
+- 错误三：丢弃异常的原始信息
+
+比如有这么一个会抛出受检异常的方法 readFile：
+
+```java
+@GetMapping("wrong1")
+public void wrong1() {
+    try {
+        readFile();
+    } catch (IOException e) {
+        // 原始异常信息丢失
+        throw new RuntimeException("系统忙请稍后再试");
+    }
+}
+
+private void readFile() throws IOException {
+    Files.readAllLines(Paths.get("a_file"));
+}
+```
+
+这样捕获异常后，出了问题不知道 IOException 具体是哪里引起的。
+
+或者是这样，只记录了异常消息，却丢失了异常的类型、栈等重要信息：
+
+```java
+catch (IOException e) {
+    // 只保留了异常消息，栈没有记录
+    log.error("文件读取错误, {}", e.getMessage());
+    throw new RuntimeException("系统忙请稍后再试");
+}
+```
+
+上面两种处理方式都不太合理，可以改为如下方式：
+
+```java
+catch (IOException e) {
+    log.error("文件读取错误", e);
+    throw new RuntimeException("系统忙请稍后再试");
+}
+// 或
+catch (IOException e) {
+    throw new RuntimeException("系统忙请稍后再试", e);
+}
+```
+
+- 错误四：抛出异常时不指定任何消息
+
+例如直接 `throw new RuntimeException();`
+
+**踩坑26：try 中的逻辑出现了异常，但却被 finally 中的异常覆盖了**
 
 - 案例场景
+
+```java
+@GetMapping("wrong")
+public void wrong() {
+    try {
+        log.info("try");
+        throw new RuntimeException("try");
+    } finally {
+        log.info("finally");
+        throw new RuntimeException("finally");
+    }
+}
+```
+
+结果日志只打印了 finally 中的异常。
+
+- 原因分析
+
+一个方法无法出现两个异常。
+
+- 解决方案
+
+方案一：finally 代码块自己负责异常捕获和处理。
+
+```java
+@GetMapping("right")
+public void right() {
+    try {
+        log.info("try");
+        throw new RuntimeException("try");
+    } finally {
+        log.info("finally");
+        try {
+            throw new RuntimeException("finally");
+        } catch (Exception ex) {
+            log.error("finally", ex);
+        }
+    }
+}
+```
+
+方案二：把 try 中的异常作为主异常抛出，使用 addSuppressed 方法把 finally 中的异常附加到主异常上。
+
+```java
+@GetMapping("right2")
+public void right2() throws Exception {
+    Exception e = null;
+    try {
+        log.info("try");
+        throw new RuntimeException("try");
+    } catch (Exception ex) {
+        e = ex;
+    } finally {
+        log.info("finally");
+        try {
+            throw new RuntimeException("finally");
+        } catch (Exception ex) {
+            if (e != null) {
+                e.addSuppressed(ex);
+            } else {
+                e = ex;
+            }
+        }
+    }
+    throw e;
+}
+```
+
+> 这正是 try-with-resources 语法所做的事情。
+
+**踩坑27：将异常定义为静态变量，导致异常栈信息错乱**
+
+- 案例场景
+
+在排查某项目生产问题时，遇到了一件非常诡异的事情：我发现异常堆信息显示的方法调用路径，在当前入参的情况下根本不可能产生。
+
+经过艰难的排查，最终定位到原因是把异常定义为了静态变量，导致异常栈信息错乱。模拟代码如下：
+
+```java
+@GetMapping("wrong")
+public void wrong() {
+    try {
+        createOrderWrong();
+    } catch (Exception ex) {
+        log.error("createOrder got error", ex);
+    }
+    try {
+        cancelOrderWrong();
+    } catch (Exception ex) {
+        log.error("cancelOrder got error", ex);
+    }
+}
+
+private void createOrderWrong() {
+    // 这里有问题
+    throw Exceptions.ORDEREXISTS;
+}
+
+private void cancelOrderWrong() {
+    // 这里有问题
+    throw Exceptions.ORDEREXISTS;
+}
+```
+
+```java
+public class Exceptions {
+
+    public static BusinessException ORDEREXISTS = new BusinessException("订单已经存在", 3001);
+}
+```
+
+结果 cancelOrder got error 的提示对应了 createOrderWrong 方法。
+
 - 原因分析
 - 解决方案
 
+改一下 Exceptions 类的实现，通过不同的方法把每一种异常都 new 出来抛出即可。
 
+```java
+public class Exceptions {
 
-**踩坑27**
+    public static BusinessException orderExists() {
+        return new BusinessException("订单已经存在", 3001);
+    }
+}
+```
+
+**踩坑28：未捕获线程池任务异常导致线程重建**
 
 - 案例场景
+
+我们来看一个例子:提交 10 个任务到线程池异步处理，第 5 个任务抛出一个 RuntimeException，每个任务完成后都会输出一行日志。
+
+```java
+@GetMapping("execute")
+public void execute() throws InterruptedException {
+
+    String prefix = "test";
+    ExecutorService threadPool = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
+            .setNameFormat(prefix + "%d")
+            .get());
+    IntStream.rangeClosed(1, 10).forEach(i -> threadPool.execute(() -> {
+        if (i == 5) throw new RuntimeException("error");
+        log.info("I'm done : {}", i);
+    }));
+
+    threadPool.shutdown();
+    threadPool.awaitTermination(1, TimeUnit.HOURS);
+}
+```
+
+结果是：任务 1 到 4 所在的线程是 test0，任务 6 开始运行在线程 test1。
+
+因为没有手动捕获异常进行处理，向标准错误输出打印了出现异常的线程名称和异常信息。
+
 - 原因分析
+
+从线程名的改变可以知 道因为异常的抛出老线程退出了，线程池只能重新创建一个线程。如果每个异步任务都以异常结束，那么线程池可能完全起不到线程重用的作用。
+
+Thread 的想着源码如下：
+
+```java
+public UncaughtExceptionHandler getUncaughtExceptionHandler() {
+	if (exceptionHandler == null)
+    // 没设置 exceptionHandler 则返回 ThreadGroup
+		return getThreadGroup();
+	return exceptionHandler;
+}
+```
+
+ThreadGroup 的相关源码如下所示：
+
+```java
+public void uncaughtException(Thread t, Throwable e) {
+	Thread.UncaughtExceptionHandler handler;
+	if (parent != null) {
+		parent.uncaughtException(t,e);
+	} else if ((handler = Thread.getDefaultUncaughtExceptionHandler()) != null) {
+		handler.uncaughtException(t, e);
+	} else if (!(e instanceof ThreadDeath)) {
+		// No parent group, has to be 'system' Thread Group
+		// K0319 = Exception in thread "{0}" 
+		System.err.print(com.ibm.oti.util.Msg.getString("K0319", t.getName())); //$NON-NLS-1$
+		e.printStackTrace(System.err);
+	}
+}
+```
+
 - 解决方案
 
+修复方式有 2 步：
 
+第一，以 execute 方法提交到线程池的异步任务，最好在任务内部做好异常处理；
 
-**踩坑28**
+第二，设置自定义的异常处理程序作为保底，比如在声明线程池时自定义线程池的未捕获异常处理程序：
 
-- 案例场景
-- 原因分析
-- 解决方案
+```java
+new ThreadFactoryBuilder()
+        .setNameFormat(prefix + "%d")
+        .setUncaughtExceptionHandler((thread, throwable) -> log.error("ThreadPool {} got exception", thread, throwable))
+        .get()
+```
+
+或者设置全局的默认未捕获异常处理程序：
+
+```java
+static {
+    Thread.setDefaultUncaughtExceptionHandler(
+        (thread, throwable) -> log.error("Thread {} got exception", thread, throwable)
+    );
+}
+```
 
 
 
