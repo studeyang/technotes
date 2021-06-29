@@ -1,3 +1,5 @@
+[TOC]
+
 # 01 | 正确使用并发工具类库
 
 我们来看看在使用并发工具时，经常遇到哪些坑，以及如何解决、避免这些坑。
@@ -3276,7 +3278,8 @@ public void uncaughtException(Thread t, Throwable e) {
 ```java
 new ThreadFactoryBuilder()
         .setNameFormat(prefix + "%d")
-        .setUncaughtExceptionHandler((thread, throwable) -> log.error("ThreadPool {} got exception", thread, throwable))
+        .setUncaughtExceptionHandler(
+            (thread, throwable) -> log.error("ThreadPool {} got exception", thread, throwable))
         .get()
 ```
 
@@ -3297,3 +3300,36 @@ static {
 - 案例场景
 - 原因分析
 - 解决方案
+
+
+
+**踩坑30**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑31**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑32**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑33**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
