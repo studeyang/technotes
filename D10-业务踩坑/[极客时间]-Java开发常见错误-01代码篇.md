@@ -21,9 +21,35 @@ public Map wrong(@RequestParam("userId") Integer userId) {
 }
 ```
 
+为了更快地重现这个问题，我在配置文件中设置一下 Tomcat 的参数，把工作线程池最大线程数设置为 1，这样始终是同一个线程在处理请求：
+
+```properties
+server.tomcat.max-threads=1
+```
+
+先让用户 1 来请求接口，然后调用接口得到如下结果：
+
+```json
+{
+  "before": "http-nio-8080-exec-1:null",
+  "after": "http-nio-8080-exec-1:1"
+}
+```
+
+可以看到第一和第二次获取到用户 ID 分别是 null 和 1，符合预期。接口用户 2 来请求接口，这次就出现了 Bug：
+
+```json
+{
+  "before": "http-nio-8080-exec-1:1",
+  "after": "http-nio-8080-exec-1:2"
+}
+```
+
+第一次和第二次获取到用户 ID 分别是 1 和 2，显然第一次获取到了用户 1 的信息，原因就是 Tomcat 的线程池重用了线程。从上面结果可以看到，两次请求的线程都是同一个线程：http-nio-8080-exec-1。
+
 - 原因分析
 
-使用了 ThreadLocal 来缓存获取到的用户信息。程序运行在 Tomcat 中，Tomcat 的工作线程是基于线程池的。
+ThreadLocal 适用于变量在线程间隔离，上述代码使用了 ThreadLocal 来缓存获取到的用户信息。程序运行在 Tomcat 中，而 Tomcat 的工作线程是基于线程池的。
 
 - 解决方案
 
@@ -50,6 +76,8 @@ public Map right(@RequestParam("userId") Integer userId) {
 
 有一个含 900 个元素的 Map，现在再补充 100 个元素进去，这个补充操作由 10 个线程并发进行。
 
+开发人员误以为使用了 ConcurrentHashMap 就不会有线程安全问题。于是写出了下面的代码：
+
 ```java
 private static int THREAD_COUNT = 10;
 private static int ITEM_COUNT = 1000;
@@ -68,8 +96,10 @@ public String wrong() throws InterruptedException {
 
     ForkJoinPool forkJoinPool = new ForkJoinPool(THREAD_COUNT);
     forkJoinPool.execute(() -> IntStream.rangeClosed(1, 10).parallel().forEach(i -> {
+        // 计算还需要补充多少元素
         int gap = ITEM_COUNT - concurrentHashMap.size();
         log.info("gap size:{}", gap);
+        // 将缺少的元素添加进去
         concurrentHashMap.putAll(getData(gap));
     }));
     forkJoinPool.shutdown();
@@ -80,15 +110,25 @@ public String wrong() throws InterruptedException {
 }
 ```
 
-输出日志如下：
+结果输出日志如下：
 
 ![image-20210603214203964](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210603214204.png)
 
+初始大小 900 符合预期，还需要填充 100 个元素。
+
+worker1 线程查询到当前需要填充的元素为 36，竟然还不是 100 的倍数。worker13 线程查询到需要填充的元素数是负的，显然已经过度填充了。最后 HashMap 的总项目数是 1536，显然不符合填充满 1000 的预期。
+
 - 原因分析
 
-诸如 size、isEmpty 和 containsValue 等聚合方法，在并发情况下反映的是 ConcurrentHashMap 的中间状态。
+ConcurrentHashMap 就像是一个大篮子， 现在这个篮子里有 900 个桔子，我们期望把这个篮子装满 1000 个桔子，也就是再装 100 个桔子。有 10 个工人来干这件事儿，大家先后到岗后会计算还需要补多少个桔子进去，最后把桔子装入篮子。
+
+但是，工人往这个篮子装 100 个桔子的操作不是原子性的，在别人看来可能会有一个瞬间篮子里有 964 个桔子，还需要补 36 个桔子。
+
+回到 ConcurrentHashMap，它只能保证原子性读写的操作是线程安全的。而诸如 size、isEmpty 和 containsValue 等聚合方法，在并发情况下反映的都是 ConcurrentHashMap 的中间状态。
 
 - 解决方案
+
+解决思路，还是以上面的场景举例。哪个工人先拿到这个篮子，就由这个工人将剩下的桔子放进篮子里去。
 
 ```java
 @GetMapping("right")
@@ -123,7 +163,7 @@ public String right() throws InterruptedException {
 
 使用 Map 来统计 Key 出现的次数。具体使用如下：
 
-1. 使用 ConcurrentHashMap 来统计，Key 的范围是 10；
+1. 使用 ConcurrentHashMap 来统计，Key 的范围是 item0~item10；
 2. 使用最多 10 个并发，循环操作 1000 万次，每次操作累加随机的 Key；
 3. 如果 Key 不存在的话，首次设置值为 1。
 
@@ -151,6 +191,12 @@ private Map<String, Long> normaluse() throws InterruptedException {
     return freqs;
 }
 ```
+
+> 为什么要对 freqs 加锁？
+>
+> 如果没有锁，2个线程判断 item0 在集合中不存在，同时走到 else 块，会造成统计 item0 应该为 2，而实际为 1。
+
+这种实现方式是一般的实现，所以叫 normal use。不会导致错误的结果，但在性能上却存在问题，因为锁的粒度较大。
 
 - 原因分析
 
@@ -219,6 +265,8 @@ public String good() throws InterruptedException {
 
 ![image-20210603222119527](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210603222119.png)
 
+性能提升了 2.8s/0.3s = 9.3 倍。
+
 **踩坑4：在写操作很多的场景下使用 CopyOnWriteArrayList 导致性能问题**
 
 - 案例场景
@@ -227,7 +275,7 @@ public String good() throws InterruptedException {
 
 - 原因分析
 
-在 Java 中，CopyOnWriteArrayList 虽然是一个线程安全的 ArrayList，但因为其实现方式是，每次修改数据时都会用 Arrays.copyOf 复制一份数据出来。
+在 Java 中，CopyOnWriteArrayList 虽然是一个线程安全的 ArrayList，但因为其实现方式是，每次修改数据时都会用 Arrays.copyOf 复制一份数据出来。下面是 CopyOnWriteArrayList 部分源码。
 
 ```java
 public boolean add(E e) {
@@ -246,7 +294,7 @@ public boolean add(E e) {
 }
 ```
 
-所以有明显的适用场景，即读多写少或者说希望无锁读的场景。
+每次 add 时，都会用 Arrays.copyOf 创建一个新数组，频繁 add 时内存的申请释放消耗会很大。所以有明显的适用场景，即读多写少或者说希望无锁读的场景。
 
 通过下面代码来分析一下 CopyOnWriteArrayList 和普通加锁方式 ArrayList 的读写性能。
 
@@ -319,7 +367,7 @@ public Map testRead() {
 
 使用 ConcurrentHashMap 来缓存。
 
-# 02 | 代码加锁：不要让“锁”事成为烦心事
+# 02 | 正确地给代码加锁
 
 **踩坑5：锁加在了不同层面上导致结果不符合预期**
 
