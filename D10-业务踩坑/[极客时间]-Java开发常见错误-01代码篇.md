@@ -3339,15 +3339,145 @@ static {
 }
 ```
 
+# 13 | 日志:日志记录真没你想象的那么简单
 
+使用日志容易出错主要在于以下几个方面：
 
-**踩坑29**
+1. 日志框架众多。
+
+Logback、Log4j、Log4j2、commons-logging、JDK 自带的 java.util.logging 等，都是 Java 体系的日志框架。而不同的类库，还可能选择使用不同的日志框架， 这样一来，日志的兼容与统一管理就变得非常困难。
+
+2. 配置复杂且容易出错。
+
+日志配置文件通常很复杂，改配置容易造成很多问题。比如，重复记录日志的问题、同步日志的性能问题、异步记录的错误配置问题。
+
+3. 没考虑日志内容获取的代价。
+4. 胡乱使用日志级别。
+
+SLF4J（Simple Logging Facade For Java）是为了统一各类日志框架而诞生的。如下图所示：
+
+![image-20210703223513586](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210703223513.png)
+
+SLF4J 实现了三种功能：
+
+一是提供了统一的日志门面 API，即图中紫色部分，实现了中立的日志记录 API。
+
+二是桥接功能，即图中蓝色部分，用来把各种日志框架的 API（图中绿色部分）桥接到 SLF4J API。
+
+三是适配功能，即图中红色部分，可以实现 SLF4J API 和实际日志框架（图中灰色部分）的绑定。
+
+> SLF4J 只是日志标准，我们还是需要一个实际的日志框架。而日志框架本身没有实现 SLF4J API，所以需要有一个前置转换。Logback 就是按照 SLF4J API 标准实现的，因此不需要绑定模块做转换。
+
+> 注意：我们可以使用 log4j-over-slf4j 来实现 Log4j 桥接到 SLF4J，也可以使用 slf4j-log4j12 实现 SLF4J 适配到 Log4j。但是它不能同时使用它们，否则就会产生死循环。jcl 和 jul 也是同样的道理。
+
+> 图中有 4 个灰色的日志实现框架，业务系统使用最广泛的是 Logback 和 Log4j，它们是同一人开发的。Logback 可以认为是 Log4j 的改进版本，更推荐使用。
+
+**踩坑29：logger 配置了继承关系导致日志重复记录**
 
 - 案例场景
+
+首先，定义一个方法实现 debug、info、warn 和 error 四种日志的记录：
+
+```java
+@Slf4j
+@RequestMapping("logging")
+@RestController
+public class LoggingController {
+
+    @GetMapping("log")
+    public void log() {
+        log.debug("debug");
+        log.info("info");
+        log.warn("warn");
+        log.error("error");
+    }
+}
+```
+
+然后，配置 Logback：
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <!-- [2] << -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
+        </layout>
+    </appender> <!-- >> -->
+    <!-- [3] << -->
+    <logger name="org.geekbang.time.commonmistakes.logging" level="DEBUG">
+        <appender-ref ref="CONSOLE"/> <!-- [4] -->
+    </logger> <!-- >> -->
+    <!-- [1] << -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/> <!-- [5] -->
+    </root> <!-- >> -->
+</configuration>
+```
+
+[1] 处设置了全局的日志级别为 INFO，日志输出使用 CONSOLE Appender。
+
+[2] 处将 CONSOLE 定义为 ConsoleAppender，且定义了日志的输出格式。
+
+[3] 处实现了一个 Logger 配置，将应用包的日志级别设置为 DEBUG、日志输出使用 CONSOLE Appender。
+
+执行方法后出现了日志重复记录的问题：
+
+![image-20210703232939441](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210703232939.png)
+
 - 原因分析
+
+从 [4]、[5] 可以看到，CONSOLE 这个 Appender 同时挂载到了两个 Logger 上，一个是我们定义的，一个是继承自 root 的。所以同一条日志既会通过 logger 记录，也会发送到 root 记录，因此应用 package 下的日志出现了重复记录。
+
+经了解，该同学如此配置的初衷是让应用内的日志暂时开启 DEBUG 级别的日志记录。
+
 - 解决方案
 
+方案一：去掉挂载的 Appender。
 
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
+        </layout>
+    </appender>
+    <logger name="org.geekbang.time.commonmistakes.logging" level="DEBUG"/>
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>
+```
+
+方案二：把日志输出到不同的 Appender。
+
+将应用的日志输出到文件 app.log，并把其他框架的日志输出到控制台，且 additivity 属性为 false，这样就不会继承的 Appender 了。
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>app.log</file>
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+		<layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
+		</layout>
+	</appender>
+    <logger name="org.geekbang.time.commonmistakes.logging" level="DEBUG" additivity="false">
+        <appender-ref ref="FILE"/>
+    </logger>
+	<root level="INFO">
+		<appender-ref ref="CONSOLE" />
+	</root>
+</configuration>
+```
 
 **踩坑30**
 
