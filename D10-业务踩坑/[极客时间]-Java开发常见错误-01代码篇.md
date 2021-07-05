@@ -3399,28 +3399,22 @@ public class LoggingController {
 ```xml
 <?xml version="1.0" encoding="UTF-8" ?>
 <configuration>
-    <!-- [2] << -->
+    <!-- 将 CONSOLE 定义为 ConsoleAppender，且定义了日志的输出格式 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <layout class="ch.qos.logback.classic.PatternLayout">
             <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
         </layout>
-    </appender> <!-- >> -->
-    <!-- [3] << -->
+    </appender>
+    <!-- 实现了一个 Logger 配置，将应用包的日志级别设置为 DEBUG、日志输出使用 CONSOLE Appender -->
     <logger name="org.geekbang.time.commonmistakes.logging" level="DEBUG">
         <appender-ref ref="CONSOLE"/> <!-- [4] -->
-    </logger> <!-- >> -->
-    <!-- [1] << -->
+    </logger>
+    <!-- 设置了全局的日志级别为 INFO，日志输出使用 CONSOLE Appender -->
     <root level="INFO">
         <appender-ref ref="CONSOLE"/> <!-- [5] -->
-    </root> <!-- >> -->
+    </root>
 </configuration>
 ```
-
-[1] 处设置了全局的日志级别为 INFO，日志输出使用 CONSOLE Appender。
-
-[2] 处将 CONSOLE 定义为 ConsoleAppender，且定义了日志的输出格式。
-
-[3] 处实现了一个 Logger 配置，将应用包的日志级别设置为 DEBUG、日志输出使用 CONSOLE Appender。
 
 执行方法后出现了日志重复记录的问题：
 
@@ -3479,19 +3473,253 @@ public class LoggingController {
 </configuration>
 ```
 
-**踩坑30**
+**踩坑30：错误配置 LevelFilter 导致日志重复记录**
 
 - 案例场景
+
+有一次我们发现 Kibana 上展示的日志有部分重复，一直怀疑是 Logstash 配置错误，但最后发现还是 Logback 的配置错误 引起的。
+
+这个项目的日志是这样配置的：在记录日志到控制台的同时，把日志记录按照不同的级别记录到两个文件中。
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+   <property name="logDir" value="./logs" />
+   <property name="app.name" value="common-mistakes" />
+    <!-- 把所有日志输出到控制台 -->
+   <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+      <layout class="ch.qos.logback.classic.PatternLayout">
+         <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
+      </layout>
+   </appender>
+   <!-- 用于记录文件日志，并定义了文件名、记录 日志的格式和编码等信息 -->
+   <appender name="INFO_FILE" class="ch.qos.logback.core.FileAppender">
+      <File>${logDir}/${app.name}_info.log</File>
+       <!-- 希望 _info.log 文件中可以记录 INFO 级别的日志 -->
+      <filter class="ch.qos.logback.classic.filter.LevelFilter">
+         <level>INFO</level>
+      </filter>
+      <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+         <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
+         <charset>UTF-8</charset>
+      </encoder>
+   </appender>
+    <!-- 使用 ThresholdFilter 来过滤日志，把 WARN 以上级别的日志记录到另一个 _error.log 文件中 -->
+   <appender name="ERROR_FILE" class="ch.qos.logback.core.FileAppender">
+      <File>${logDir}/${app.name}_error.log</File>
+      <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+         <level>WARN</level>
+      </filter>
+      <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+         <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
+         <charset>UTF-8</charset>
+      </encoder>
+   </appender>
+    <!-- 定义的 root 引用了三个 Appender -->
+   <root level="INFO">
+      <appender-ref ref="CONSOLE" />
+      <appender-ref ref="INFO_FILE"/>
+      <appender-ref ref="ERROR_FILE"/>
+   </root>
+</configuration>
+```
+
+运行测试代码后发现，_info.log 中包含了 INFO、WARN 和 ERROR 三个级别的日志。error.log 包含了 WARN 和 ERROR 两个级别的日志。
+
 - 原因分析
+
+我们先来了解一下 ThresholdFilter 和 LevelFilter 的配置方式。
+
+首先来分析下 ThresholdFilter 的源码。
+
+```java
+public class ThresholdFilter extends Filter<ILoggingEvent> {
+    @Override
+    public FilterReply decide(ILoggingEvent event) {
+        if (!isStarted()) {
+            return FilterReply.NEUTRAL;
+        }
+
+        if (event.getLevel().isGreaterOrEqual(level)) {
+            return FilterReply.NEUTRAL;
+        } else {
+            return FilterReply.DENY;
+        }
+    }
+}
+```
+
+当日志级别大于等于配置的级别时返回 NEUTRAL，继续调用过滤器链上的下一个过滤器；否则，返回 DENY 直接拒绝记录日志。在这个案例中，把 ThresholdFilter 设置为 WARN，可以记录 WARN 和 ERROR 级别的日志。
+
+再来分析下 LevelFilter 的源码。
+
+```java
+public class LevelFilter extends AbstractMatcherFilter<ILoggingEvent> {
+    @Override
+    public FilterReply decide(ILoggingEvent event) {
+        if (!isStarted()) {
+            return FilterReply.NEUTRAL;
+        }
+
+        if (event.getLevel().equals(level)) {
+            return onMatch;
+        } else {
+            return onMismatch;
+        }
+    }
+}
+```
+
+```java
+public abstract class AbstractMatcherFilter<E> extends Filter<E> {
+    protected FilterReply onMatch;
+    protected FilterReply onMismatch;
+}
+```
+
+如果匹配就调用 onMatch 定义的处理方式，默认是交给下一个过滤器处理；否则，调用 onMismatch 定义的处理方式，默认也是交给下一个过滤器处理。
+
+和 ThresholdFilter 不同的是，LevelFilter 仅仅配置 level 是无法真正起作用的。由于没有配置 onMatch 和 onMismatch 属性，所以相当于这个过滤器是无用的，导致 INFO 以上级别的日志都记录了。
+
 - 解决方案
 
+配置 LevelFilter 的 onMatch 属性为 ACCEPT，表示接收 INFO 级别的日志；配置 onMismatch 属性为 DENY，表示除了 INFO 级别都不记录：
 
+```xml
+<appender name="INFO_FILE" class="ch.qos.logback.core.FileAppender">
+    <File>${logDir}/${app.name}_info.log</File>
+    <filter class="ch.qos.logback.classic.filter.LevelFilter">
+        <level>INFO</level>
+        <onMatch>ACCEPT</onMatch>
+        <onMismatch>DENY</onMismatch>
+    </filter>
+    ...
+</appender>
+```
 
-**踩坑31**
+**踩坑31：日志记录过多导致应用的性能瓶颈**
 
 - 案例场景
+
+FILE 是一个 FileAppender，用于记录所有的日志；CONSOLE 是一个 ConsoleAppender，用于记录带有 time 标记的日志。
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>app.log</file>
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n</pattern>
+        </layout>
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
+                <marker>time</marker>
+            </evaluator>
+            <onMismatch>DENY</onMismatch>
+            <onMatch>ACCEPT</onMatch>
+        </filter>
+    </appender>
+    <root level="INFO">
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
+```
+
+测试代码如下。
+
+```java
+@GetMapping("performance")
+public void performance(@RequestParam(name = "count", defaultValue = "1000") int count) {
+    long begin = System.currentTimeMillis();
+    String payload = IntStream.rangeClosed(1, 1000000)
+            .mapToObj(__ -> "a")
+            .collect(Collectors.joining("")) + UUID.randomUUID().toString();
+    IntStream.rangeClosed(1, count).forEach(i -> log.info("{} {}", i, payload));
+    Marker timeMarker = MarkerFactory.getMarker("time");
+    log.info(timeMarker, "took {} ms", System.currentTimeMillis() - begin);
+}
+```
+
+在这个案例中，我们给输出测试结果的那条日志上做了 time 标记。实现了记录指定次数的大日志，每条日志包含 1MB 字节的模拟数据，最后记录一条以 time 为标记的方法执行耗时日志。
+
+> 配合使用标记和 EvaluatorFilter，实现日志的按标签过滤，是一个不错的小技巧。
+
+执行程序后可以看到，记录 1000 次日志和 10000 次日志的调用耗时，分别是 6.3 秒和 44.5 秒：
+
+![image-20210705233722881](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210705233723.png)
+
+对于只记录文件日志的代码了来说，这个耗时挺长的。
+
 - 原因分析
+
+我们析下 FileAppender 的源码发现，FileAppender 继承自 OutputStreamAppender。
+
+```java
+public class OutputStreamAppender<E> extends UnsynchronizedAppenderBase<E> {
+    
+    private OutputStream outputStream;
+    boolean immediateFlush = true;
+    
+    @Override
+    protected void append(E eventObject) {
+        if (!isStarted()) {
+            return;
+        }
+        subAppend(eventObject);
+    }
+    
+    protected void subAppend(E event) {
+        if (!isStarted()) {
+            return;
+        }
+        try {
+            // 编码LoggingEvent
+            byte[] byteArray = this.encoder.encode(event);
+            // 写字节流
+            writeBytes(byteArray);
+        } catch (IOException ioe) {
+            ...
+        }
+    }
+    
+    private void writeBytes(byte[] byteArray) throws IOException {
+        if(byteArray == null || byteArray.length == 0)
+            return;
+        // <<[1]
+        lock.lock();
+        try {
+            this.outputStream.write(byteArray); //>>
+            if (immediateFlush) {
+                this.outputStream.flush();
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+```
+
+通过 [1] 处的代码可以发现，在追加日志的时候，是直接把日志写入 OutputStream 中，属于同步记录日志。这就是为什么日志大量写入会耗时这么久的原因了。
+
 - 解决方案
+
+使用 Logback 提供的 AsyncAppender 即可实现异步的日志记录。定义一个异步 Appender ASYNCFILE，包装之前的同步文件日志记录的 FileAppender， 就可以实现异步记录日志到文件。
+
+```xml
+<appender name="ASYNCFILE" class="ch.qos.logback.classic.AsyncAppender">
+    <appender-ref ref="FILE"/>
+</appender>
+```
+
+测试一下可以发现，记录 1000 次日志和 10000 次日志的调用耗时，分别是 735 毫秒和 668 毫秒：
+
+![image-20210705234705019](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210705234705.png)
 
 
 
