@@ -3339,7 +3339,7 @@ static {
 }
 ```
 
-# 13 | 日志:日志记录真没你想象的那么简单
+# 13 | 正确打印日志
 
 使用日志容易出错主要在于以下几个方面：
 
@@ -3721,9 +3721,163 @@ public class OutputStreamAppender<E> extends UnsynchronizedAppenderBase<E> {
 
 ![image-20210705234705019](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210705234705.png)
 
+**踩坑32：关于 AsyncAppender 异步日志的坑**
 
+总结关于 AsyncAppender 异步日志的坑，可以归结为三类：
 
-**踩坑32**
+1. 记录异步日志撑爆内存；
+2. 记录异步日志出现日志丢失；
+3.  记录异步日志出现阻塞。
+
+- 案例场景
+
+首先，自定义一个继承自 ConsoleAppender 的 MySlowAppender，作为记录到控制台的输出器，写入日志时休眠 1 秒。
+
+```java
+public class MySlowAppender extends ConsoleAppender {
+    @Override
+    protected void subAppend(Object event) {
+        try {
+            // 模拟慢日志
+            TimeUnit.MILLISECONDS.sleep(1);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        super.subAppend(event);
+    }
+}
+```
+
+然后，在配置文件中使用 AsyncAppender，将 MySlowAppender 包装为异步日志记录：
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <appender name="CONSOLE" class="org.geekbang.time.commonmistakes.logging.async.MySlowAppender">
+		<layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>
+                [%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{40}:%line] - %msg%n
+            </pattern>
+		</layout>
+	</appender>
+	<appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+		<appender-ref ref="CONSOLE" />
+        <!-- <includeCallerData>true</includeCallerData> -->
+        <!-- <discardingThreshold>200</discardingThreshold> -->
+        <!-- <queueSize>1000</queueSize> -->
+        <!-- <neverBlock>true</neverBlock> -->
+	</appender>
+	<root level="INFO">
+		<appender-ref ref="ASYNC" />
+	</root>
+</configuration>
+```
+
+定义一段测试代码，循环记录一定次数的日志，最后输出方法执行耗时：
+
+```java
+@GetMapping("manylog")
+public void manylog(@RequestParam(name = "count", defaultValue = "1000") int count) {
+    long begin = System.currentTimeMillis();
+    IntStream.rangeClosed(1, count).forEach(i -> log.info("log-{}", i));
+    System.out.println("took " + (System.currentTimeMillis() - begin) + " ms");
+}
+```
+
+执行方法后发现，耗时很短但出现了日志丢失:我们要记录 1000 条日志，最终控制台只能 搜索到 215 条日志，而且日志的行号变为了一个问号。
+
+![image-20210706223428032](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210706223428.png)
+
+- 原因分析
+
+出现这个问题的原因在于，AsyncAppender 提供了一些配置参数，而我们没用对。
+
+```text
+includeCallerData 用于控制是否收集调用方数据，默认是 false，所以方法行号、方法名等信息没有显示。
+
+queueSize 用于控制阻塞队列大小，使用的 ArrayBlockingQueue 阻塞队列，默认大小是 256，即内存中最多保存 256 条日志。
+
+discardingThreshold 是控制丢弃日志的阈值(它不是百分比，而是日志条数)，主要是防止队列满后阻塞。默认情况下，队列剩余量低于队列长度的 20%，就会丢弃 TRACE、DEBUG 和 INFO 级别的日志。
+
+neverBlock 用于控制队列满的时候，加入的数据是否直接丢弃，不会阻塞等待，默认是 false。
+```
+
+看到默认队列大小为 256，达到 80% 容量后开始丢弃 <=INFO 级别的日志后，我们就可以理解日志中为什么只有 215 条 INFO 日志了。
+
+- 解决方案
+
+如果考虑绝对性能优先，那就设置 neverBlock 为 true，永不阻塞。
+
+如果考虑绝对不丢数据优先，那就设置 discardingThreshold 为 0，即使是 <=INFO 的级别日志也不会丢，但最好把 queueSize 设置大一点，毕竟默认的 queueSize 显然太小，太容易阻塞。
+
+如果希望兼顾两者，可以丢弃不重要的日志，把 queueSize 设置大一点，再设置一个合理的 discardingThreshold。
+
+**踩坑33：记录日志时未作级别判断导致不记录日志也花费时间获取日志参数**
+
+- 案例场景
+
+“SLF4J 的{}占位符语法，到真正记录日志时才会获取实际参数， 因此解决了日志数据获取的性能问题”。你觉得这种说法对吗?
+
+为了验证这个问题，我们写一段测试代码：
+
+```java
+private String slowString(String s) {
+    System.out.println("slowString called via " + s);
+    try {
+        TimeUnit.SECONDS.sleep(1);
+    } catch (InterruptedException e) {
+    }
+    return "OK";
+}
+```
+
+分别构建三种打印日志的场景：
+
+```java
+@GetMapping
+public void index() {
+    StopWatch stopWatch = new StopWatch();
+    stopWatch.start("debug1");
+    log.debug("debug1:" + slowString("debug1"));
+    stopWatch.stop();
+    stopWatch.start("debug2");
+    log.debug("debug2:{}", slowString("debug2"));
+    stopWatch.stop();
+    stopWatch.start("debug3");
+    if (log.isDebugEnabled())
+        log.debug("debug3:{}", slowString("debug3"));
+    stopWatch.stop();
+    log.info(stopWatch.prettyPrint());
+}
+```
+
+结果如下：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210706230654.png" alt="image-20210706230653935" style="zoom:50%;" />
+
+可以看出，前两种方式都调用了 slowString 方法，耗时都是 1 秒；
+
+- 原因分析
+
+这种方式虽然允许我们传入 Object，不用拼接字符串，但也只是延迟了日志参数对象.toString() 和字符串拼接的耗时。
+
+在这个案例中，除非事先判断日志级别，否则必然会调用 slowString 方法。回到开头提的问题，使用{}占位符语法不能通过延迟参数值获取，来解决日志数据获取的性能问题。
+
+- 解决方案
+
+方案一：打印日志前判断日志级别；
+
+方案二：使用 lambda 表达式进行延迟参数内容获取。
+
+```java
+log.debug("debug4:{}", () -> slowString("debug4"));
+```
+
+需要把 Lombok 的 @Slf4j 注解替换为 @Log4j2 注解。
+
+# 14 | 文件IO：实现高效正确的文件读写并非易事
+
+**踩坑34**
 
 - 案例场景
 - 原因分析
@@ -3731,9 +3885,24 @@ public class OutputStreamAppender<E> extends UnsynchronizedAppenderBase<E> {
 
 
 
-**踩坑33**
+**踩坑35**
 
 - 案例场景
 - 原因分析
 - 解决方案
 
+
+
+**踩坑36**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
+
+
+**踩坑37**
+
+- 案例场景
+- 原因分析
+- 解决方案
