@@ -3339,7 +3339,7 @@ static {
 }
 ```
 
-# 13 | 正确打印日志
+# 13 | 正确地打印日志
 
 使用日志容易出错主要在于以下几个方面：
 
@@ -3877,21 +3877,212 @@ log.debug("debug4:{}", () -> slowString("debug4"));
 
 # 14 | 文件IO：实现高效正确的文件读写并非易事
 
-**踩坑34**
+本文从字符编码、缓冲区和文件句柄释放这 3 个常见问题出发，和你分享如何解决与文件操作相关的性能问题或者 Bug。
+
+**踩坑34：文件读写字符编码不一致导致乱码**
 
 - 案例场景
+
+有一个项目需要读取三方的对账文件定时对账，原先一直是单机处理的，没什么问题。后来为了提升性能，使用双节点同时处理对账，每一个节点处理部分对账数据，但新增的节点在处理文件中中文的时候总是读取到乱码。
+
+为复现这个场景，模拟代码如下：
+
+```java
+private static void init() throws IOException {
+    Files.deleteIfExists(Paths.get("hello.txt"));
+    Files.write(Paths.get("hello.txt"), "你好hi".getBytes(Charset.forName("GBK")));
+    log.info("bytes:{}", Hex.encodeHexString(Files.readAllBytes(Paths.get("hello.txt"))).toUpperCase());
+}
+```
+
+输出如下：
+
+```text
+bytes:C4E3BAC36869
+```
+
+当时出现问题的文件读取代码是这样的：
+
+```java
+private static void wrong() throws IOException {
+    log.info("charset: {}", Charset.defaultCharset());
+
+    char[] chars = new char[10];
+    String content = "";
+    try (FileReader fileReader = new FileReader("hello.txt")) {
+        int count;
+        while ((count = fileReader.read(chars)) != -1) {
+            content += new String(chars, 0, count);
+        }
+    }
+    log.info("result:{}", content);
+
+    Files.write(Paths.get("hello2.txt"), "你好hi".getBytes(Charsets.UTF_8));
+    log.info("bytes:{}", Hex.encodeHexString(Files.readAllBytes(Paths.get("hello2.txt"))).toUpperCase());
+
+}
+```
+
+可以看到，是使用了 FileReader 类以字符方式进行文件读取，日志中读取出来的“你 好”变为了乱码：
+
+```text
+charset: UTF-8
+result:���hi
+```
+
 - 原因分析
+
+FileReader 是以当前机器的默认字符集来读取文件的，当前机器默认字符集是 UTF-8，当然无法读取 GBK 编码的汉字。UTF-8 编码的一个汉字需要三个字节；而 GBK 编码的一个汉字需要两个字节。字节长度都不一样，以 GBK 编码后保存的汉字，以 UTF8 进行解码读取，必然不会成功。
+
+FileReader 虽然方便但因为使用了默认字符集对环境产生了依赖， 这就是为什么老的机器上程序可以正常运作，在新节点上读取中文时却产生了乱码。
+
 - 解决方案
 
+如果希望指定字符集的话，需要直接使用 InputStreamReader 和 FileInputStream。
 
+```java
+private static void right1() throws IOException {
 
-**踩坑35**
+    char[] chars = new char[10];
+    String content = "";
+    try (FileInputStream fileInputStream = new FileInputStream("hello.txt");
+         InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream, Charset.forName("GBK"))) {
+        int count;
+        while ((count = inputStreamReader.read(chars)) != -1) {
+            content += new String(chars, 0, count);
+        }
+    }
+
+    log.info("result: {}", content);
+}
+```
+
+也可以使用 JDK1.7 Files 类的 readAllLines 方法，可以很方便地用一行代码完成文件内容读取：
+
+```java
+private static void right2() throws IOException {
+    log.info("result: {}", Files.readAllLines(Paths.get("hello.txt"), Charset.forName("GBK"))
+             .stream()
+             .findFirst()
+             .orElse(""));
+}
+```
+
+> 使用 Files # readAllLines 要注意：读取超出内存大小的大文件时会出现 OOM。
+>
+> 因为 readAllLines 读取文件所有内容后，是放到一个 `List<String>` 中返回，如果内存无法容纳这个 List，就会出现 OOM。
+
+**使用Files类的lines方法来避免OOM**
+
+下面我们通过一段测试代码来说明。我们尝试读取一个 1 亿 1 万行的文件，文件占用磁盘空间超过 4GB。如果使用 -Xmx512m -Xms512m 启动 JVM 控制最大堆内存为 512M 的 话，肯定无法一次性读取这样的大文件，但通过 Files.lines 方法就没问题。
+
+```java
+private static void linesTest() throws IOException {
+    //输出文件大小
+    log.info("file size:{}", Files.size(Paths.get("large.txt")));
+    StopWatch stopWatch = new StopWatch();
+    stopWatch.start("read 200000 lines");
+    //使用Files.lines方法读取20万行数据
+    log.info("lines {}", (int) Files.lines(Paths.get("large.txt"))
+            .limit(200000)
+            .count());
+    stopWatch.stop();
+    stopWatch.start("read 2000000 lines");
+    //使用Files.lines方法读取200万行数据
+    log.info("lines {}", (int) Files.lines(Paths.get("large.txt"))
+            .limit(2000000)
+            .count());
+    stopWatch.stop();
+    log.info(stopWatch.prettyPrint());
+    AtomicLong atomicLong = new AtomicLong();
+    //使用Files.lines方法统计文件总行数
+    Files.lines(Paths.get("large.txt")).forEach(line -> atomicLong.incrementAndGet());
+    log.info("total lines {}", atomicLong.get());
+}
+```
+
+结果如下：
+
+![image-20210707233223237](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210707233223.png)
+
+可以看到，实现了全文件的读取、统计了整个文件的行数，并没有出现 OOM；读取 200 万行数据耗时 760ms，读取 20 万行数据仅需 267ms。这些都可以说明，File.lines 方法并不是一次性读取整个文件的，而是按需读取。
+
+> 你觉得上面这段代码有什么问题吗?
+
+**踩坑35：读取完文件后没有关闭导致出现 too many files 的错误**
 
 - 案例场景
+
+随便
+
+写入 10 行数据到一个 demo.txt 文件中：
+
+```java
+private static void init() throws IOException {
+    Files.write(
+            Paths.get("demo.txt"),
+            IntStream.rangeClosed(1, 10)
+                    .mapToObj(i -> UUID.randomUUID().toString())
+                    .collect(Collectors.toList()),
+            UTF_8, CREATE, TRUNCATE_EXISTING);
+}
+```
+
+然后使用 Files.lines 方法读取这个文件 100 万次，每读取一行计数器 +1：
+
+```java
+private static void wrong() {
+    //ps aux | grep CommonMistakesApplication
+    //lsof -p 63937
+    LongAdder longAdder = new LongAdder();
+    IntStream.rangeClosed(1, 1000000).forEach(i -> {
+        try {
+            Files.lines(Paths.get("demo.txt")).forEach(line -> longAdder.increment());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    });
+    log.info("total : {}", longAdder.longValue());
+}
+```
+
+运行后马上可以在日志中看到如下错误：
+
+![image-20210707234030337](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210707234030.png)
+
 - 原因分析
+
+使用 lsof 命令查看进程打开的文件，可以看到打开了 1 万多个 demo.txt：
+
+```shell
+$ ps aux | grep CommonMistakesApplication
+63937
+$ lsof -p 63937
+...
+java  63902 zhuye *238r REG 1,4 370 1293416064
+java  63902 zhuye *238r REG 1,4 370 1293416064
+...
+$ lsof -p 63937 | grep demo.txt | wc -l
+10007
+```
+
 - 解决方案
 
+使用 try 来包裹 Stream 即可：
 
+```java
+private static void right() {
+    LongAdder longAdder = new LongAdder();
+    IntStream.rangeClosed(1, 1000000).forEach(i -> {
+        try (Stream<String> lines = Files.lines(Paths.get("demo.txt"))) {
+            lines.forEach(line -> longAdder.increment());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    });
+    log.info("total : {}", longAdder.longValue());
+}
+```
 
 **踩坑36**
 
