@@ -4084,7 +4084,131 @@ private static void right() {
 }
 ```
 
-**踩坑36**
+**踩坑36：读写文件没有考虑缓冲区导致性能问题**
+
+- 案例场景
+
+有这么一个案例，一段先进行文件读入再简单处理后写入另一个文件的业务代码，由于开发人员使用了单字节的读取写入方式，导致执行得巨慢，业务量上来后需要数小时才能完成。
+
+为了简化逻辑便于理解，这里我们不对数据进行处理，直接把原文件数据写入目标文件，相当于文件复制：
+
+```java
+private static void perByteOperation() throws IOException {
+    // src.txt有100万行数据，文件大小35M
+    try (FileInputStream fileInputStream = new FileInputStream("src.txt");
+        FileOutputStream fileOutputStream = new FileOutputStream("dest.txt")) {
+        int i;
+        while ((i = fileInputStream.read()) != -1) {
+            fileOutputStream.write(i);
+        }
+    }
+}
+```
+
+这样的实现，复制一个 35MB 的文件居然耗时 190 秒。
+
+- 原因分析
+
+显然，每读取一个字节、每写入一个字节都进行一次 IO 操作，代价太大了。
+
+- 解决方案
+
+解决方案就是，考虑使用缓冲区作为过渡，一次性从原文件读取一定数量的数据到缓冲区，一次性写入一定数量的数据到目标文件。
+
+```java
+private static void bufferOperationWith100Buffer() throws IOException {
+    // src.txt有100万行数据，文件大小35M
+    try (FileInputStream fileInputStream = new FileInputStream("src.txt");
+         FileOutputStream fileOutputStream = new FileOutputStream("dest.txt")) {
+        byte[] buffer = new byte[100];
+        int len = 0;
+        while ((len = fileInputStream.read(buffer)) != -1) {
+            fileOutputStream.write(buffer, 0, len);
+        }
+    }
+}
+```
+
+仅仅使用了 100 个字节的缓冲区作为过渡，完成 35M 文件的复制耗时缩短到了 26 秒，是无缓冲时性能的 7 倍；如果把缓冲区放大到 1000 字节，耗时可以进一步缩短到 342 毫秒。可以看到，在进行文件 IO 处理的时候，使用合适的缓冲区可以明显提高性能。
+
+**踩坑37：正确使用 BufferedInputStream 和 BufferedOutputStream**
+
+BufferedInputStream 和 BufferedOutputStream 在内部实现了一个默认 8KB 大小的缓冲区。但是，在使用时，还是建议你再使用一个缓冲进行读写，不要因为它们实现了内部缓冲就进行逐字节的操作。
+
+- 案例场景
+
+接下来，我用一段代码比较下使用下面三种方式读写一个字节的性能：
+
+```java
+// src.txt有100万行数据，文件大小35M
+//直接使用 BufferedInputStream 和 BufferedOutputStream
+private static void bufferedStreamByteOperation() throws IOException {
+    try (BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream("src.txt"));
+         BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream("dest.txt"))) {
+        int i;
+        while ((i = bufferedInputStream.read()) != -1) {
+            bufferedOutputStream.write(i);
+        }
+    }
+}
+//额外使用一个 8KB 缓冲，使用 BufferedInputStream 和 BufferedOutputStream
+private static void bufferedStreamBufferOperation() throws IOException {
+    try (BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream("src.txt"));
+         BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream("dest.txt"))) {
+        byte[] buffer = new byte[8192];
+        int len = 0;
+        while ((len = bufferedInputStream.read(buffer)) != -1) {
+            bufferedOutputStream.write(buffer, 0, len);
+        }
+    }
+}
+//直接使用 FileInputStream 和 FileOutputStream，再使用一个 8KB 的缓冲
+private static void largerBufferOperation() throws IOException {
+    try (FileInputStream fileInputStream = new FileInputStream("src.txt");
+         FileOutputStream fileOutputStream = new FileOutputStream("dest.txt")) {
+        byte[] buffer = new byte[8192];
+        int len = 0;
+        while ((len = fileInputStream.read(buffer)) != -1) {
+            fileOutputStream.write(buffer, 0, len);
+        }
+    }
+}
+```
+
+结果如下：
+
+![image-20210708232406733](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210708232407.png)
+
+可以看到，第一种方式虽然使用了缓冲流，但逐字节的操作因为方法调用次数实在太多还是慢，耗时 1.4 秒；后面两种方式的性能差不多，耗时 110 毫秒左右。
+
+- 原因分析
+
+既然这样使用 BufferedInputStream 和 BufferedOutputStream 有什么意义呢?
+
+这里为了演示所以示例三使用了固定大小的缓冲区，但在实际代码中每次需要读取的字节数很可能不是固定的，有的时候读取几个字节，有的时候读取几百字节。这个时候有一个固定大小较大的缓冲，也就是使用 BufferedInputStream 和 BufferedOutputStream 做为后备的稳定的二次缓冲，就非常有意义了。
+
+- 解决方案
+
+对于类似的文件复制操作，如果希望有更高性能，可以使用 FileChannel 的 transfreTo 方法进行流的复制。在一些操作系统（比如高版本的 Linux 和 UNIX）上可以实现 DMA（直接内存访问），也就是数据从磁盘经过总线直接发送到目标文件，无需经过内存和 CPU 进行数据中转：
+
+```java
+private static void fileChannelOperation() throws IOException {
+    // src.txt有100万行数据，文件大小35M
+    FileChannel in = FileChannel.open(Paths.get("src.txt"), StandardOpenOption.READ);
+    FileChannel out = FileChannel.open(Paths.get("dest.txt"), CREATE, WRITE);
+    in.transferTo(0, in.size(), out);
+}
+```
+
+测试结果如下：
+
+![image-20210708233906937](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210708233907.png)
+
+可以看到，最慢的是单字节读写文件流的方式，耗时 183 秒，最快的是 FileChannel.transferTo 方式进行流转发的方式，耗时 50 毫秒。两者耗时相差达到 3600 倍！
+
+
+
+**踩坑38**
 
 - 案例场景
 - 原因分析
@@ -4092,8 +4216,17 @@ private static void right() {
 
 
 
-**踩坑37**
+**踩坑39**
 
 - 案例场景
 - 原因分析
 - 解决方案
+
+
+
+**踩坑40**
+
+- 案例场景
+- 原因分析
+- 解决方案
+
