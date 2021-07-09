@@ -476,7 +476,6 @@ props.put("enable.idempotence", ture)
 那如果我想实现多分区以及多会话上的消息无重复，应该怎么做呢？答案就是事务（transaction）型 Producer。
 
 > Kafka 自 0.11 版本开始也提供了对事务的支持，目前主要是在 read committed 隔离级别上做事情。它能保证多条消息原子性地写入到目标分区，同时也能保证 Consumer 只能看到事务成功提交的消息。
->
 
 **事务型 Producer**
 
@@ -889,4 +888,105 @@ while (true) {
 > 不过，你需要注意的是，独立消费者的位移提交机制和消费者组是一样的，因此独立消费者的位移提交也必须遵守之前说的那些规定，比如独立消费者也要指定 group.id 参数才能提交位移。
 
 虽然说这个场景很冷门，但也并非完全不会遇到。在一个大型公司中，特别是那些将 Kafka 作为全公司级消息引擎系统的公司中，每个部门或团队都可能有自己的消费者应用，谁能保证各自的 Consumer 程序配置的 group.id 没有重复呢？一旦出现不凑巧的重复，发生了上面提到的这种场景，你使用之前提到的哪种方法都不能规避该异常。令人沮丧的是，无论是刚才哪个版本的异常说明，都完全没有提及这个场景，因此，如果是这个原因引发的 CommitFailedException 异常，前面的 4 种方法全部都是无效的。
+
+# 20 | 多线程开发消费者实例
+
+今天我们来聊聊 Kafka Java Consumer 端多线程消费的实现方案。
+
+**KafkaConsumer 的单线程设计**
+
+KafkaConsumer 类是 Kafka Java Consumer 比较重要的一个类，它是单线程的设计，这点你可能会感到很意外，下面我们就来看看为什么采用单线程的设计。
+
+严格来说，从 Kafka 0.10.1.0 版本开始，KafkaConsumer 类就是双线程的，即用户主线程和心跳线程。
+
+> 不过，虽然有心跳线程，但实际的消息获取逻辑依然是在用户主线程中完成的。因此，在消费消息的这个层面上，我们依然可以安全地认为 KafkaConsumer 是单线程的设计。
+
+单线程的设计能够简化 Consumer 端的设计。Consumer 获取到消息后，处理消息的逻辑是否采用多线程，完全由用户决定。
+
+单线程的设计比较容易实现。并不是所有的编程语言都能够很好地支持多线程。从这一点上来说，单线程设计的 Consumer 更容易移植到其他语言上。
+
+KafkaConsumer 类不是线程安全的，所有的网络 I/O 处理都是发生在用户主线程中，因此，你在使用过程中必须要确保线程安全。简单来说，就是你不能在多个线程中共享同一个 KafkaConsumer 实例，否则程序会抛出 ConcurrentModificationException 异常。
+
+当然了，这也不是绝对的。KafkaConsumer 中有个方法是例外的，它就是 wakeup()，你可以在其他线程中安全地调用 KafkaConsumer.wakeup() 来唤醒 Consumer。
+
+鉴于 KafkaConsumer 不是线程安全的事实，我们能够制定两套多线程方案。
+
+ **KafkaConsumer 多线程方案**
+
+方案一：多个 KafkaConsumer。
+
+消费者程序启动多个线程，每个线程维护专属的 KafkaConsumer 实例，如下图所示：
+
+![image-20210709230045996](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210709230046.png)
+
+> 一个 courier-consumer 进程里启动多个 KafkaConsumer 线程。
+
+方案二：多个消费线程执行消息处理逻辑。
+
+消费者程序使用单或多线程获取消息，然后创建多个消费线程执行消息处理逻辑。如下图所示：
+
+![image-20210709230607780](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210709230607.png)
+
+> Couier 使用的是多个 KafkaConsumer，多个消费线程的方案。
+
+两种方案的优缺点如下表：
+
+![image-20210709231201009](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210709231201.png)
+
+**实现代码示例**
+
+方案一：
+
+```java
+public class KafkaConsumerRunner implements Runnable {
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final KafkaConsumer consumer;
+
+    public void run() {
+        try {
+            consumer.subscribe(Arrays.asList("topic"));
+            while (!closed.get()) {
+			    ConsumerRecords records = 
+			        consumer.poll(Duration.ofMillis(10000));
+                //  执行消息处理逻辑
+            }
+        } catch (WakeupException e) {
+            // Ignore exception if closing
+            if (!closed.get()) throw e;         
+        } finally {
+            consumer.close();
+        }
+    }
+
+    // Shutdown hook which can be called from a separate thread
+    public void shutdown() {
+        closed.set(true);
+        consumer.wakeup();
+    }
+}
+```
+
+方案二：
+
+```java
+private final KafkaConsumer<String, String> consumer;
+private ExecutorService executors;
+...
+
+private int workerNum = ...;
+executors = new ThreadPoolExecutor(
+    workerNum, workerNum, 0L, TimeUnit.MILLISECONDS,
+    new ArrayBlockingQueue<>(1000), 
+    new ThreadPoolExecutor.CallerRunsPolicy());
+
+...
+while (true)  {
+    ConsumerRecords<String, String> records = 
+        consumer.poll(Duration.ofSeconds(1));
+    for (final ConsumerRecord record : records) {
+        executors.submit(new Worker(record));
+    }
+}
+...
+```
 
