@@ -344,7 +344,7 @@ public class AvgLatencyConsumerInterceptor implements ConsumerInterceptor<String
 }
 ```
 
-# 13 | Java生产者何时创建/关闭TCP连接？
+# 13 | Java 生产者何时创建/关闭TCP连接？
 
 Apache Kafka 的所有通信都是基于 TCP 的，而不是基于 HTTP 或其他协议。无论是生产者、消费者，还是 Broker 之间的通信都是如此。
 
@@ -989,4 +989,105 @@ while (true)  {
 }
 ...
 ```
+
+# 21 | Java 消费者是如何管理TCP连接的?
+
+完成了今天的讨论，我们才算是对 Kafka 客户端的 TCP 连接管理机制有了全面的了解。
+
+**何时创建 TCP 连接？**
+
+和生产者不同的是，构建 KafkaConsumer 实例时是不会创建任何 TCP 连接的。TCP 连接是在调用 KafkaConsumer.poll 方法时被创建的。再细粒度地说，在 poll 方法内部有 3 个时机可以创建 TCP 连接。
+
+> KafkaConsumer 的这一点设计比 KafkaProducer 要好，因为在 Java 构造函数中启动线程，会造成 this 指针的逃逸，这始终是一个隐患。
+
+1. 发起 FindCoordinator 请求时。
+
+消费者端有个组件叫协调者（Coordinator），它驻留在 Broker 端的内存中，负责消费者组的组成员管理和各个消费者的位移提交管理。当消费者程序首次启动调用 poll 方法时，它需要向 Kafka 集群发送一个名为 FindCoordinator 的请求，希望 Kafka 集群告诉它哪个 Broker 是管理它的协调者。
+
+> 消费者应该向哪个 Broker 发送这类请求呢？
+>
+> 消费者会向集群中当前负载最小的那台 Broker 发送 FindCoordinator 请求。（如何评估负载？看消费者连接的所有 Broker 中，谁的待发送请求最少。）
+
+2. 连接协调者时。
+
+Broker 处理完上一步发送的 FindCoordinator 请求之后，会返还对应的响应结果（Response），显式地告诉消费者哪个 Broker 是真正的协调者，因此在这一步，消费者知晓了真正的协调者后，会创建连向该 Broker 的 Socket 连接。
+
+> 只有成功连入协调者，协调者才能开启正常的组协调操作，比如加入组、等待组分配方案、心跳请求处理、位移获取、位移提交等。
+
+3. 消费数据时。
+
+消费者会为每个要消费的分区创建与该分区领导者副本所在 Broker 连接的 TCP。
+
+> 举个例子，假设消费者要消费 5 个分区的数据，这 5 个分区各自的领导者副本分布在 4 台 Broker 上，那么该消费者在消费时会创建与这 4 台 Broker 的 Socket 连接。
+
+需要注意的是，当第三类 TCP 连接成功创建后，消费者程序就会废弃第一类 TCP 连接，在后台被默默地关闭掉，之后在定期请求元数据时，它会改为使用第三类 TCP 连接。
+
+**创建多少个 TCP 连接？**
+
+我们来看看这段日志。
+
+日志的第 1 行是消费者程序创建的第一个 TCP 连接，这个 Socket 用于发送 FindCoordinator 请求。
+
+> （第一个时机）
+>
+> 注意 **id: -1**。
+>
+> 这是消费者程序创建的第一个连接，此时消费者对于要连接的 Kafka 集群一无所知，因此它连接的 Broker 节点的 ID 是 -1，表示消费者根本不知道要连接的 Kafka Broker 的任何信息。
+
+日志的第 3 行，消费者复用了刚才创建的那个 Socket 连接，向 Kafka 集群发送元数据请求（MetadataRequestData）以获取整个集群的信息。
+
+日志的第 5 行表明，消费者程序开始发送 FindCoordinator 请求给第一步中连接的 Broker，即 localhost:9092，也就是 nodeId 等于 -1 的那个。
+
+日志的第 6 行表明，在十几毫秒之后，消费者程序成功地获悉协调者所在的 Broker 信息，也就是第四行标为橙色的“node_id = 2”。
+
+```log
+[2019-05-27 10:00:54,142] DEBUG [Consumer clientId=consumer-1, groupId=test] Initiating connection to node localhost:9092 (id: -1 rack: null) using address localhost/127.0.0.1 (org.apache.kafka.clients.NetworkClient:944)
+…
+[2019-05-27 10:00:54,188] DEBUG [Consumer clientId=consumer-1, groupId=test] Sending metadata request MetadataRequestData(topics=[MetadataRequestTopic(name=‘t4’)], allowAutoTopicCreation=true, includeClusterAuthorizedOperations=false, includeTopicAuthorizedOperations=false) to node localhost:9092 (id: -1 rack: null) (org.apache.kafka.clients.NetworkClient:1097)
+…
+[2019-05-27 10:00:54,188] TRACE [Consumer clientId=consumer-1, groupId=test] Sending FIND_COORDINATOR {key=test,key_type=0} with correlation id 0 to node -1 (org.apache.kafka.clients.NetworkClient:496)
+[2019-05-27 10:00:54,203] TRACE [Consumer clientId=consumer-1, groupId=test] Completed receive from node -1 for FIND_COORDINATOR with correlation id 0, received {throttle_time_ms=0,error_code=0,error_message=null, node_id=2,host=localhost,port=9094} (org.apache.kafka.clients.NetworkClient:837)
+…
+[2019-05-27 10:00:54,204] DEBUG [Consumer clientId=consumer-1, groupId=test] Initiating connection to node localhost:9094 (id: 2147483645 rack: null) using address localhost/127.0.0.1 (org.apache.kafka.clients.NetworkClient:944)
+…
+[2019-05-27 10:00:54,237] DEBUG [Consumer clientId=consumer-1, groupId=test] Initiating connection to node localhost:9094 (id: 2 rack: null) using address localhost/127.0.0.1 (org.apache.kafka.clients.NetworkClient:944)
+[2019-05-27 10:00:54,237] DEBUG [Consumer clientId=consumer-1, groupId=test] Initiating connection to node localhost:9092 (id: 0 rack: null) using address localhost/127.0.0.1 (org.apache.kafka.clients.NetworkClient:944)
+[2019-05-27 10:00:54,238] DEBUG [Consumer clientId=consumer-1, groupId=test] Initiating connection to node localhost:9093 (id: 1 rack: null) using address localhost/127.0.0.1 (org.apache.kafka.clients.NetworkClient:944)
+```
+
+在日志的第 8 行发起了第二个 Socket 连接，创建了连向 localhost:9094 的 TCP。
+
+> （第二个时机）
+>
+> 只有连接了协调者，消费者进程才能正常地开启消费者组的各种功能以及后续的消息消费。
+
+日志的 10、11、12 三行中，消费者又分别创建了新的 TCP 连接，主要用于实际的消息获取。
+
+> （第三个时机）
+>
+> 要消费的分区的领导者副本在哪台 Broker 上，消费者就要创建连向哪台 Broker 的 TCP。localhost:9092，localhost:9093 和 localhost:9094 这 3 台 Broker 上都有要消费的分区，因此消费者创建了 3 个 TCP 连接。
+
+看完这段日志，你应该会发现日志中的这些 Broker 节点的 ID 在不断变化。有时候是 -1，有时候是 2147483645，只有在最后的时候才回归正常值 0、1 和 2。这又是怎么回事呢？
+
+-1 的来由：消费者程序首次启动时，对 Kafka 集群一无所知，因此用 -1 来表示尚未获取到 Broker 数据。
+
+2147483645 的来由：看第 6 行的 `node_id=2,host=localhost,port=9094`，我们可以知道协调者 ID 是 2，因此这个 Socket 连接的节点 ID 就是 Integer.MAX_VALUE 减去 2，即 2147483647 减去 2，也就是 2147483645。这种节点 ID 的标记方式的目的就是要让组协调请求和真正的数据获取请求使用不同的 Socket 连接。
+
+0、1、2 的来由：它们表征了真实的 Broker ID，也就是我们在 server.properties 中配置的 broker.id 值。
+
+**何时关闭 TCP 连接？**
+
+和生产者类似，消费者关闭 Socket 也分为主动关闭和 Kafka 自动关闭。
+
+主动关闭具体方式就是调用 KafkaConsumer.close() 方法，或者是执行 Kill 命令，不论是 Kill -2 还是 Kill -9；
+
+自动关闭是由消费者端参数 connection.max.idle.ms 控制的，该参数现在的默认值是 9 分钟，即如果某个 Socket 连接上连续 9 分钟都没有任何请求“过境”的话，那么消费者会强行“杀掉”这个 Socket 连接。
+
+> 在实际场景中，有很多将 connection.max.idle.ms 设置成 -1，即禁用定时关闭的案例。如果是这样的话，这些 TCP 连接将不会被定期清除，只会成为永久的“僵尸”连接。基于这个原因，社区应该考虑更好的解决方案。
+
+
+
+
+
+
 
