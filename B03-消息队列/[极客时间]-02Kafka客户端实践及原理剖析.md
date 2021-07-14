@@ -1085,9 +1085,116 @@ Broker 处理完上一步发送的 FindCoordinator 请求之后，会返还对�
 
 > 在实际场景中，有很多将 connection.max.idle.ms 设置成 -1，即禁用定时关闭的案例。如果是这样的话，这些 TCP 连接将不会被定期清除，只会成为永久的“僵尸”连接。基于这个原因，社区应该考虑更好的解决方案。
 
+# 22 | 消费者组消费进度监控都怎么实现？
 
+**消费者 Lag**
 
+对于 Kafka 消费者来说，最重要的事情就是监控它们消费的滞后程度。这个滞后程度有个专门的名称：消费者 Lag 或 Consumer Lag。
 
+所谓滞后程度，就是指消费者当前落后于生产者的程度。比方说，Kafka 生产者向某主题成功生产了 100 万条消息，消费者当前消费了 80 万条消息，那么我们就说消费者滞后了 20 万条消息，即 Lag 等于 20 万。
 
+Lag 有哪些影响呢？
 
+一个正常工作的消费者，它的 Lag 值应该很小，甚至是接近于 0 的，这表示该消费者能够及时地消费生产者生产出来的消息，滞后程度很小。反之，如果一个消费者 Lag 值很大，通常就表明它无法跟上生产者的速度，最终 Lag 会越来越大，从而拖慢下游消息的处理速度。
+
+并且由于消费者的速度无法匹及生产者的速度，极有可能导致它消费的数据已经不在操作系统的页缓存中了，那么这些数据就会失去享有 Zero Copy 技术的资格。这就进一步拉大了与生产者的差距，那些 Lag 原本就很大的消费者会越来越慢，Lag 也会越来越大。
+
+既然消费 Lag 这么重要，我们应该怎么监控它呢？简单来说，有 3 种方法。
+
+1. 使用 Kafka 自带的命令行工具 kafka-consumer-groups 脚本。
+2. 使用 Kafka Java Consumer API 编程。
+3. 使用 Kafka 自带的 JMX 监控指标。
+
+接下来，我们分别来讨论下这 3 种方法。
+
+**监控 Lag 方式一：Kafka 自带命令**
+
+kafka-consumer-groups 脚本位于 Kafka 安装目录的 bin 子目录下，我们可以通过下面的命令来查看某个给定消费者的 Lag 值：
+
+```shell
+$ bin/kafka-consumer-groups.sh --bootstrap-server <Kafka broker 连接信息 > --describe --group <group 名称 >
+```
+
+实际的例子如下图所示：
+
+![image-20210714235411379](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210714235411.png)
+
+图中每个分区的 LAG 值大约都是 60 多万，这表明，在我的这个测试中，消费者组远远落后于生产者的进度。理想情况下，我们希望该列所有值都是 0，因为这才表明我的消费者完全没有任何滞后。
+
+有的时候，你运行这个脚本可能会出现下面这种情况，如下图所示：
+
+![image-20210714235701454](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210714235701.png)
+
+CONSUMER-ID、HOST 和 CLIENT-ID 列没有值。这是因为我们运行 kafka-consumer-groups 脚本时没有启动消费者程序。
+
+除了上面这三列没有值的情形，还可能出现的一种情况是该命令压根不返回任何结果。这是因为你使用的 Kafka 版本比较老，kafka-consumer-groups 脚本还不支持查询非 active 消费者组。
+
+**监控 Lag 方式二：Kafka Java Consumer API**
+
+社区提供的 Java Consumer API 分别提供了查询当前分区最新消息位移和消费者组最新消费消息位移两组方法，我们使用它们就能计算出对应的 Lag。
+
+下面这段代码展示了如何利用 Consumer 端 API 监控给定消费者组的 Lag 值：
+
+```java
+public static Map<TopicPartition, Long> lagOf(String groupID, String bootstrapServers) 
+    throws TimeoutException {
+    Properties props = new Properties();
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    try (AdminClient client = AdminClient.create(props)) {
+        ListConsumerGroupOffsetsResult result = client.listConsumerGroupOffsets(groupID);//[1]
+        try {
+            Map<TopicPartition, OffsetAndMetadata> consumedOffsets = 
+                result.partitionsToOffsetAndMetadata().get(10, TimeUnit.SECONDS);
+            props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // 禁止自动提交位移
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, groupID);
+            props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+            try (final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+                Map<TopicPartition, Long> endOffsets = consumer.endOffsets(consumedOffsets.keySet());//[2]
+                return endOffsets.entrySet().stream().collect(Collectors.toMap(entry -> entry.getKey(),
+                        entry -> entry.getValue() - consumedOffsets.get(entry.getKey()).offset()));//[3]
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            // 处理中断异常
+            // ...
+            return Collections.emptyMap();
+        } catch (ExecutionException e) {
+            // 处理 ExecutionException
+            // ...
+            return Collections.emptyMap();
+        } catch (TimeoutException e) {
+            throw new TimeoutException("Timed out when getting lag for consumer group " + groupID);
+        }
+    }
+}
+```
+
+[1] 处是调用 AdminClient.listConsumerGroupOffsets 方法获取给定消费者组的最新消费消息的位移；[2] 是获取订阅分区的最新消息位移；[3] 是执行相应的减法操作，获取 Lag 值并封装进一个 Map 对象。
+
+> 请注意，这段代码只适用于 Kafka 2.0.0 及以上的版本，2.0.0 之前的版本中没有 AdminClient.listConsumerGroupOffsets 方法。
+
+**监控 Lag 方式三：Kafka JMX 监控指标**
+
+Kafka 消费者提供了一个名为 kafka.consumer:type=consumer-fetch-manager-metrics,client-id=“{client-id}”的 JMX 指标，里面有很多属性。其中 records-lag-max 和 records-lead-min 分别表示此消费者在测试窗口时间内曾经达到的最大的 Lag 值和最小的 Lead 值。
+
+> 这里的 Lead 值是指消费者最新消费消息的位移与分区当前第一条消息位移的差值。很显然，Lag 越大的话，Lead 就越小，反之也是同理。
+
+为什么要引入 Lead 呢？我只监控 Lag 不就行了吗？
+
+试想一下，监控到 Lag 越来越大，可能只会给你一个感受，那就是消费者程序变得越来越慢了，至少是追不上生产者程序了，除此之外，你可能什么都不会做，毕竟，有时候这也是能够接受的。但反过来，一旦你监测到 Lead 越来越小，甚至是快接近于 0 了，那就一定要小心了，这可能预示着消费者端要丢消息了。
+
+为什么？我们知道 Kafka 的消息是有留存时间设置的，默认是 1 周，也就是说 Kafka 默认删除 1 周前的数据。倘若你的消费者程序足够慢，慢到它要消费的数据快被 Kafka 删除了，这时你就必须立即处理，否则一定会出现消息被删除，从而导致消费者程序重新调整位移值的情形。这可能产生两个后果：一个是消费者从头消费一遍数据，另一个是消费者从最新的消息位移处开始消费，之前没来得及消费的消息全部被跳过了，从而造成丢消息的假象。
+
+这两种情形都是不可忍受的，因此必须有一个 JMX 指标，清晰地表征这种情形，这就是引入 Lead 指标的原因。所以，Lag 值从 100 万增加到 200 万这件事情，远不如 Lead 值从 200 减少到 100 这件事来得重要。在实际生产环境中，请你一定要同时监控 Lag 值和 Lead 值。
+
+接下来，我给出一张使用 JConsole 工具监控此 JMX 指标的截图。
+
+![image-20210715002321474](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210715002321.png)
+
+从这张图片中，我们可以看到，client-id 为 consumer-1 的消费者在给定的测量周期内最大的 Lag 值为 714202，最小的 Lead 值是 83，这说明此消费者有很大的消费滞后性。
+
+**小结**
+
+集成性最好的是方法 3，直接将 JMX 监控指标配置到主流的监控框架就可以了。
 
