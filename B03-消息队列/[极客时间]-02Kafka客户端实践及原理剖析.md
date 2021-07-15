@@ -1,3 +1,5 @@
+> 来源：极客时间《Kafka核心技术与实战》
+
 # 09 | 生产消息的分区机制
 
 在使用 Apache Kafka 生产和消费消息的时候，如何将大的数据量均匀地分配到 Kafka 的各个 Broker 上？
@@ -1197,4 +1199,6 @@ Kafka 消费者提供了一个名为 kafka.consumer:type=consumer-fetch-manager-
 **小结**
 
 集成性最好的是方法 3，直接将 JMX 监控指标配置到主流的监控框架就可以了。
+
+> 方法三可参考：https://www.cnblogs.com/LUA123/p/12714900.html
 
