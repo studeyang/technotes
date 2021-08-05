@@ -297,6 +297,91 @@ Spring Cloud Alibaba 是直接隶属于 Spring Cloud 的子项目。是国产的
 
 原有的服务保护组件也调整为 Sentinel，相较Hystrix功能更强大，使用也更加友好。
 
+# 04 | 服务治理：Nacos 如何实现微服务服务治理
+
+**Nacos 注册中心的特性**
+
+“一个更易于构建云原生应用的动态服务发现、配置管理和服务管理平台”。Nacos 具备以下职能：
+
+- 服务发现及管理；
+- 动态配置服务；
+- 动态 DNS 服务。
+
+**Nacos 的快速部署**
+
+- 获取安装包
+
+访问 Nacos GitHub：https://github.com/alibaba/nacos/releases/获取 Nacos 最新版安装包 nacos-server-1.4.0.tar.gz。
+
+```shell
+[root@server-1 local]# tar -xvf nacos-server-1.4.0.tar.gz
+```
+
+- 以单点方式启动
+
+```shell
+[root@server-1 local]# cd nacos/bin
+[root@server-1 bin]# sh startup.sh -m standalone
+```
+
+- 开放防火墙端口
+
+默认 CentOS 系统并没有对外开放 7848/8848 端口，需要设置防火墙对 7848/8848 端口放行。
+
+```shell
+[root@server-1 bin]# firewall-cmd --zone=public --add-port=8848/tcp --permanent
+success
+[root@server-1 bin]# firewall-cmd --zone=public --add-port=7848/tcp --permanent
+success
+[root@server-1 bin]# firewall-cmd  --reload
+success
+```
+
+最后，就可以访问了：http://192.168.31.102:8848/nacos。
+
+**微服务如何接入 Nacos**
+
+- 引入 pom.xml 依赖
+
+```xml
+<dependency>
+    <groupId>com.allibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+```
+
+- 配置 Nacos 地址
+
+```properties
+# 应用名称，默认也是在微服务中注册的微服务 ID
+spring.application.name=sample-service
+# 配置 Nacos 服务器的IP地址
+spring.cloud.nacos.discovery.server-addr=192.168.31.102:8848
+#连接 Nacos 服务器使用的用户名、密码，默认为 nacos
+spring.cloud.nacos.discovery.username=nacos
+spring.cloud.nacos.discvery.password=nacos
+#微服务提供Web服务的端口号
+server.port=9000
+```
+
+启动服务后，打开：http://192.168.31.102:8848/nacos。
+
+![image-20210805232918709](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210805232918.png)
+
+**Nacos 注册中心的心跳机制**
+
+下图阐述了微服务与 Nacos 服务器之间的通信过程。在微服务启动后每过5秒，会由微服务内置的 Nacos 客户端主动向 Nacos 服务器发起心跳包（HeartBeat）。
+
+![image-20210805233326517](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210805233326.png)
+
+心跳包会包含当前服务实例的名称、IP、端口、集群名、权重等信息。
+
+naming 模块在接收到心跳包后，首先根据 IP 与端口判断 Nacos 是否存在该服务实例？如果实例信息不存在，在 Nacos 中注册登记该实例。
+
+Nacos Server 每过 20 秒对“实例 Map”中的所有“非健康”实例进行扫描，如发现“非健康”实例，随即从“实例 Map”中将该实例删除。
+
+> 实例地址变化后，这 20 秒内如何容错？
+
 
 
 
