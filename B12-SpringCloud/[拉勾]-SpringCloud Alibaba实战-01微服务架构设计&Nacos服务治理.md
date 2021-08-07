@@ -382,9 +382,79 @@ Nacos Server 每过 20 秒对“实例 Map”中的所有“非健康”实例�
 
 > 实例地址变化后，这 20 秒内如何容错？
 
+# 05 | 高可用保证：Nacos 如何有效构建注册中心集群
 
+**如何在生产环境部署 Nacos 集群**
 
+![image-20210806230205479](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210806230210.png)
 
+Nacos 集群架构的设计要点：
 
+1. 通过域名方式屏蔽后端容易产生变化的 IP 地址；
+2. Nacos 节点对外暴露 8848 与 7848 端口；
+3. Nacos 在集群环境下需要持久化应用配置、用户权限、历史信息等内置数据；
+4. 不建议直接将服务器物理 IP 对外暴露，而是额外增加 VIP（虚拟 IP），通过 DNS 服务绑定 VIP；
+
+**Nacos 集群的部署过程**
+
+- 第一步，环境准备
+
+Nacos 因为选举算法的特殊性，要求最少三个节点才能组成一个有效的集群。
+
+> 运行最低配置：CPU 1核 / 内存 2G / 硬盘 2G 以上
+>
+> 生产环境配置：CPU 4核 / 内存 8G / 硬盘 10G 以上
+
+- 第二步，下载安装 Nacos
+
+- 第三步，配置数据库
+
+- 第四步，Nacos 集群节点配置
+
+在 /nacos/config 目录下提供了集群示例文件 cluster.conf.example，根据样例配置 cluster.conf
+
+```properties
+192.168.163.131:8848
+192.168.163.132:8848
+192.168.163.133:8848
+```
+
+- 第五步，启动 Nacos 服务器
+
+```shell
+sh /usr/local/nacos/bin/startup.sh
+```
+
+- 第六步，微服务接入
+
+在 application.properties 配置 Nacos 集群的任意节点：
+
+```properties
+# 应用名称，默认也是在微服务中注册的微服务 ID
+spring.application.name=sample-service
+# 配置 192.168.163.131/132/133 都可以接入 Nacos
+spring.cloud.nacos.discovery.server-addr=192.168.163.131:8848,192.168.163.132:8848,192.168.163.133:8848
+#连接 Nacos 服务器使用的用户名、密码，默认为 nacos
+spring.cloud.nacos.discovery.username=nacos
+spring.cloud.nacos.discvery.password=nacos
+#微服务提供 Web 服务的端口号
+server.port=9000
+```
+
+**Nacos 节点间的数据同步过程**
+
+![image-20210807221034759](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210807221040.png)
+
+在 Raft 算法中，只有 Leader 才拥有数据处理与信息分发的权利。因此当微服务启动时，假如注册中心指定为 Follower 节点，则步骤如下：
+
+第一步，Follower 会自动将注册心跳包转给 Leader 节点；
+
+第二步，Leader 节点完成实质的注册登记工作；
+
+第三步，完成注册后向其他 Follower 节点发起“同步注册日志”的指令；
+
+第四步，所有可用的 Follower 在收到指令后进行“ack应答”，通知 Leader 消息已收到；
+
+第五步，当 Leader 接收过半数 Follower 节点的 “ack 应答”后，返回给微服务“注册成功”的响应信息。
 
 

@@ -448,6 +448,140 @@ public class InterventionApplication{
 
 现在每次访问 user-service 时将使用 RandomRule 这一随机负载均衡策略。
 
+**Ribbon+RestTemplate 实现服务间高可用通信**
+
+- 代码模式
+
+pom.xml 引入依赖：
+
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+<dependency>
+  <groupId>com.alibaba.cloud</groupId>
+  <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-netflix-ribbon</artifactId>
+  <version>${spring-cloud-alibaba.version}</version>
+</dependency>
+```
+
+配置 application.yml：
+
+```yaml
+spring:
+  application:
+    name: provider-service #应用/微服务名字
+  cloud:
+    nacos:
+      discovery:
+        #nacos服务器地址
+        server-addr: 192.168.31.102:8848 
+        username: nacos #用户名密码
+        password: nacos
+server:
+  port: 80
+```
+
+使用代码：
+
+```java
+@RestController
+public class ConsumerController {
+    @Resource
+    private LoadBalancerClient loadBalancerClient;
+    @Resource
+    private RestTemplate restTemplate;
+    @GetMapping("/consumer/msg")
+    public String getProviderMessage() {
+        ServiceInstance serviceInstance = loadBalancerClient.choose("provider-service");
+        //获取服务实例的 IP 地址
+        String host = serviceInstance.getHost();
+        //获取服务实例的端口
+        int port = serviceInstance.getPort();
+        String result = restTemplate.getForObject("http://" + host + ":" + port + "/provider/msg", String.class);
+        //向浏览器返回响应
+        return "consumer-service 响应数据:" + result;
+    }
+}
+```
+
+- 注解模式
+
+初始化 RestTemplate：
+
+```java
+@SpringBootApplication
+public class ConsumerServiceApplication {
+    @Bean
+    @LoadBalanced 
+    public RestTemplate restTemplate(){
+        return new RestTemplate();
+    }
+    public static void main(String[] args) {
+        SpringApplication.run(ConsumerServiceApplication.class, args);
+    }
+}
+```
+
+使用代码：
+
+```java
+@RestController
+public class ConsumerController {
+    @Resource
+    private RestTemplate restTemplate;
+    @GetMapping("/consumer/msg")
+    public String getProviderMessage() {
+        //将原有IP:端口替换为服务名，RestTemplate便会在通信前自动利用Ribbon查询可用provider-service实例列表
+        //再根据负载均衡策略选择节点实例
+        String result = restTemplate.getForObject("http://provider-service/provider/msg", String.class);
+        return "consumer-service获得数据:" + result;
+    }
+}
+```
+
+**如何配置 Ribbon 负载均衡策略**
+
+Ribbon 内置多种负载均衡策略，常用的分为以下几种：
+
+- RoundRobinRule
+
+  轮询策略，Ribbon 默认策略。默认超过 10 次获取到的 server 都不可用，会返回⼀个空的 server。
+
+- RandomRule
+
+  随机策略，如果随机到的 server 为 null 或者不可用的话。会不停地循环选取。
+
+- RetryRule
+
+  重试策略，⼀定时限内循环重试。RetryRule 会在每次选取之后，对选举的 server 进⾏判断，是否为 null，是否 alive，并且在 500ms 内会不停地选取判断。
+
+- BestAvailableRule
+
+  最小连接数策略，遍历 serverList，选取出可⽤的且连接数最小的⼀个 server。那么会调用 RoundRobinRule 重新选取。
+
+- AvailabilityFilteringRule
+
+  可用过滤策略。扩展了轮询策略，会先通过默认的轮询选取⼀个 server，再去判断该 server 是否超时可用、当前连接数是否超限，都成功再返回。
+
+- ZoneAvoidanceRule
+
+  区域权衡策略。扩展了轮询策略，除了过滤超时和链接数过多的 server，还会过滤掉不符合要求的 zone 区域⾥⾯的所有节点，始终保证在⼀个区域/机房内的服务实例进行轮询。
+
+要更改微服务通信时采用的负载均衡策略，在 application.yml 中采用下面格式书写即可。
+
+```yaml
+provider-service: #服务提供者的微服务id
+  ribbon:
+    #设置对应的负载均衡类
+    NFLoadBalancerRuleClassName: com.netflix.loadbalancer.RandomRule 
+```
+
 # 08 | 负载均衡：Ribbon 的基本架构和实现原理？
 
 **Netflix Ribbon 基本架构**
