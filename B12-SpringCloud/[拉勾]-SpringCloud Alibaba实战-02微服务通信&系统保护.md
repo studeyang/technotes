@@ -1,5 +1,7 @@
 > 来源：拉勾教育《Spring Cloud Alibaba实战》
 
+# 模块三 微服务通信
+
 # 06 | 负载均衡：Ribbon 如何保证微服务的高可用
 
 > 内容合并至《[拉勾]-SpringCloud原理与实战-02服务治理&API网关》07 | 负载均衡：如何使用 Ribbon 实现客户端负载均衡？
@@ -302,6 +304,249 @@ public class OrderController {
 ![image-20210808230529484](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808230529.png)
 
 此时 Consumer 已在服务列表中出现，说明消费者已注册成功。
+
+# 09 | 服务门户：Spring Cloud Gateway 如何把好微服务的大门
+
+**API 网关的作用**
+
+- 针对所有请求进行统一鉴权、熔断、限流、日志等前置处理，让微服务专注自己的业务。
+- 统一调用风格，大幅度简化用户的接入难度。
+- 更好的安全性，在通过 API 网关鉴权后，可以控制不同角色用户访问后端服务的权利，实现了服务更细粒度的权限控制。
+- 微服务架构通过引入 API 网关，将用户端与微服务的具体实现进行了解耦。
+
+**API 网关主流产品**
+
+- OpenResty
+
+OpenResty 是一个强大的 Web 应用服务器，可以快速构造出足以胜任 10K 以上并发连接响应的超高性能 Web 应用系统。
+
+但 OpenResty 是一款独立的产品，与主流的注册中心存在一定兼容问题，需要架构师独立实现其服务注册、发现的功能。
+
+- Spring Cloud Zuul
+
+Zuul 是 Netflix 开源的微服务网关，它的主要职责是对用户请求进行路由转发与过滤。
+
+后来 Netflix 内部产生分歧，Netflix 官方宣布 Zuul 停止维护，这让 Spring 机构也必须转型。于是 Spring Cloud 团队决定开发自己的第二代 API 网关产品：Spring Cloud Gateway。
+
+- Spring Cloud Gateway
+
+Spring Cloud Gateway 是 Spring 自己开发的新一代 API 网关产品。它基于 NIO 异步处理，摒弃了 Zuul 基于 Servlet 同步通信的设计，因此拥有更好的性能。
+
+**Spring Cloud Gateway使用入门**
+
+示例说明：
+
+假设“service-a”微服务提供了三个 RESTful 接口。
+
+![image-20210809224559049](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224559.png)
+
+假设 “service-b” 微服务提供了三个 RESTful 接口。
+
+![image-20210809224624039](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224655.png)
+
+如何通过部署 Spring Cloud Gateway 实现 API 路由功能来屏蔽后端细节呢？
+
+第一步：引入 pom.xml 依赖。
+
+```xml
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+```
+
+第二步，在 application.yml 增加如下配置。
+
+```yaml
+spring:
+  application:
+    name: gateway #配置微服务id
+  cloud:
+    nacos:
+      discovery:
+        #nacos通信地址
+        server-addr: 192.168.31.101:8848 
+        username: nacos
+        password: nacos
+    gateway: #让gateway通过nacos实现自动路由转发
+      discovery:
+        locator:
+          #locator.enabled是自动根据URL规则实现路由转发
+          enabled: true
+```
+
+`spring.cloud.gateway.discovery.locator.enabled=true`这项配置允许 Gateway 自动实现后端微服务路由转发，例如，网关 IP 为：192.168.31.103，我们需要通过网关执行 service-a 的 list 方法，具体写法为：
+
+```http
+http://192.168.31.103:80/service-a/list
+```
+
+访问后 Gateway 按下图流程进行请求路由转发。
+
+![image-20210809223117733](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809223117.png)
+
+**谓词（Predicate）与过滤器（Filter）**
+
+路由（Route）是指一个完整的网关地址映射与处理过程。一个完整的路由包含两部分配置：谓词（Predicate）与过滤器（Filter）。
+
+前端应用发来的请求要被转发到哪个微服务上，是由谓词决定的；而转发过程中请求、响应数据被网关如何加工处理是由过滤器决定的。
+
+- 谓词（Predicate）
+
+这里我们给出一个实例，将原有 Gateway 工程的 application.yml 文件修改为下面的设置：
+
+```yaml
+spring:
+  application:
+    name: gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.31.10:8848
+        username: nacos
+        password: nacos
+    gateway: 
+      discovery:
+        locator:
+          #不再需要Gateway路由转发
+          enabled: false 
+      routes:  #路由规则配置
+        #第一个路由配置，service-a路由规则
+        - id: service_a_route #路由唯一标识
+          #lb开头代表基于gateway的负载均衡策略选择实例
+          uri: lb://service-a 
+          #谓词配置
+          predicates:
+            #Path路径谓词，代表用户端URI如果以/a开头便会转发到service-a实例
+            - Path=/a/** 
+            #After生效时间谓词，2020年10月15日后该路由才能在网关对外暴露
+            - After=2020-10-05T00:00:00.000+08:00[Asia/Shanghai]
+          #过滤器配置
+          filters:
+            #忽略掉第一层前缀进行转发
+            - StripPrefix=1 
+            #为响应头附加X-Response=Blue
+            - AddResponseHeader=X-Response,Blue 
+        #第二个路由配置，service-b路由规则
+        - id: service_b_route
+          uri: lb://service-b
+          predicates:
+            - Path=/b/**
+          filters:
+            - StripPrefix=1
+```
+
+在 2020 年 10 月 15 日后，当用户端发来/a/...开头的请求时，Spring Cloud Gateway 会自动获取 service-a 可用实例，默认采用轮询方式将URI附加至实例地址后，形成新地址，service-a处理后 Gateway 网关自动在响应头附加 X-Response=Blue。
+
+第二个 service_b_route，说明当用户访问/b开头 URL 时，转发到 service-b 可用实例。
+
+- 过滤器（Filter）
+
+过滤器（Filter）可以对请求或响应的数据进行额外处理，这里我们列出三个最常用的内置过滤器进行说明。
+
+AddRequestParameter 是对所有匹配的请求添加一个查询参数。
+
+```yaml
+filters:
+  #在请求参数中追加foo=bar
+  - AddRequestParameter=foo,bar
+```
+
+AddResponseHeader 会对所有匹配的请求，在返回结果给客户端之前，在 Header 中添加响应的数据。
+
+```yaml
+#在Response中添加Header头，key=X-Response-Foo，Value=Bar。
+filters:
+  - AddResponseHeader=X-Response,Blue
+```
+
+Retry 为重试过滤器，当后端服务不可用时，网关会根据配置参数来发起重试请求。
+
+```yaml
+filters:
+  #涉及过滤器参数时，采用name-args的完整写法
+  - name: Retry #name是内置的过滤器名
+    args: #参数部分使用args说明
+      retries: 3
+      status: 503
+```
+
+**Spring Cloud Gateway 的执行原理**
+
+下图是 Spring Cloud Gateway 的执行流程。
+
+![img](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809223635.png)
+
+在整个处理过程中谓词（Predicate）与过滤器（Filter）起到了重要作用，谓词决定了路径的匹配规则，让 Gateway 确定应用哪个微服务，而 Filter 则是对请求或响应作出实质的前置、后置处理。
+
+在项目中功能场景多种多样，像日常的用户身份鉴权、日志记录、黑白名单、反爬虫等基础功能都可以通过自定义 Filter 为 Gateway 进行功能扩展。
+
+下面我们通过“计时过滤器”为例，讲解如何为 Gateway 绑定自定义全局过滤器。
+
+**自定义全局过滤器**
+
+在 Spring Cloud Gateway 中，自定义过滤器分为两种，全局过滤器与局部过滤器。两者唯一的区别是：全局过滤器默认应用在所有路由（Route）上，而局部过滤器可以为指定的路由绑定。
+
+下面通过“计时过滤器”这个案例讲解全局过滤器的配置。所谓计时过滤器是指任何从网关访问的请求，都要在日志中记录下从请求进入到响应退出的执行时间，通过这个时间运维人员便可以收集并分析哪些功能进行了慢处理，以此为依据进行进一步优化。
+
+下面是计时过滤器的代码，重要的部分我通过注释进行了说明。
+
+```java
+@Component //自动实例化并被Spring IOC容器管理
+//全局过滤器必须实现两个接口：GlobalFilter、Ordered
+//GlobalFilter是全局过滤器接口，实现类要实现filter()方法进行功能扩展
+//Ordered接口用于排序，通过实现getOrder()方法返回整数代表执行当前过滤器的前后顺序
+public class ElapsedFilter implements GlobalFilter, Ordered {
+    //基于slf4j.Logger实现日志输出
+    private static final Logger logger = LoggerFactory.getLogger(ElapsedFilter.class);
+    //起始时间属性名
+    private static final String ELAPSED_TIME_BEGIN = "elapsedTimeBegin";
+    /**
+     * 实现filter()方法记录处理时间
+     
+     * @param exchange 用于获取与当前请求、响应相关的数据，以及设置过滤器间传递的上下文数据
+     * @param chain Gateway过滤器链对象
+     * @return Mono对应一个异步任务，因为Gateway是基于Netty Server异步处理的,Mono对就代表异步处理完毕的情况。
+     */
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        //Pre前置处理部分
+        //在请求到达时，往ServerWebExchange上下文环境中放入了一个属性elapsedTimeBegin，保存请求执行前的时间戳
+        exchange.getAttributes().put(ELAPSED_TIME_BEGIN, System.currentTimeMillis());
+
+        //chain.filter(exchange).then()对应Post后置处理部分
+        //当响应产生后，记录结束与elapsedTimeBegin起始时间比对，获取RESTful API的实际执行时间
+        return chain.filter(exchange).then(
+                Mono.fromRunnable(() -> { //当前过滤器得到响应时，计算并打印时间
+                    Long startTime = exchange.getAttribute(ELAPSED_TIME_BEGIN);
+                    if (startTime != null) {
+                        logger.info(exchange.getRequest().getRemoteAddress() //远程访问的用户地址
+                                + " | " +  exchange.getRequest().getPath()  //Gateway URI
+                                + " | cost " + (System.currentTimeMillis() - startTime) + "ms"); //处理时间
+                    }
+                })
+        );
+    }
+    //设置为最高优先级，最先执行ElapsedFilter过滤器
+    //return Ordered.LOWEST_PRECEDENCE; 代表设置为最低优先级
+    @Override
+    public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
+    }
+}
+```
+
+运行后通过 Gateway 访问任意微服务便会输出日志：
+
+```shell
+2021-01-10 12:36:01.765  INFO 14052 --- [ctor-http-nio-4] com.lagou.gateway.filter.ElapsedFilter   : /0:0:0:0:0:0:0:1:57873 | /test-service/test | cost 821ms
+```
+
+# 模块四 系统保护
+
+
+
+
 
 
 
