@@ -342,7 +342,7 @@ Spring Cloud Gateway 是 Spring 自己开发的新一代 API 网关产品。它�
 
 假设 “service-b” 微服务提供了三个 RESTful 接口。
 
-![image-20210809224624039](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224655.png)
+![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224624.png)
 
 如何通过部署 Spring Cloud Gateway 实现 API 路由功能来屏蔽后端细节呢？
 
