@@ -18,7 +18,7 @@ OpenFeign 则是在 Netflix Feign 的基础上进行封装，结合原有 Spring
 
 假设某电商平台日常订单业务中，为保证每一笔订单不会超卖，在创建订单前订单服务（order-service）首先去仓储服务（warehouse-service）检查对应商品 skuId（品类编号）的库存数量是否足够，库存充足创建订单，不足 App 前端提示“库存不足”。
 
-![image-20210808220417309](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808220423.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808220423.png" alt="image-20210808220417309" style="zoom:67%;" />
 
 第一步，order-service 工程引入 pom.xml。
 
@@ -136,17 +136,17 @@ feign:
 
 RPC 采用客户端（Client) - 服务端（Server） 的架构方式实现跨进程通信，实现的通信协议也没有统一的标准，具体实现依托于研发厂商的设计。
 
-![image-20210808223857154](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223857.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223857.png" alt="image-20210808223857154" style="zoom:50%;" />
 
 那 RESTful 与 RPC 孰优孰劣呢？我们通过一个表格进行说明：
 
-![image-20210808223948543](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223948.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223948.png" alt="image-20210808223948543" style="zoom:50%;" />
 
 在微服务架构场景下，因为大多数服务都是轻量级的，同时 90%的任务通过短连接就能实现，因此更推荐使用 RESTful 通信。
 
 **Apache Dubbo**
 
-![image-20210808223135525](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223135.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223135.png" alt="image-20210808223135525" style="zoom: 50%;" />
 
 Dubbo 架构中，包含 5 种角色。
 
@@ -160,7 +160,7 @@ Dubbo 架构中，包含 5 种角色。
 
 还是以“订单与库存服务”案例为例。
 
-![image-20210808223251858](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223251.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223251.png" alt="image-20210808223251858" style="zoom:67%;" />
 
 第一步：引入 pom.xml 依赖。
 
@@ -338,11 +338,11 @@ Spring Cloud Gateway 是 Spring 自己开发的新一代 API 网关产品。它�
 
 假设“service-a”微服务提供了三个 RESTful 接口。
 
-![image-20210809224559049](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224559.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224559.png" alt="image-20210809224559049" style="zoom:50%;" />
 
 假设 “service-b” 微服务提供了三个 RESTful 接口。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224624.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224624.png" style="zoom:50%;" />
 
 如何通过部署 Spring Cloud Gateway 实现 API 路由功能来屏蔽后端细节呢？
 
@@ -383,7 +383,7 @@ http://192.168.31.103:80/service-a/list
 
 访问后 Gateway 按下图流程进行请求路由转发。
 
-![image-20210809223117733](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809223117.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809223117.png" alt="image-20210809223117733" style="zoom:67%;" />
 
 **谓词（Predicate）与过滤器（Filter）**
 
@@ -475,7 +475,7 @@ filters:
 
 下图是 Spring Cloud Gateway 的执行流程。
 
-![img](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809223635.png)
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809223635.png" alt="img" style="zoom: 67%;" />
 
 在整个处理过程中谓词（Predicate）与过滤器（Filter）起到了重要作用，谓词决定了路径的匹配规则，让 Gateway 确定应用哪个微服务，而 Filter 则是对请求或响应作出实质的前置、后置处理。
 
@@ -544,13 +544,122 @@ public class ElapsedFilter implements GlobalFilter, Ordered {
 
 # 模块四 系统保护
 
+# 10 | 系统保护：微服务架构雪崩效应与服务限流
 
+**微服务的雪崩效应**
 
+“雪崩”一词指的是山地积雪由于底部溶解等原因造成的突然大块塌落的现象，具有很强的破坏力。
 
+在微服务项目中指由于突发流量导致某个服务不可用，从而导致上游服务不可用，并产生级联效应，最终导致整个系统不可用。
 
+为什么微服务会产生雪崩效应？
 
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810231240.png" alt="image-20210810231240612" style="zoom:50%;" />
 
+假如服务 I 因为优化问题，导致需要 20 秒才能返回响应，这就必然会导致 20 秒内该请求线程会一直处于阻塞状态。
 
+假如在 20 秒内有 10 万个请求通过应用访问到后端微服务。容器会因为大量请求阻塞积压导致连接池爆满，而这种情况后果极其严重！轻则“服务无响应”，重则前端应用直接崩溃。
 
+如何有效避免雪崩效应？
 
+- 采用限流方式进行预防：控制请求的流入，让流量有序的进入应用，保证流量在一个可控的范围内。
+- 采用服务降级进行补救：服务降级是指当应用处理时间超过规定上限后，无论服务是否处理完成，便立即触发服务降级，响应返回预先设置的异常信息。
+
+**Alibaba Sentinel**
+
+Sentinel 以流量为切入点，从流量控制、熔断降级、系统负载保护等多个维度保护服务的稳定性。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810231651.png" alt="image-20210810231651809" style="zoom:67%;" />
+
+Sentinel 分为两个部分：Sentinel Dashboard和Sentinel 客户端。
+
+如何部署 Sentinel Dashboard（仪表盘）？
+
+- 下载最新版 Sentinel Dashboard
+
+访问：https://github.com/alibaba/Sentinel/releases。
+
+- 启动 Dashboard
+
+```shell
+java -jar -Dserver.port=9100 sentinel-dashboard-1.8.0.jar
+```
+
+- 登录控制台
+
+输入 sentinel/sentinel，便可进入 Dashboard。
+
+![image-20210810232105397](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232105.png)
+
+**微服务内置 Sentinel 客户端**
+
+- 第一步：引入 pom.xml 依赖。
+
+```xml
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+</dependency>
+```
+
+- 第二步：配置 application.yml。
+
+```yaml
+spring:
+  application:
+    name: sentinel-sample #应用名&微服务id
+  cloud:
+    sentinel: #Sentinel Dashboard通信地址
+      transport:
+        dashboard: 192.168.31.10:9100
+      eager: true #取消控制台懒加载
+    nacos: #Nacos通信地址
+      server-addr: 192.168.31.10:8848
+      username: nacos
+      password: nacos
+```
+
+- 第三步，验证配置。
+
+在 Sentinel Dashboard 左侧看到 sentinel-sample 服务出现，则代表 Sentinel 客户端与 Dashboard 已经完成通信。
+
+![image-20210810232335630](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232335.png)
+
+如何配置限流规则？
+
+- 第一步：编写模拟接口。
+
+```java
+@RestController
+public class SentinelSampleController {
+    @GetMapping("/test_flow_rule")
+    public String testFlowRule(){
+        return "SUCCESS";
+    }
+}
+```
+
+访问http://localhost/test_flow_rule，无论刷新多少次，都会看到“SUCCESS”。
+
+- 第二步，访问 Sentinel Dashboard 配置限流规则。
+
+在左侧找到簇点链路，右侧定位到 /test_flow_rule，点击后面的“流控”按钮。
+
+![image-20210810232618999](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232619.png)
+
+为 /test_flow_rule 接口配置每秒钟只允许 1QPS 访问。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232706.png" alt="image-20210810232706581" style="zoom: 50%;" />
+
+此时针对 /test_flow_rule 接口的流控规则已生效，可以在“流控规则”面板看到。
+
+![image-20210810232739728](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232739.png)
+
+- 第三步，验证流控效果。
+
+重新访问http://localhost/test_flow_rule，第一次刷新时会出现“SUCCESS”文本代表处理成功。
+
+同一秒内再次刷新便会出现 “Blocked by Sentinel (flow limiting)”，代表服务已被限流降级。
+
+![image-20210810232823597](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232823.png)
 
