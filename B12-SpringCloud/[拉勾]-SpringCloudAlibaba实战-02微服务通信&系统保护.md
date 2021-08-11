@@ -663,3 +663,146 @@ public class SentinelSampleController {
 
 ![image-20210810232823597](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232823.png)
 
+# 11 | 限流与熔断：Sentinel 在项目中的最佳实践
+
+**Sentinel 的执行流程**
+
+Sentinel 的执行流程分为三个阶段：
+
+- Sentinel Core 与 Sentinel Dashboard 建立连接；
+- Sentinel Dashboard 向 Sentinel Core 下发新的保护规则；
+- Sentinel Core 应用新的保护规则，实施限流、熔断等动作。
+
+第一步，建立连接。
+
+请求是以心跳包的方式定时向 Dashboard 发送，包含 Sentinel Core 的 AppName、IP、端口信息。
+
+> 这里有个重要细节：Sentinel Core为了能够持续接收到来自 Dashboard 的数据，会在微服务实例设备上监听 8719 端口，在心跳包上报时也是上报这个 8719 端口，而非微服务本身的 80 端口。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811225452.png" alt="image-20210811225452372" style="zoom:50%;" />
+
+在 Sentinel Dashboard 接收到心跳包后，来自 Sentinel Core的AppName、IP、端口信息会被封装为 MachineInfo 对象放入 ConcurrentHashMap 保存在 JVM的内存中，以备后续使用。
+
+第二步，推送新规则。
+
+如果在 Dashboard 页面中设置了新的保护规则，会（第一）先从当前的 MachineInfo 中提取符合要求的微服务实例信息，（第二）之后通过 Dashboard 内置的 transport 模块将新规则打包推送到微服务实例的 Sentinel Core，（第三）Sentinel Core 收到新规则在微服务应用中对本地规则进行更新，这些新规则会保存在微服务实例的 JVM 内存中。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811230108.png" alt="image-20210811230108150" style="zoom:50%;" />
+
+第三步，处理请求。
+
+Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterceptor，这个拦截器默认对所有请求 /** 进行拦截，然后开始请求的链式处理流程。
+
+在对于每一个处理请求的节点被称为 Slot（槽），通过多个槽的连接形成处理链，在请求的流转过程中，如果有任何一个 Slot 验证未通过，都会产生 BlockException，请求处理链便会中断，并返回“Blocked by sentinel" 异常信息。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811230332.png" alt="img" style="zoom:67%;" />
+
+前 3 个 Slot为前置处理，用于收集、统计、分析必要的数据；后 4 个为规则校验 Slot，从 Dashboard 推送的新规则保存在“规则池”中，然后对应 Slot 进行读取并校验当前请求是否允许放行，允许放行则送入下一个 Slot 直到最终被 RestController 进行业务处理，不允许放行则直接抛出 BlockException 返回响应。
+
+**Sentinel 限流降级算法：滑动窗口算法**
+
+实现限流降级的核心是如何统计单位时间某个接口的访问量，常见的算法有计数器算法、令牌桶算法、漏桶算法、滑动窗口算法。Sentinel 采用滑动窗口算法来统计访问量。
+
+假设某应用限流控制 1 分钟最多允许 600 次访问。采用滑动窗口算法是将每 1 分钟拆分为 6（变量）个等份时间段，每个时间段为 10 秒，6 个时间段为 1 组在下图用红色边框区域标出，而这个红色边框区域就是滑动窗口。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811231230.png" alt="image-20210811231230786" style="zoom:50%;" />
+
+每当产生 1 个访问则在对应时间段的计数器自增加 1，当滑动窗口内所有时间段的计数器总和超过 600，后面新的访问将被限流直接拒绝。同时每过 10 秒，滑动窗口向右移动，前面的过期时间段计数器将被作废。
+
+**使用 Sentinel Dashboard 进行限流设置**
+
+第一，在 Sentinel Dashboard 中“簇点链路”,找到需要限流的 URI，点击“+流控”进入流控设置。
+
+![image-20210811231550033](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811231550.png)
+
+> 小提示，sentinel-dashboard 基于懒加载模式，如果在簇点链路没有找到对应的 URI，需要先访问下这个功能，对应的 URI 便会出现。
+
+第二，点击后，弹出下框：
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811231704.png" alt="image-20210811231704413" style="zoom:50%;" />
+
+- 资源名：要流控的 URI，在 Sentinel 中 URI 被称为“资源”；
+- 针对来源：默认 default 代表所有来源，可以针对某个微服务或者调用者单独设置；
+- 阈值类型：是按每秒访问数量（QPS）还是并发数（线程数）进行流控；
+- 单机阈值：具体限流的数值是多少。
+
+第三，点击对话框中的“高级选项”，就会出现更为详细的设置项。
+
+<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811232050.png" alt="image-20210811232050554" style="zoom:50%;" />
+
+流控模式是指采用什么方式进行流量控制。Sentinel支持三种模式：直接、关联、链路。
+
+- 直接模式：以上图为例，当 List 接口 QPS 超过 1，浏览器会出现“Blocked by Sentinel”。
+
+- 关联模式：
+
+  当 List 接口关联的 update 接口 QPS 超过 1 时，再次访问List 接口便会响应“Blocked by Sentinel”。
+
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811232422.png" alt="image-20210811232422736" style="zoom:50%;" />
+
+- 链路模式：
+
+  以下图为例，在某个微服务中 List 接口，会被 Check 接口调用。在另一个业务，List 接口也会被 Scan 接口调用。
+
+  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811224358.png" alt="image-20210811224358399" style="zoom: 33%;" />
+
+  如果按下图配置，将入口资源设为“/check”，则只会针对 check 接口的调用链路生效。
+
+  ![image-20210811232921202](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811232921.png)
+
+  当访问 check 接口的 QPS 超过 1 时，List 接口就会被限流。而另一条链路从 scan 接口到List 接口的链路则不会受到任何影响。
+
+流控效果是指在达到流控条件后，对当前请求如何处理。流控效果有三种：快速失败、Warm UP（预热）、排队等待。
+
+- 快速失败：指流量超过限流阈值后，直接返回响应并抛出 BlockException，快速失败是最常用的处理形式。
+
+- Warm Up（预热）：用于应对瞬时大并发流量冲击。当遇到突发大流量时，Warm Up 会缓慢拉升阈值限制，预防系统瞬时崩溃，这期间超出阈值的访问处于队列等待状态，并不会立即抛出 BlockException。
+
+  如下图所示，List 接口平时单机阈值 QPS 处于低水位：默认为 1000/3 (冷加载因子)≈333，当瞬时大流量进来，10 秒钟内将 QPS 阈值逐渐拉升至 1000，为系统留出缓冲时间，预防突发性系统崩溃。
+
+  ![image-20210811233406680](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811233406.png)
+
+- 排队等待：排队等待是采用匀速放行的方式对请求进行处理。如下所示，假设现在有100个请求瞬间进入，那么会出现以下几种情况：
+
+  单机 QPS 阈值=1，代表每 1 秒只能放行 1 个请求，其他请求队列等待，共需 100 秒处理完毕；
+
+  单机 QPS 阈值=4，代表 250 毫秒匀速放行 1 个请求，其他请求队列等待，共需 25 秒处理完毕；
+
+  ![image-20210811233847710](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811233847.png)
+
+  如果某一个请求在队列中处于等待状态超过 2000 毫秒，则直接抛出 BlockException。
+
+**使用 Sentinel Dashboard 进行熔断降级设置**
+
+在股市中，熔断条件就是大盘跌幅超过 5%，而熔断的措施便是强制停止交易 15 分钟，之后尝试恢复交易，如仍出现继续下跌，便会再次触发熔断直接闭市。但假设 15分钟后，大盘出现回涨，便认为事故解除继续正常交易。这是现实生活中的熔断。
+
+下图清晰的说明了 Sentinel的熔断过程：
+
+![image-20210811224812688](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811224812.png)
+
+Sentinel Dashboard 可以设置三种不同的熔断模式：慢调用比例、异常比例、异常数。
+
+- 慢调用比例是指当接口在 1 秒内“慢处理”数量超过一定比例，则触发熔断。
+
+  ![image-20210811234457180](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234457.png)
+
+  ![image-20210811234712010](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234712.png)
+
+- 异常比例是指 1 秒内按接口调用产生异常的比例（异常调用数/总数量）触发熔断。
+
+  ![image-20210811234529852](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234529.png)
+
+  ![image-20210811234738056](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234738.png)
+
+- 异常数是指在 1 分钟内异常的数量超过阈值则触发熔断。
+
+  ![image-20210811234809488](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234809.png)
+
+  ![image-20210811234826401](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234826.png)
+
+# 12 | 配置中心：基于 Nacos 集中管理应用配置
+
+
+
+
+
