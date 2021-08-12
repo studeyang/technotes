@@ -802,6 +802,123 @@ Sentinel Dashboard 可以设置三种不同的熔断模式：慢调用比例、�
 
 # 12 | 配置中心：基于 Nacos 集中管理应用配置
 
+配置中心的职责是集中管理微服务架构中每一个服务实例的配置数据。当微服务架构引入配置中心后，微服务应用只需持有应用启动的最小化配置。
+
+当引入配置中心后，微服务的架构会产生如下变化。
+
+![image-20210812223749823](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210812223749.png)
+
+**微服务接入 Nacos 配置中心**
+
+第一步，创建工程引入依赖。
+
+```xml
+<!-- Nacos注册中心starter -->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+<!-- Nacos配置中心starter -->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+</dependency>
+```
+
+第二步，在 resources 目录下创建 bootstrap.yml 引导文件。
+
+> 注意，bootstrap.yml 文件名是固定的，不能随意改变。
+
+```yaml
+spring:
+  application:
+    name: order-service #微服务id
+  profiles:
+    active: dev #环境名
+  cloud:
+    nacos:
+      config: #Nacos配置中心配置
+        file-extension: yml #文件扩展名
+        server-addr: 192.168.31.10:8848
+        username: nacos
+        password: nacos
+logging: #开启debug日志，仅为学习时使用
+  level:
+    root: debug
+```
+
+通过文件中的 “微服务 id”-“环境名”.“文件扩展名” 三部分组合为有效的 data id，即 order-service-dev.yml。
+
+第三步，打开 Nacos 配置中心页面，点击右上角“+”号新建配置。
+
+![image-20210812224424868](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210812224424.png)
+
+![image-20210812224508963](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210812224509.png)
+
+- Data ID：配置的唯一标识，格式固定为：{微服务id}-{环境名}.yml，例如 order-service-dev.yml。
+- Group：指定配置文件的分组，这里设置默认分组 DEFAULT_GROUP 即可。
+
+配置完成后在 nacos_config 数据库的 config_info 表中也出现了对应配置数据。
+
+**Nacos 生产环境中的配置技巧**
+
+- 配置热加载技术
+
+Nacos 采用的是一种长轮询机制以支持配置的热加载。当客户端发起 Pull 请求后，服务端先检查配置是否发生了变更，如果有变更，则立即返回最新的配置；如果没有，则设置一个定时任务，延迟 29.5s 执行，并且把当前的客户端长轮询连接加入 allSubs 队列。如图所示：
+
+![image-20210812230219145](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210812230219.png)
+
+这时候有两种方式触发该连接结果的返回：
+
+第一种是在等待 29.5s 后触发自动检查机制，这时候不管配置有没有发生变化，都会把结果返回客户端。而 29.5s 就是这个长连接保持的时间。
+
+第二种是在 29.5s 内任意一个时刻，通过 Nacos Dashboard 或者 API 的方式对配置进行了修改，这会触发一个事件机制，监听到该事件的任务会遍历 allSubs 队列，找到发生变更的配置项对应的 ClientLongPolling 任务，将变更的数据通过该任务中的连接进行返回，就完成了一次“推送”操作。
+
+> 服务端“Hold”住请求的这个动作，有无必要？
+
+为了支持热加载，服务 A 需要满足如下要求：
+
+第一，配置数据必须被封装到单独的 Bean 中；
+
+第二，这个配置 Bean 需要被 @Configuration 与 @RefreshScope 两个注解描述。
+
+```java
+@Configuration
+@RefreshScope
+public class CustomConfig {
+    @Value("${custom.flag}")
+    private String flag;
+    @Value("${custom.database}")
+    private String database;
+}
+```
+
+- 切换环境配置文件
+
+假如产品开发完成准备上线，可利用 Nacos 迅速完成从开发到生产环境的切换。
+
+第一步，在 Nacos 中设置生产环境的配置，Data Id 为 order-service-prod.yml。
+
+第二步，调整 order-service 的 bootstrap.yml 引导文件，修改`spring.profiles.active`为 prod，同时更换生产环境 Nacos 地址。
+
+- 管理基础配置数据
+
+对于基础的全局配置，我们可以将其存放到单独的 order-service.yml 配置中，在 order-service 服务启动时，这个不带环境名的配置文件必然会被加载。
+
+# 13 | 生产实践：Sentinel 进阶应用场景
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
