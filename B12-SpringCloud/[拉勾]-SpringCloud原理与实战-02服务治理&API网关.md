@@ -148,7 +148,7 @@ eureka:
     hostname: eureka2
   client:
     serviceUrl:
-	    defaultZone: http://eureka1:8761/eureka/
+      defaultZone: http://eureka1:8761/eureka/
 ```
 
 Eureka 集群的构建方式实际上就是将自己作为服务并向其他注册中心注册自己，这样就形成了一组互相注册的服务注册中心以实现服务列表的同步。
@@ -292,14 +292,14 @@ user-service 中的配置内容如下所示：
 ```yaml
 spring:
   application:
-	name: userservice 
+    name: userservice 
 server:
   port: 8081
 	 
 eureka:
   client:
     serviceUrl:
-	    defaultZone: http://localhost:8761/eureka/
+      defaultZone: http://localhost:8761/eureka/
 ```
 
 如果使用的是 Eureka 服务器集群，那么 eureka.client.serviceUrl.defaultZone 配置项的内容就应该是“http://eureka1:8761/eureka/,http://eureka2:8762/eureka/”，用于指向当前的集群环境。
@@ -819,7 +819,6 @@ API 网关与注册中心关系密切，注册中心为服务路由提供了服�
 ```yaml
 server:
   port: 5555
-	 
 eureka:
   instance:
     preferIpAddress: true
@@ -827,7 +826,7 @@ eureka:
     registerWithEureka: true
     fetchRegistry: true
     serviceUrl:
-	    defaultZone: http://localhost:8761/eureka/
+      defaultZone: http://localhost:8761/eureka/
 ```
 
 另一方面，API 网关在其服务的消费者和提供者之间提供了一层反向代理，充当着前置负载均衡器的角色。所以，API 网关的定位决定了 Zuul 需要依赖 Ribbon。
@@ -1143,8 +1142,8 @@ Spring Cloud Gateway 中的过滤器和 Zuul 中的过滤器是同一个概念�
 ```yaml
 spring:
   cloud:
-	  gateway:
-	    discovery:
+    gateway:
+      discovery:
         locator:
           enabled: true
       routes:
