@@ -92,7 +92,7 @@ Spring Cloud Netflix 中也集成了Netflix Ribbon 组件来实现客户端负�
 @EnableEurekaServer
 public class EurekaServerApplication {
     public static void main(String[] args) {
-        SpringApplication.run(EurekaServerApplication.class, args);
+        SpringApplication.run(EurekaServerApplication.class, args);
     }
 }
 ```
@@ -210,21 +210,21 @@ ApplicationResource 类（位于com.netflix.eureka.resources 包中）提供了�
 
 ```java
 Key cacheKey = new Key(
-       Key.EntityType.Application,
-       appName,
-       keyType,
-       CurrentRequestVersion.get(),
-       EurekaAccept.fromString(eurekaAccept)
+    Key.EntityType.Application,
+    appName,
+    keyType,
+    CurrentRequestVersion.get(),
+    EurekaAccept.fromString(eurekaAccept)
 );
 
 String payLoad = responseCache.get(cacheKey);
 
 if (payLoad != null) {
     logger.debug("Found: {}", appName);
-    return Response.ok(payLoad).build();
+    return Response.ok(payLoad).build();
 } else {
     logger.debug("Not Found: {}", appName);
-    return Response.status(Status.NOT_FOUND).build();
+    return Response.status(Status.NOT_FOUND).build();
 }
 ```
 
@@ -236,11 +236,11 @@ Eureka 的高可用部署方式被称为 Peer Awareness 模式。我们在 Insta
 @Override
 public void register(final InstanceInfo info, final boolean isReplication) {
     int leaseDuration = Lease.DEFAULT_DURATION_IN_SECS;
-    if (info.getLeaseInfo() != null && info.getLeaseInfo().getDurationInSecs() > 0) {
-        leaseDuration = info.getLeaseInfo().getDurationInSecs();
+    if (info.getLeaseInfo() != null && info.getLeaseInfo().getDurationInSecs() > 0) {
+        leaseDuration = info.getLeaseInfo().getDurationInSecs();
     }
-    super.register(info, leaseDuration, isReplication);
-    replicateToPeers(Action.Register, info.getAppName(), info.getId(), info, null, isReplication);
+    super.register(info, leaseDuration, isReplication);
+    replicateToPeers(Action.Register, info.getAppName(), info.getId(), info, null, isReplication);
 }
 ```
 
@@ -248,11 +248,11 @@ replicateToPeers 方法就是用来实现服务器节点之间的状态同步。
 
 ```java
 for (final PeerEurekaNode node : peerEurekaNodes.getPeerEurekaNodes()) {
-    //如果该 URL 代表主机自身，则不用进行注册
-    if (peerEurekaNodes.isThisMyUrl(node.getServiceUrl())) {
-         continue;
-    }
-    replicateInstanceActionsToPeers(action, appName, id, info, newStatus, node);
+    //如果该 URL 代表主机自身，则不用进行注册
+    if (peerEurekaNodes.isThisMyUrl(node.getServiceUrl())) {
+        continue;
+    }
+    replicateInstanceActionsToPeers(action, appName, id, info, newStatus, node);
 }
 ```
 
@@ -280,8 +280,8 @@ user-service 的 Bootstrap 类：
 @EnableEurekaClient
 public class UserApplication {
   	public static void main(String[] args) {
-        SpringApplication.run(UserApplication.class, args);
-    }
+        SpringApplication.run(UserApplication.class, args);
+    }
 }
 ```
 
@@ -295,7 +295,7 @@ spring:
     name: userservice 
 server:
   port: 8081
-	 
+
 eureka:
   client:
     serviceUrl:
@@ -366,16 +366,16 @@ List<ServiceInstance> serviceInstances = discoveryClient.getInstances(serviceNam
 @SpringBootApplication
 @EnableEurekaClient
 public class InterventionApplication {
- 
-    @LoadBalanced
-    @Bean
-    public RestTemplate getRestTemplate(){
-        return new RestTemplate();
-    }
- 
-    public static void main(String[] args) {
-        SpringApplication.run(InterventionApplication.class, args);
-    }
+
+    @LoadBalanced
+    @Bean
+    public RestTemplate getRestTemplate(){
+        return new RestTemplate();
+    }
+
+    public static void main(String[] args) {
+        SpringApplication.run(InterventionApplication.class, args);
+    }
 }
 ```
 
@@ -384,20 +384,20 @@ public class InterventionApplication {
 ```java
 @Component
 public class UserServiceClient {
- 
-    @Autowired
-  	RestTemplate restTemplate;
-	 
-    public UserMapper getUserByUserName(String userName){
-        ResponseEntity<UserMapper> restExchange =
-                restTemplate.exchange(
-                        "http://userservice/users/{userName}",
-                        HttpMethod.GET,
-                        null, UserMapper.class, userName);
 
-        UserMapper user = restExchange.getBody();
-        return user;
-    }
+    @Autowired
+    RestTemplate restTemplate;
+
+    public UserMapper getUserByUserName(String userName){
+        ResponseEntity<UserMapper> restExchange =
+            restTemplate.exchange(
+                "http://userservice/users/{userName}",
+                HttpMethod.GET,
+                null, UserMapper.class, userName);
+
+        UserMapper user = restExchange.getBody();
+        return user;
+    }
 }
 ```
 
@@ -414,15 +414,15 @@ public class UserServiceClient {
 ```java
 @Configuration
 public class SpringHealthLoadBalanceConfig {
- 
-    @Autowired
-    IClientConfig config;
- 
-    @Bean
-    @ConditionalOnMissingBean
-    public IRule springHealthRule(IClientConfig config) {
-        return new RandomRule();
-    }
+
+    @Autowired
+    IClientConfig config;
+
+    @Bean
+    @ConditionalOnMissingBean
+    public IRule springHealthRule(IClientConfig config) {
+        return new RandomRule();
+    }
 }
 ```
 
@@ -433,16 +433,16 @@ public class SpringHealthLoadBalanceConfig {
 @EnableEurekaClient
 @RibbonClient(name = "userservice", configuration = SpringHealthLoadBalanceConfig.class)
 public class InterventionApplication{
- 
+
     @Bean
-    @LoadBalanced
-    public RestTemplate restTemplate(){
-        return new RestTemplate();
-    }
- 
-    public static void main(String[] args) {
-        SpringApplication.run(InterventionApplication.class, args);
-    }
+    @LoadBalanced
+    public RestTemplate restTemplate(){
+        return new RestTemplate();
+    }
+
+    public static void main(String[] args) {
+        SpringApplication.run(InterventionApplication.class, args);
+    }
 }
 ```
 
@@ -596,20 +596,20 @@ Netflix Ribbon 的核心接口 ILoadBalancer 就是围绕着上述两个问题�
 
 ```java
 public interface ILoadBalancer {
-    //添加后端服务
-    public void addServers(List<Server> newServers);
- 
+    //添加后端服务
+    public void addServers(List<Server> newServers);
+
     //选择一个后端服务
-    public Server chooseServer(Object key); 
- 
+    public Server chooseServer(Object key); 
+
     //标记一个服务不可用
-    public void markServerDown(Server server);
- 
+    public void markServerDown(Server server);
+
     //获取当前可用的服务列表
     public List<Server> getReachableServers();
-	 
+
     //获取所有后端服务列表
-    public List<Server> getAllServers();
+    public List<Server> getAllServers();
 }
 ```
 
@@ -625,9 +625,9 @@ IRule 接口是对负载均衡策略的一种抽象，可以通过实现这个�
 
 ```java
 public interface IRule {
-    public Server choose(Object key);
-    public void setLoadBalancer(ILoadBalancer lb);
-    public ILoadBalancer getLoadBalancer();
+    public Server choose(Object key);
+    public void setLoadBalancer(ILoadBalancer lb);
+    public ILoadBalancer getLoadBalancer();
 }
 ```
 
@@ -637,7 +637,7 @@ IPing 接口判断目标服务是否存活，定义如下：
 
 ```java
 public interface IPing {
-    public boolean isAlive(Server server);
+    public boolean isAlive(Server server);
 }
 ```
 
@@ -687,24 +687,24 @@ Spring Cloud Netflix Ribbon 相当于 Netflix Ribbon 的客户端。而对于 Sp
 @Configuration
 @ConditionalOnMissingClass("org.springframework.retry.support.RetryTemplate")
 static class LoadBalancerInterceptorConfig {
-    @Bean
-    public LoadBalancerInterceptor ribbonInterceptor(
+    @Bean
+    public LoadBalancerInterceptor ribbonInterceptor(
                             LoadBalancerClient loadBalancerClient, 
                             LoadBalancerRequestFactory requestFactory) {
-        return new LoadBalancerInterceptor(loadBalancerClient, requestFactory);
+        return new LoadBalancerInterceptor(loadBalancerClient, requestFactory);
     }
- 
-    @Bean
-    @ConditionalOnMissingBean
-    public RestTemplateCustomizer restTemplateCustomizer(
+
+    @Bean
+    @ConditionalOnMissingBean
+    public RestTemplateCustomizer restTemplateCustomizer(
                 final LoadBalancerInterceptor loadBalancerInterceptor) {
-        return restTemplate -> {
-                List<ClientHttpRequestInterceptor> list = new ArrayList<>(
-                        restTemplate.getInterceptors());
-                list.add(loadBalancerInterceptor);
-                restTemplate.setInterceptors(list);
-            };
-    }
+        return restTemplate -> {
+                List<ClientHttpRequestInterceptor> list = new ArrayList<>(
+                    restTemplate.getInterceptors());
+                list.add(loadBalancerInterceptor);
+                restTemplate.setInterceptors(list);
+            };
+    }
 }
 ```
 
