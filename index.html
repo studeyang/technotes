@@ -8,11 +8,11 @@
     <meta name="description" content="Description">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
     <!-- 复制 -->
-    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/css/copy-code.css"/>
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/css/copy-code.css"/>
     <!-- 黑夜模式 -->
-    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/css/dark-light.css"/>
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/css/dark-light.css"/>
     <!-- toc-->
-<!--    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/css/jx-toc.css">-->
+<!--    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/css/jx-toc.css">-->
     <style>
       .sidebar a.active {
           color: var(--accent);
@@ -25,7 +25,7 @@
 
   <script>
     window.$docsify = {
-	    basePath: 'https://cdn.jsdelivr.net/gh/dbses/technotes@0.0.1/',
+	    // basePath: 'https://cdn.jsdelivr.net/gh/dbses/technotes@0.0.1/',
         name:'互联网技术学习笔记',
         repo:'https://github.com/dbses/technotes',
         // 侧边栏
@@ -33,16 +33,13 @@
         loadSidebar: true,
         auto2top: true,
         subMaxLevel: 3,
+		relativePath: false,
 		// 禁用 emoji 解析
 		noEmoji: true,
         // 导航栏
         loadNavbar: true,
         alias: {
-		    '/': '/README.md',
-			'/B类/.*/_sidebar.md': '/B类/_sidebar.md',
-			'/C类/.*/_sidebar.md': '/C类/_sidebar.md',
-			'/D类/.*/_sidebar.md': '/D类/_sidebar.md',
-            '/.*/_navbar.md': '/_navbar.md'
+
         },
         // 封面
         coverpage: true,
@@ -75,7 +72,7 @@
 </script>
     <script src="//cdn.jsdelivr.net/npm/docsify/lib/docsify.min.js"></script>
     <!-- 复制到剪贴板 -->
-    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/copy-code.js"></script>
+    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/copy-code.js"></script>
     <!-- Search -->
     <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
     <!-- 图片缩放 -->
@@ -83,20 +80,20 @@
     <!-- 回到顶部 -->
     <script src="//unpkg.com/docsify-scroll-to-top/dist/docsify-scroll-to-top.min.js"></script>
     <!-- 黑夜模式 -->
-    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/docsify-darklight-theme.js"></script>
+    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/docsify-darklight-theme.js"></script>
     <!--toc-->
-<!--    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/jx-toc.js"></script>-->
+<!--    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/jx-toc.js"></script>-->
     <!-- 字数统计 -->
-    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/countable.js"></script>
+    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/countable.js"></script>
     <!-- 最后修改时间 -->
-    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/last-modify-time.js"></script>
+    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/last-modify-time.js"></script>
     <!-- 语言格式 -->
-    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/prism-bash.js"></script>
-    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/prism-java.js"></script>
-    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/prism-sql.js"></script>
-    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/prism-yaml.js"></script>
+    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/prism-bash.js"></script>
+    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/prism-java.js"></script>
+    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/prism-sql.js"></script>
+    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/prism-yaml.js"></script>
     <!-- mermaid -->
     <script src="//unpkg.com/mermaid/dist/mermaid.js"></script>
-    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@v0.0.1/js/docsify-mermaid.js"></script>
+    <script src="//cdn.jsdelivr.net/gh/dbses/cdn@0.0.2/js/docsify-mermaid.js"></script>
 </body>
 </html>
