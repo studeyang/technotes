@@ -1,4 +1,4 @@
-![](./技术笔记.png)
+![](https://cdn.jsdelivr.net/gh/dbses/technotes@0.0.1/%E6%8A%80%E6%9C%AF%E7%AC%94%E8%AE%B0.png)
 
 # 基础类
 
