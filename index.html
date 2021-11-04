@@ -25,21 +25,25 @@
 
   <script>
     window.$docsify = {
+	    basePath: 'https://cdn.jsdelivr.net/gh/dbses/technotes@0.0.1/',
         name:'互联网技术学习笔记',
-        repo:'https://github.com/dbses',
+        repo:'https://github.com/dbses/technotes',
         // 侧边栏
+		autoHeader: true,
         loadSidebar: true,
         auto2top: true,
         subMaxLevel: 3,
-        auto2top: true,
 		// 禁用 emoji 解析
 		noEmoji: true,
         // 导航栏
         loadNavbar: true,
         alias: {
-
+		    '/': '/README.md',
+			'/B类/.*/_sidebar.md': '/B类/_sidebar.md',
+			'/C类/.*/_sidebar.md': '/C类/_sidebar.md',
+			'/D类/.*/_sidebar.md': '/D类/_sidebar.md',
+            '/.*/_navbar.md': '/_navbar.md'
         },
-		nameLink: '/',
         // 封面
         coverpage: true,
         // 小屏设备下合并导航栏到侧边栏
