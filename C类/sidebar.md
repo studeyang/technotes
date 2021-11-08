@@ -31,6 +31,6 @@
 - **Web安全**
 
   - [OAuth2实战-基础篇](C类/C06-Web安全/[极客时间]-OAuth2实战-基础篇.md)
-
-
+- **SaaS**
+  - [SaaS架构设计](C类/C07-SaaS/SaaS架构设计.md)
 
