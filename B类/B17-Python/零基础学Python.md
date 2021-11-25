@@ -1,6 +1,6 @@
 > 来源极客时间《零基础学Python》--尹会生
 
-![](python_knowledge_map.jpg)
+![](https://cdn.jsdelivr.net/gh/dbses/technotes@master/B类/B17-Python/python_knowledge_map.jpg)
 
 # 01 | Python介绍与安装
 
