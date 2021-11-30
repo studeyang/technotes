@@ -565,7 +565,7 @@ name_sorted = sorted(name_dict.items(), key=lambda item: item[1], reverse=True)
 print(name_sorted[0:10])
 ```
 
-**函数的可变长参数**
+### 函数的可变长参数
 
 对于 print 函数，参数个数可变：
 
@@ -597,7 +597,7 @@ def howlong(first, *other):
 howlong(123)
 ```
 
-**函数的变量作用域**
+### 函数的变量作用域
 
 全局变量：
 
@@ -615,7 +615,7 @@ func() # 456
 print(var1) # 456
 ```
 
-**函数的迭代器与生成器**
+### 函数的迭代器与生成器
 
 ```python
 list1 = [1, 2, 3]
@@ -644,7 +644,7 @@ for i in frange(10, 20, 0.5):
     print(i)
 ```
 
-**lambda 表达式**
+### lambda 表达式
 
 ```python
 lambda x: x <= (month, day)
@@ -654,7 +654,7 @@ def func1(x):
     return x <= (month, day)
 ```
 
-**Python 内置函数**
+### Python 内置函数
 
 filter()
 
@@ -695,7 +695,146 @@ print(dict(dictb))
 # {'aa': 'a', 'bb': 'b'}
 ```
 
+### 闭包
 
+内部函数引用外部变量，做叫闭包。
+
+```python
+def func():
+    a = 1
+    b = 2
+    return a + b
+
+
+num1 = func()
+
+# 等同于
+
+def sum(a):
+    def add(b):
+        return a + b
+
+    return add
+
+
+num2 = sum(2)
+print(num2(4))
+```
+
+闭包的应用
+
+```python
+# 实现计数器
+def counter(FIRST=0):
+    cnt = [FIRST]
+
+    def add_one():
+        cnt[0] += 1
+        return cnt[0]
+
+    return add_one
+
+
+num5 = counter(5)
+num10 = counter(10)
+
+print(num5()) # 6
+print(num5()) # 7
+print(num5()) # 8
+print(num10()) # 11
+print(num10()) # 12
+```
+
+```python
+# 求 a*x + b = y
+def a_line(a, b):
+    def arg_y(x):
+        return a * x + b
+
+    return arg_y
+
+
+# 使用 lambda 简写
+def a_line(a, b):
+    return lambda x: a * x + b
+
+
+line1 = a_line(3, 5)
+print(line1(10)) # 35
+```
+
+### 装饰器
+
+装饰器将函数作为参数传入。
+
+```python
+import time
+
+
+def timmer(func):
+    def wrapper():
+        start_time = time.time()
+        func()
+        stop_time = time.time()
+        print("运行时间是 %s 秒 " % (stop_time - start_time))
+
+    return wrapper
+
+
+@timmer
+def i_can_sleep():
+    time.sleep(3)
+
+
+i_can_sleep()
+```
+
+带参数的装饰器。
+
+```python
+def new_tips(argv):
+    def tips(func):
+        def nei(a, b):
+            print('start %s %s' % (argv, func.__name__))
+            func(a, b)
+            print('stop')
+
+        return nei
+
+    return tips
+
+
+@new_tips('add_module')
+def add(a, b):
+    print(a + b)
+
+
+@new_tips('sub_module')
+def sub(a, b):
+    print(a - b)
+
+
+print(add(4, 5))
+print(sub(7, 3))
+```
+
+### 自定义上下文管理器
+
+```python
+fd = open('name.txt')
+try:
+    for line in fd:
+        print(line)
+finally:
+    fd.close()
+
+# 可简写成
+
+with open('name.txt') as f:
+    for line in f:
+        print(line)
+
+```
 
 ## 模块
 
@@ -705,12 +844,41 @@ print(dict(dictb))
 
 ```
 import 模块名称
+import 模块名称 as 新名称
 from 模块名称 import 方法名
 ```
 
+mymod.py
 
+```python
+def print_me():
+    print('me')
+```
 
+```python
+import mymod
 
+mymod.print_me()
+```
+
+## PEP8 编码规范
+
+https://www.python.org/dev/peps/pep-0008/
+
+可安装 autopep8 插件。
+
+```
+pycharm 安装PEP8
+cmd窗口输入：pip install autopep8
+Tools→Extends Tools→点击加号
+
+Name：Autopep8（可以随便取）
+- Tools settings:
+    - Programs：`autopep8` （前提是你已经安装了哦）
+    - Parameters:`--in-place --aggressive --aggressive $FilePath$`
+    - Working directory:`$ProjectFileDir$`
+- 点击Output Filters→添加，在对话框中的：Regular expression to match output中输入：`$FILE_PATH$\:$LINE$\:$COLUMN$\:.*`
+```
 
 # 06 | 面向对象编程
 
