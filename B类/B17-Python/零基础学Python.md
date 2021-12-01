@@ -865,10 +865,8 @@ mymod.print_me()
 
 https://www.python.org/dev/peps/pep-0008/
 
-可安装 autopep8 插件。
-
-```
 pycharm 安装PEP8
+
 cmd窗口输入：pip install autopep8
 Tools→Extends Tools→点击加号
 
@@ -878,13 +876,215 @@ Name：Autopep8（可以随便取）
     - Parameters:`--in-place --aggressive --aggressive $FilePath$`
     - Working directory:`$ProjectFileDir$`
 - 点击Output Filters→添加，在对话框中的：Regular expression to match output中输入：`$FILE_PATH$\:$LINE$\:$COLUMN$\:.*`
-```
 
 # 06 | 面向对象编程
 
+### 类与实例
 
+面向对象编程(OOP)引入了类的概念，提供了另一种区别于面向过程的编程方法。
+
+面向对象的特征：封装、继承、多态。
+
+```python
+class Person(object): # 定义类
+    def name(self): # 定义方法
+        pass
+        
+john = Person( … ) # 实例化
+```
+
+设计游戏人物。
+
+```python
+class Player():  # 定义一个类
+    def __init__(self, name, hp, occu):
+        self.__name = name # 变量被称作属性
+        self.hp = hp
+        self.occu = occu # 职业
+
+    def print_role(self):  # 定义一个方法
+        print('%s: %s %s' % (self.__name, self.hp, self.occu))
+
+    def updateName(self, newname):
+        self.name = newname
+
+
+class Monster():
+    '定义怪物类'
+
+    def __init__(self, hp=100):
+        self.hp = hp
+
+    def run(self):
+        print('移动到某个位置')
+
+    def whoami(self):
+        print('我是怪物父类')
+
+
+class Animals(Monster):
+    '普通怪物'
+
+    def __init__(self, hp=10):
+        super().__init__(hp)
+
+
+class Boss(Monster):
+    'Boss类怪物'
+
+    def __init__(self, hp=1000):
+        super().__init__(hp)
+
+    def whoami(self):
+        print('我是怪物我怕谁')
+
+
+a1 = Monster(200)
+print(a1.hp)
+print(a1.run())
+a2 = Animals(1)
+print(a2.hp)
+print(a2.run())
+
+a3 = Boss(800)
+a3.whoami()
+
+print('a1的类型 %s' % type(a1))
+print('a2的类型 %s' % type(a2))
+print('a3的类型 %s' % type(a3))
+
+print(isinstance(a2, Monster))
+
+# 判断对象的类型
+print('a1的类型 %s' % type(a1))
+print('a2的类型 %s' % type(a2))
+print('a3的类型 %s' % type(a3))
+
+print(isinstance(a2, Monster))
+```
+
+### 自定义with语句
+
+可用 with 语句简化异常的编写。
+
+```python
+class Testwith(object):
+    """
+    with 包含了 __enter__ 和 __exit__ 方法
+    """
+
+    def __enter__(self):
+        print('run now ')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_tb is None:
+            print('exit normal ')
+        else:
+            print('exit with exception')
+
+
+with Testwith():
+    print('test')
+    raise NameError('Exception')
+```
 
 # 07 | 多线程编程
+
+## 多线程编程的定义
+
+```python
+import threading
+import time
+from threading import current_thread
+
+
+def myThread(arg1, arg2):
+    print(current_thread().getName(), 'start')
+    print('%s %s' % (arg1, arg2))
+    time.sleep(1)
+    print(current_thread().getName(), 'stop')
+
+
+for i in range(1, 6, 1):
+    # t1 = myThread(i, i+1)
+    t1 = threading.Thread(target=myThread, args=(i, i + 1))
+    t1.start()
+
+print(current_thread().getName(), 'end')
+```
+
+使用面向对象编写多线程。
+
+```python
+import threading
+from threading import current_thread
+
+
+class Mythread(threading.Thread):
+    def run(self):
+        print(current_thread().getName(), 'start')
+        print('run')
+        print(current_thread().getName(), 'stop')
+
+
+t1 = Mythread()
+t1.start()
+t1.join()
+
+print(current_thread().getName(), 'end')
+```
+
+## 生产者和消费者问题
+
+```python
+from threading import Thread, current_thread
+import time
+import random
+from queue import Queue
+
+queue = Queue(5)
+
+
+class ProducerThread(Thread):
+    def run(self):
+        name = current_thread().getName()
+        nums = range(100)
+        global queue
+        while True:
+            num = random.choice(nums)
+            queue.put(num)
+            print('生产者 %s 生产了数据 %s' % (name, num))
+            t = random.randint(1, 3)
+            time.sleep(t)
+            print('生产者 %s 睡眠了 %s 秒' % (name, t))
+
+
+class ConsumerTheard(Thread):
+    def run(self):
+        name = current_thread().getName()
+        global queue
+        while True:
+            num = queue.get()
+            queue.task_done()
+            print('消费者 %s 消耗了数据 %s' % (name, num))
+            t = random.randint(1, 5)
+            time.sleep(t)
+            print('消费者 %s 睡眠了 %s 秒' % (name, t))
+
+
+p1 = ProducerThread(name='p1')
+p1.start()
+p2 = ProducerThread(name='p2')
+p2.start()
+p3 = ProducerThread(name='p3')
+p3.start()
+c1 = ConsumerTheard(name='c1')
+c1.start()
+c2 = ConsumerTheard(name='c2')
+c2.start()
+```
+
+> queue.task_done() 不是很理解它的作用。
 
 
 
