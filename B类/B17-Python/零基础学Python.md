@@ -879,7 +879,7 @@ Name：Autopep8（可以随便取）
 
 # 06 | 面向对象编程
 
-### 类与实例
+## 类与实例
 
 面向对象编程(OOP)引入了类的概念，提供了另一种区别于面向过程的编程方法。
 
@@ -963,7 +963,7 @@ print('a3的类型 %s' % type(a3))
 print(isinstance(a2, Monster))
 ```
 
-### 自定义with语句
+## 自定义with语句
 
 可用 with 语句简化异常的编写。
 
@@ -1086,9 +1086,237 @@ c2.start()
 
 > queue.task_done() 不是很理解它的作用。
 
-
-
 # 08 | 标准库、机器学习库
+
+日常应用比较广泛的模块是：
+1. 文字处理的 re
+2. 日期类型的time、datetime
+3. 数字和数学类型的math、random
+4. 文件和目录访问的pathlib、os.path
+5. 数据压缩和归档的tarfile
+6. 通用操作系统的os、logging、argparse
+7. 多线程的 threading、queue
+8. Internet数据处理的 base64 、json、urllib
+9. 结构化标记处理工具的 html、xml
+10. 开发工具的unitest
+11. 调试工具的 timeit
+12. 软件包发布的venv
+13. 运行服务的`__main__`
+
+## re 正则表达式
+
+作用：根据模式匹配搜索和修改文本。
+
+```python
+import re
+pattern ='p'
+text = 'text match pattern'
+match = re.search(pattern, text)
+```
+
+### 元字符
+
+```
+# . ^ $ * + ? {m} {m,n} [] |  \d \D \s ()
+# ^$
+# .*?
+```
+
+### 分组 group
+
+不转义特殊字符，使用'r'：
+
+```python
+p = re.compile(r'(\d+)-(\d+)-(\d+)')
+print(p.match('2018-05-10').groups())
+year, month, day = p.match('2018-05-10').groups()
+```
+
+### match 与 search
+
+match 用于匹配并分组，search 用于查找字符。
+
+```python
+p = re.compile(r'(\d+)-(\d+)-(\d+)')
+print(p.search('aa2018-05-10bb'))
+```
+
+> findall() 可匹配多次。
+
+### 替换函数 sub
+
+```python
+phone = '123-456-789 # 这是电话号码'
+p2 = re.sub(r'#.*$', '', phone)
+print(p2)
+
+p3 = re.sub(r'\D', '', p2)
+print(p3)
+```
+
+## datetime 日期和时间值管理
+
+作用：用于完成日期和时间解析、 格式化和算数运算。
+
+```python
+import datetime
+t = datetimetime.date.today()
+one_day = datetime.timedelta(days=1)
+```
+
+时间操作：
+
+```python
+import time
+
+print(time.time())
+print(time.localtime())
+print(time.strftime('%Y%m%d'))
+```
+
+日期时间操作：
+
+```python
+import datetime
+
+# 10分钟后的日期
+print(datetime.datetime.now())
+newtime = datetime.timedelta(minutes=10)
+print(datetime.datetime.now() + newtime)
+
+# 某一日期10分钟后的日期
+one_day = datetime.datetime(2008, 5, 27)
+new_date = datetime.timedelta(days=10)
+print(one_day + new_date)
+```
+
+## 数学相关库
+
+```python
+import random
+
+print(random.randint(1, 5))
+print(random.choice(['aa', 'bb', 'cc']))
+```
+
+## 文件夹操作库
+
+```python
+import os
+
+print(os.path.abspath('..'))
+print(os.path.exists('/Users'))
+print(os.path.isdir('/Users'))
+os.path.join('/tmp/a/', 'b/c')
+```
+
+另一种实现库：
+
+```python
+from pathlib import Path
+
+p = Path('.')
+print(p.resolve())
+p.is_dir()
+
+q = Path('/tmp/a/b/c')
+Path.mkdir(q, parents=True)
+```
+
+## 机器学习库
+
+机器学习中， 经常会将多个功能的库一起使用，以便优化参数， 获得更好的学习效果。
+
+```
+numpy库 数学库
+matplotlib库 绘图库
+pandas库 数据分析库
+tensorflow库 机器学习模型库
+```
+
+### numpy
+
+用于高性能科学计算和数据分析，是常用的高级数据分析库的基础包。
+
+安装：
+
+```shell
+pip3 install numpy
+```
+
+基本使用：
+
+```python
+import numpy as np
+
+arr1 = np.array([2, 3, 4])
+print(arr1)
+print(arr1.dtype)
+
+arr2 = np.array([1.2, 2.3, 3.4])
+print(arr2)
+print(arr2.dtype)
+
+print(arr1 + arr2)
+print(arr2 * 10)
+```
+
+矩阵操作：
+
+```python
+import numpy as np
+
+# 二维矩阵
+data = [[1, 2, 3], [4, 5, 6]]
+arr3 = np.array(data)
+print(arr3)
+print(arr3.dtype)
+# 二维矩阵（填充0）
+print(np.zeros((3, 5)))
+# 二维矩阵（填充1）
+print(np.ones((4, 6)))
+# 三维矩阵
+print(np.empty((2, 3, 2)))
+```
+
+切片运算：
+
+```python
+import numpy as np
+
+arr4 = np.arange(10)
+arr4[5:8] = 10
+print(arr4)
+
+# 复本
+arr_slice = arr4[5:8].copy()
+arr_slice[:] = 15
+print(arr_slice)
+print(arr4)
+```
+
+### pandas
+
+
+
+### matplotlib
+
+
+
+### tensorflow
+
+
+
+## 网络库
+
+- urllib 库
+- requests 库
+- BeautifulSoup库
+- http协议常用库
+- http协议常用库
+- xml格式处理库
+
+
 
 
 
