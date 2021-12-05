@@ -1297,24 +1297,178 @@ print(arr4)
 
 ### pandas
 
+进行数据预处理、清洗。
 
+```python
+from pandas import Series, DataFrame
+import pandas as pd
+
+obj = Series([4, 5, 6, -7])
+print(obj)
+print(obj.index)
+print(obj.values)
+```
+
+Series 的基本操作：
+
+```python
+from pandas import Series, DataFrame
+import pandas as pd
+
+obj2 = Series([4, 7, -5, 3], index=['d', 'b', 'c', 'a'])
+print(obj2)
+obj2['c'] = 6
+print(obj2)
+print('f' in obj2)
+```
+
+```python
+from pandas import Series, DataFrame
+import pandas as pd
+
+sdata = {
+    'beijing': 35000,
+    'shanghai': 71000,
+    'guangzhou': 16000,
+    'shenzhen': 5000}
+obj3 = Series(sdata)
+print(obj3)
+obj3.index = ['bj', 'gz', 'sh', 'sz']
+print(obj3)
+```
+
+DataFrame 的基本操作：
+
+```python
+from pandas import Series, DataFrame
+import pandas as pd
+
+data = {'city': ['shanghai', 'shanghai', 'shanghai', 'beijing', 'beijing'],
+        'year': [2016, 2017, 2018, 2017, 2018],
+        'pop': [1.5, 1.7, 3.6, 2.4, 2.9]}
+frame = DataFrame(data)
+frame2 = DataFrame(data, columns=['year', 'city', 'pop'])
+print(frame)
+print(frame2)
+print(frame2['city'])
+print(frame2.year)
+
+frame2['new'] = 100
+print(frame2)
+
+frame2['cap'] = frame2.city == 'beijing'
+print(frame2)
+
+# 另一种赋值方式
+pop = {'beijing': {2008: 1.5, 2009: 2.0},
+       'shanghai': {2008: 2.0, 2009: 3.6}
+       }
+frame3 = DataFrame(pop)
+print(frame3.T)
+```
+
+层次化索引：
+
+```python
+import numpy as np
+
+data3 = Series(np.random.randn(10),
+               index=[['a', 'a', 'a', 'b', 'b', 'b', 'c', 'c', 'd', 'd'],
+                      [1, 2, 3, 1, 2, 3, 1, 2, 2, 3]])
+print(data3.unstack().stack())
+print(data3['b':'c'])
+```
 
 ### matplotlib
 
+```python
+import matplotlib.pyplot as plt
 
+# 绘制简单的曲线
+plt.plot([1, 3, 5], [4, 8, 10])
+plt.show()
+```
+
+```python
+import numpy as np
+
+# x轴的定义域为 -3.14~3.14，中间间隔100个元素
+x = np.linspace(-np.pi, np.pi, 100)
+plt.plot(x, np.sin(x))
+# 显示所画的图
+plt.show()
+```
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+
+# 定义域为： -2pi 到 2pi
+x = np.linspace(-np.pi * 2, np.pi * 2, 100)
+plt.figure(1, dpi=50)  # 创建图表1
+for i in range(1, 5):  # 画四条线
+    plt.plot(x, np.sin(x / i))
+plt.show()
+```
 
 ### tensorflow
 
-
+参考官方文档。
 
 ## 网络库
 
-- urllib 库
-- requests 库
-- BeautifulSoup库
-- http协议常用库
-- http协议常用库
-- xml格式处理库
+### urllib 库
+
+```python
+from urllib import request
+
+url = 'http://www.baidu.com'
+response = request.urlopen(url, timeout=1)
+print(response.read().decode('utf-8'))
+```
+
+GET/POST：
+
+> httpbin.org 是一个http请求示例网站。
+
+```python
+from urllib import parse
+from urllib import request
+
+data = bytes(parse.urlencode({'word': 'hello'}), encoding='utf8')
+
+# POST
+response = request.urlopen('http://httpbin.org/post', data=data)
+print(response.read().decode('utf-8'))
+
+# GET
+response2 = request.urlopen('http://httpbin.org/get', timeout=1)
+print(response2.read())
+```
+
+```python
+import urllib
+import socket
+
+# 超时情况
+try:
+    response3 = urllib.request.urlopen('http://httpbin.org/get', timeout=0.1)
+except urllib.error.URLError as e:
+    if isinstance(e.reason, socket.timeout):
+        print('TIME OUT')
+```
+
+### requests 库
+
+
+
+### BeautifulSoup库
+
+### http协议常用库
+
+### http协议常用库
+
+### xml格式处理库
 
 
 
