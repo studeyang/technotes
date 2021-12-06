@@ -73,6 +73,4 @@
   - [Go微服务实战](B类/B15-Go语言/[拉勾]-Go微服务实战.md)
 - **Lua**
   - [Lua教程](B类/B16-Lua/[runoob]-Lua教程.md)
-- **Python**
-  - [零基础学Python](B类/B17-Python/零基础学Python.md)
 
