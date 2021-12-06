@@ -10,6 +10,4 @@
   - [07 | 多线程编程](Python/零基础学Python/07多线程编程.md)
   - [08 | 标准库、机器学习库](Python/零基础学Python/08标准库、机器学习库.md)
   - [09 | 第三方库](Python/零基础学Python/09第三方库.md)
-  - [10 | 综合项目](Python/零基础学Python/10综合项目.md)
-
 
