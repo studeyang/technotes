@@ -120,13 +120,92 @@ public interface Future<V> {
 
 > 所谓回弹性指的是系统在出现失败时，依然能够保持即时响应性；而弹性则是指的系统在各种请求压力之下，都能保持即时响应性。
 
+# 02 | 背压机制：响应式流为什么能够提高系统的弹性？
 
+我们知道响应式系统都是通过对数据流中每个事件进行处理，来提高系统的即时响应性的。
 
+**流的概念**
 
+简单来讲，所谓的流就是由生产者生产并由一个或多个消费者消费的元素序列。
 
+- 流的处理模型：存在两种基本的实现机制--推和拉。
+- 流量控制：使用有界阻塞队列。
 
+![Drawing 9.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211209224847.png)
 
+这种阻塞行为是不可能实现异步操作的，所以结合上一讲中的讨论结果，无论从回弹性、弹性还是即时响应性出发，有界阻塞队列都不是我们想要的解决方案。
 
+讲到这里，我们已经明确，纯“推”模式下的数据流量会有很多不可控制的因素，并不能直接应用，而是需要在“推”模式和“拉”模式之间考虑一定的平衡性，从而优雅地实现流量控制。这就需要引出响应式系统中非常重要的一个概念——背压机制（Backpressure）。
+
+**背压机制**
+
+什么是背压？简单来说就是下游能够向上游反馈流量请求的机制。
+
+如果消费者消费数据的速度赶不上生产者生产数据的速度时，它就会持续消耗系统的资源，直到这些资源被消耗殆尽。
+
+这个时候，就需要采用背压机制，消费者会根据自身的处理能力来请求数据，而生产者也会根据消费者的能力来生产数据，从而在两者之间达成一种动态的平衡，确保系统的即时响应性。
+
+**响应式流的核心接口**
+
+针对流量控制的解决方案以及背压机制都包含在响应式流规范中，其中包含了响应式编程的各个核心组件，让我们一起来看一下。
+
+在 Java 的世界中，响应式流规范只定义了四个核心接口，即 Publisher`<T>`、Subscriber`<T>`、Subscription 和 Processor<T,R>。
+
+- Publisher`<T>`：生产者
+
+Publisher 根据收到的请求向当前订阅者 Subscriber 发送元素。
+
+```java
+public interface Publisher<T> {
+    public void subscribe(Subscriber<? super T> s);
+}
+```
+
+- Subscriber `<T>`：订阅者
+
+Subscriber 代表的是一种可以从发布者那里订阅并接收元素的订阅者。
+
+```java
+public interface Subscriber<T> {
+    public void onSubscribe(Subscription s);
+    public void onNext(T t);
+    public void onError(Throwable t);
+    public void onComplete();
+}
+```
+
+onSubscribe()：当发布者的 subscribe() 方法被调用时就会触发这个回调。
+
+Subscription：可以把这个 Subscription 看作是一种用于订阅的上下文对象。
+
+onNext()：当订阅关系已经建立，那么发布者就可以调用订阅者的 onNext() 方法向订阅者发送一个数据。
+
+onComplete()：上述这个过程是持续不断的，直到所发送的数据已经达到 Subscription 对象中所请求的数据个数。这时候 onComplete() 方法就会被触发，代表这个数据流已经全部发送结束。
+
+onError()：一旦在这个过程中出现了异常，那么就会触发 onError() 方法，我们可以通过这个方法捕获到具体的异常信息进行处理，而数据流也就自动终止了。
+
+- Subscription
+
+Subscription 代表的就是一种订阅上下文对象。
+
+```java
+public interface Subscription {
+    public void request(long n);
+    public void cancel();
+}
+```
+
+request()：订阅者用该方法请求 n 个元素，可以通过不断调用该方法来向发布者请求数据。
+
+cancel()：用来取消这次订阅。
+
+请注意，**Subscription 对象是确保生产者和消费者针对数据处理速度达成一种动态平衡的基础，也是流量控制中实现背压机制的关键所在**，我们可以通过下图来进一步理解整个数据请求和处理过程。
+
+![Drawing 11.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211209230532.png)
+
+**响应式流的技术生态圈**
+
+目前，业界主流响应式开发库包括 RxJava、Akka、Vert.x 以及 Project Reactor。在本课程中，我们将重点介绍 Project Reactor，它是 Spring 5 中所默认集成的响应式开发库。
 
 
 
