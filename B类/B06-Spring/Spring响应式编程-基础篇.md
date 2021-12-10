@@ -207,6 +207,135 @@ cancel()：用来取消这次订阅。
 
 目前，业界主流响应式开发库包括 RxJava、Akka、Vert.x 以及 Project Reactor。在本课程中，我们将重点介绍 Project Reactor，它是 Spring 5 中所默认集成的响应式开发库。
 
+# 03 | 场景应用：响应式编程能够应用于哪些具体场景？
+
+响应式编程能够应用到那些具体的场景呢？目前有哪些框架中使用到了这一新型的技术体系呢？这一讲我将为你解答这些疑问。
+
+**响应式编程的应用场景分析**
+
+- 数据流处理
+
+数据流处理是响应式编程的一大应用场景。流式系统的主要特点是低延迟和高吞吐量，流式系统的表现形式也可以有很多，日常的日志埋点和分析、服务运行时的状态采集等都属于这种类型。
+
+- API 网关
+
+针对高并发流量，通常涉及大量的 I/O 操作。相较于传统的同步阻塞式 I/O 模型，响应式编程所具备的异步非阻塞式 I/O 模型非常适合应对处理高并发流量的业务场景。
+
+**应用一：Netflix Hystrix 中的滑动窗口**
+
+Netflix Hystrix 使用了 HystrixCircuitBreaker 类来实现熔断器。该类通过一个 circuitOpen 状态位控制着整个熔断判断流程，而这个状态位本身的状态值则取决于系统目前的执行数据和健康指标。
+
+那么，HystrixCircuitBreaker 如何动态获取系统运行时的各项数据呢？
+
+这里就使用到了一个 HealthCountsStream 类，这就是一种数据流。HealthCountsStream 在设计上采用了一种特定的机制，即滑动窗口（Rolling Window）机制。
+
+Hystrix 以秒为单位来统计系统中所有请求的处理情况，然后每次取最近 10 秒的数据来进行计算。如果失败率超过一定阈值，就进行熔断。这里的 10 秒就是一个滑动窗口，参考其官网的一幅图，如下所示。
+
+![图片0.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210220934.png)
+
+上图演示了 Hystrix 滑动窗口策略，把 10 秒时间拆分成了 10 个格子，我们把这种格子称为桶 Bucket。每个桶中的数据就是这一秒中所处理的请求数量，并针对处理结果的状态做了分类。然后每当收集好一个新的桶后，就会丢弃掉最旧的一个桶，所以窗口是滑动的。
+
+那么如何来实现这个滑动窗口呢？我们转换一下思路，可以把系统运行时所产生的所有数据都视为一个个的事件，这样滑动窗口中每个桶的数据都来自源源不断的事件。同时，对于这些生成的事件，我们通常需要对其进行转换以便进行后续的操作。这两点构成了实现滑动窗口的设计目标和方法。
+
+在技术实现的选型上，Hystrix 采用了基于响应式编程思想的 RxJava。使用 RxJava 的一大好处是可以通过 RxJava 的一系列操作符来实现滑动窗口，包括 window、flatMap 和 reduce 等。
+
+**应用二：Spring Cloud Gateway 中的过滤器**
+
+Spring Cloud Gateway 中的核心概念就是过滤器（Filter），围绕过滤器的请求处理流程如下图所示。
+
+![图片1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210221331.png)
+
+过滤器用于在响应 HTTP 请求之前或之后修改请求本身及对应的响应结果。Spring Cloud Gateway 中提供了一个全局过滤器（GlobalFilter）的概念，对所有路由都生效。
+
+```java
+@Configuration
+public class JWTAuthFilter implements GlobalFilter {
+ 
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        ServerHttpRequest.Builder builder = exchange.getRequest().mutate();
+        builder.header("Authorization","Token");
+        return chain.filter(exchange.mutate().request(builder.build()).build());
+    }
+}
+```
+
+在上面示例中，我们对所有经过 API 网关的 HTTP 请求添加了一个消息头，用来设置与访问 Token 相关的安全认证信息。
+
+**应用三：Spring WebFlux 中的请求处理流程**
+
+在 WebFlux 中，对 HTTP 请求的处理过程涉及了 HandlerMapping、HandlerAdapter、HandlerResultHandler 类之间的交互，整个流程如下图所示。
+
+![图片3.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210223401.png)
+
+我们直接来看用于完成上图流程的 Handle 方法定义，该方法实现了流式处理请求机制，如下所示。
+
+```java
+public Mono<Void> handle(ServerWebExchange exchange) {
+    if (this.handlerMappings == null) {
+        return createNotFoundError();
+    }
+
+    return Flux.fromIterable(this.handlerMappings)
+            //从handlerMapping这个map中获取HandlerMapping
+            .concatMap(mapping -> mapping.getHandler(exchange))
+            .next()
+            //如果没有找到HandlerMapping，则抛出异常
+            .switchIfEmpty(createNotFoundError())
+            //触发HandlerAdapter的handle方法
+            .flatMap(handler -> invokeHandler(exchange, handler))
+            //触发HandlerResultHandler 的handleResult方法
+            .flatMap(result -> handleResult(exchange, result));
+}
+```
+
+# 04 | 案例驱动：如何基于 Spring 框架来学习响应式编程？
+
+Spring 5 提供了针对 Web 服务层开发的响应式 Web 框架 WebFlux，以及支持响应式数据访问的 Spring Data Reactive 框架。在今天这一讲中，我将为你梳理 Spring 框架中的响应式编程技术栈，并引出贯穿整个课程的案例系统。
+
+**Spring WebFlux**
+
+WebFlux 功能非常强大，不仅包含了对创建和访问响应式 HTTP 端点的支持，还可以用来实现服务器推送事件以及 WebSocket。
+
+Spring WebFlux 提供了完整的支持响应式开发的服务端技术栈，Spring WebFlux 的整体架构如下图所示。
+
+![Drawing 1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210224812.png)
+
+上图针对传统 spring-webmvc 技术栈和新型的 spring-webflux 技术栈做了一个对比。
+
+最上层所提供的实际上是面向开发人员的开发模式，Spring WebFlux 既支持基于 @Controller、@RequestMapping 等注解的传统开发模式，又支持基于 Router Functions 的函数式开发模式。
+
+关于框架背后的实现原理，传统的 Spring MVC 构建在 Java EE 的 Servlet 标准之上，该标准本身就是阻塞和同步的。而 Spring WebFlux 则是构建在响应式流以及它的实现框架 Reactor 的基础之上的一个开发框架，因此可以基于 HTTP 协议用来构建异步非阻塞的 Web 服务。
+
+位于底部的容器。Spring MVC 是运行在传统的 Servlet 容器之上，而 Spring WebFlux 则需要支持异步的运行环境。
+
+> 由于 WebFlux 提供了异步非阻塞的 I/O 特性，因此非常适合用来开发 I/O 密集型服务。而在使用 Spring MVC 就能满足的场景下，就不需要更改为 WebFlux。通常，我也不大建议你将 WebFlux 和 Spring MVC 混合使用，因为这种开发方式显然无法保证全栈式的响应式流。
+
+**Spring Data Reactive**
+
+在 Spring Data 的基础上，Spring 5 也全面提供了一组响应式数据访问模型。
+
+![Drawing 2.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210230046.png)
+
+可以看到，上图底部明确把 Spring Data 划分为两大类型，一类是支持 JDBC、JPA 和部分 NoSQL 的传统 Spring Data Repository，而另一类则是支持 Mongo、Cassandra、Redis、Couchbase 等的响应式 Spring Data Reactive Repository。
+
+**案例驱动：ReactiveSpringCSS**
+
+这里的 CSS 是对客户服务系统 Customer Service System 的简称。客户服务是电商、健康类业务场景中非常常见的一种业务场景，我们将通过构建一个精简但又完整的系统来展示 Spring 5 中响应式编程相关的设计理念和各项技术组件。ReactiveSpringCSS 整体架构。
+
+![Drawing 3.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210225139.png)
+
+customer-service 一般会与用户账户服务 account-service 进行交互以获取生成工单所需的用户账户信息。针对 order-service，其定位是订单服务，customer-service 也需要从该服务中查询订单信息。
+
+在 ReactiveSpringCSS 的整体架构图中，引出了构建一个响应式系统所需的多项技术组件。
+
+- Web 层：使用 Spring WebFlux 组件来为三个服务构建响应式 RESTful 端点，并通过支持响应式请求的 WebClient 客户端组件来消费这些端点。
+- Service 层：完成事件处理和消息通信相关的业务场景。
+- 消息中间件：使用 Spring Cloud Stream 组件。
+- Repository 层：将引入 MongoDB 和 Redis 这两款支持响应式流的 NoSQL 数据库。MongoDB 用于存储业务数据，Redis 用于消息数据缓存。
+
+
+
 
 
 
