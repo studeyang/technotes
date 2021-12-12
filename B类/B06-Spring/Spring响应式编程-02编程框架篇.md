@@ -306,9 +306,387 @@ jianxiang4
 
 **通过 Mono 对象创建响应式流**
 
+对于 Mono 而言，可以认为它是 Flux 的一种特例，所以很多创建 Flux 的方法同样适用。
 
+除了 just()、empty()、error() 和 never() 这些方法之外，比较常用的还有 justOrEmpty() 等方法。justOrEmpty() 方法会先判断所传入的对象中是否包含值，只有在传入对象不为空时，Mono 序列才生成对应的元素，该方法示例代码如下。
+
+```java
+Mono.justOrEmpty(Optional.of("jianxiang"))
+	.subscribe(System.out::println);
+```
+
+如果要想动态创建 Mono，我们同样也可以通过 create() 方法并使用 MonoSink 组件，示例代码如下。
+
+```java
+Mono.create(sink -> sink.success("jianxiang"))
+    .subscribe(System.out::println);
+```
 
 **订阅响应式流**
+
+介绍完如何创建响应式流，接下来就需要讨论如何订阅响应式流。Flux 和 Mono 提供了一批非常有用的 subscribe() 方法重载方法。
+
+```java
+//订阅流的最简单方法，忽略所有消息通知
+subscribe();
+
+//对每个来自 onNext 通知的值调用 dataConsumer，但不处理 onError 和 onComplete 通知
+subscribe(Consumer<T> dataConsumer);
+
+//在前一个重载方法的基础上添加对 onError 通知的处理
+subscribe(Consumer<T> dataConsumer, Consumer<Throwable> errorConsumer);
+
+//在前一个重载方法的基础上添加对 onComplete 通知的处理
+subscribe(Consumer<T> dataConsumer, Consumer<Throwable> errorConsumer,
+Runnable completeConsumer);
+
+//这种重载方法允许通过请求足够数量的数据来控制订阅过程
+subscribe(Consumer<T> dataConsumer, Consumer<Throwable> errorConsumer,
+Runnable completeConsumer, Consumer<Subscription> subscriptionConsumer);
+
+//订阅序列的最通用方式，可以为我们的 Subscriber 实现提供所需的任意行为
+subscribe(Subscriber<T> subscriber);
+```
+
+通过上述 subscribe() 重载方法，我们可以只处理其中包含的正常消息，也可以同时处理错误消息和完成消息。例如，下面这段代码示例展示了同时处理正常和错误消息的实现方法。
+
+```java
+Mono.just(“jianxiang”)
+         .concatWith(Mono.error(new IllegalStateException()))
+         .subscribe(System.out::println, System.err::println);
+```
+
+```
+jianxiang 
+java.lang.IllegalStateException
+```
+
+有时候我们不想直接抛出异常，而是希望采用一种容错策略来返回一个默认值，就可以采用如下方式。
+
+```java
+Mono.just(“jianxiang”)
+          .concatWith(Mono.error(new IllegalStateException()))
+          .onErrorReturn(“default”)
+          .subscribe(System.out::println);
+```
+
+```
+jianxiang 
+default
+```
+
+另外一种容错策略是通过 switchOnError() 方法使用另外的流来产生元素。
+
+```java
+Mono.just(“jianxiang”)
+         .concatWith(Mono.error(new IllegalStateException()))
+         .switchOnError(Mono.just(“default”))
+         .subscribe(System.out::println);
+```
+
+```
+jianxiang 
+default
+```
+
+我们可以充分利用 Lambda 表达式来使用 subscribe() 方法，例如下面这段代码。
+
+```java
+Flux.just("jianxiang1", "jianxiang2", "jianxiang3")
+    .subscribe(
+        data -> System.out.println("onNext:" + data), 
+        err -> {}, 
+        () -> System.out.println("onComplete")
+    );
+```
+
+```
+onNext:jianxiang1
+onNext:jianxiang2
+onNext:jianxiang3
+onComplete
+```
+
+# 07 | Reactor 操作符（上）：如何快速转换响应式流？
+
+Reactor 框架为我们提供了大量操作符，用于操作 Flux 和 Mono 对象。
+
+**操作符的分类**
+
+本篇将 Flux 和 Mono 操作符分成如下六大类型：
+
+- 转换（Transforming）操作符，负责将序列中的元素转变成另一种元素；
+
+- 过滤（Filtering）操作符，负责将不需要的数据从序列中剔除出去；
+
+- 组合（Combining）操作符，负责将序列中的元素进行合并、连接和集成；
+
+- 条件（Conditional）操作符，负责根据特定条件对序列中的元素进行处理；
+
+- 裁剪（Reducing）操作符，负责对序列中的元素执行各种自定义的裁剪操作；
+
+- 工具（Utility）操作符，负责一些针对流式处理的辅助性操作。
+
+本篇把前面三种操作符统称为“转换类”操作符，剩余的三大类统称为“裁剪类”操作符。
+
+**转换（Transforming）操作符**
+
+- buffer
+
+buffer 操作符的作用相当于把当前流中的元素统一收集到一个集合中，并把这个集合对象作为新的数据流。
+
+```java
+Flux.range(1, 25)
+    .buffer(10)
+    .subscribe(System.out::println);
+```
+
+```
+[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+[11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+[21, 22, 23, 24, 25]
+```
+
+> buffer 操作符的另一种用法是指定收集的时间间隔，由此演变出了一组 bufferTimeout() 方法，bufferTimeout() 方法可以指定时间间隔为一个 Duration 对象或毫秒数。
+
+- window
+
+window 操作符的作用类似于 buffer，不同的是 window 操作符是把当前流中的元素收集到另外的 Flux 序列中，而不是一个集合，代表的是一种对序列进行开窗的操作。官方给出的弹珠图，如下所示。
+
+![Drawing 1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211212222358.png)
+
+示例代码如下。
+
+```java
+Flux.range(1, 5)
+    .window(2)
+    .toIterable()
+    .forEach(w -> {
+        w.subscribe(System.out::println);
+        System.out.println("-------");
+    });
+```
+
+```
+1
+2
+-------
+3
+4
+-------
+5
+```
+
+- map
+
+map 操作符相当于一种映射操作，它对流中的每个元素应用一个映射函数从而达到转换效果。
+
+```java
+Flux.just(1, 2)
+    .map(i -> "number-" + i)
+    .subscribe(System.out::println);
+```
+
+```
+number-1
+number-2
+```
+
+- flatMap 
+
+flatMap 操作符执行的也是一种映射操作，但与 map 不同，该操作符会把流中的每个元素映射成一个流而不是一个元素。弹珠图如下所示。
+
+![Drawing 3.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211212222950.png)
+
+示例代码如下。
+
+```java
+Flux.just(1, 5)
+     .flatMap(x -> Mono.just(x * x))
+     .subscribe(System.out::println);
+```
+
+```
+1
+25
+```
+
+**过滤（Filtering）操作符**
+
+- filter
+
+filter 操作符的含义与普通的过滤器类似，就是对流中包含的元素进行过滤，只留下满足指定过滤条件的元素，而过滤条件的指定一般是通过断言。
+
+示例代码如下：
+
+```java
+Flux.range(1, 10)
+    .filter(i -> i % 2 == 0)
+	.subscribe(System.out::println);
+```
+
+这里的“i % 2 == 0”代表的就是一种断言。
+
+- first/last
+
+first 操作符的执行效果为返回流中的第一个元素，而 last 操作符的执行效果即返回流中的最后一个元素。
+
+- skip/skipLast
+
+如果使用 skip 操作符，将会忽略数据流的前 n 个元素。类似的，如果使用 skipLast 操作符，将会忽略流的最后 n 个元素。
+
+- take/takeLast
+
+take 系列操作符用来从当前流中提取元素。我们可以按照指定的数量来提取元素，也可以按照指定的时间间隔来提取元素。
+
+```java
+Flux.range(1, 100).take(5).subscribe(System.out::println);
+Flux.range(1, 100).takeLast(5).subscribe(System.out::println);
+```
+
+```
+1
+2
+3
+4
+5
+```
+
+```
+996
+997
+998
+999
+1000
+```
+
+**组合（Combining）操作符**
+
+- then/when
+
+then 操作符的含义是等到上一个操作完成再进行下一个。以下代码展示了该操作符的用法。
+
+```java
+Flux.just(1, 2, 3)
+    .then()
+    .subscribe(System.out::println);
+```
+
+then 操作符在上游的元素执行完成之后才会触发新的数据流，也就是说会忽略所传入的元素，所以上述代码在控制台上实际并没有任何输出。
+
+和 then 一起的还有一个 thenMany 操作服务，具有同样的含义，但可以初始化一个新的 Flux 流。示例代码如下所示。
+
+```java
+Flux.just(1, 2, 3)
+    .thenMany(Flux.just(4, 5))
+    .subscribe(System.out::println);
+```
+
+```
+4
+5
+```
+
+对应的，when 操作符的含义则是等到多个操作一起完成。
+
+```java
+public Mono<Void> updateOrders(Flux<Order> orders) {
+        return orders
+            .flatMap(file -> {
+                Mono<Void> saveOrderToDatabase = ...;
+                Mono<Void> sendMessage = ...;
+                return Mono.when(saveOrderToDatabase, sendMessage);
+       });
+}
+```
+
+在上述代码中，假设我们对订单列表进行批量更新，首先把订单数据持久化到数据库，然后再发送一条通知类的消息。我们需要确保这两个操作都完成之后方法才能返回，所以用到了 when 操作符。
+
+- merge
+
+merge 操作符用来把多个 Flux 流合并成一个 Flux 序列，而合并的规则就是按照流中元素的实际生成的顺序进行，它的弹珠图如下所示。
+
+![Drawing 5.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211212225103.png)
+
+merge 操作符的代码示例如下所示，我们通过 Flux.intervalMillis() 方法分别创建了两个 Flux 序列，然后将它们 merge 之后打印出来。
+
+```java
+Flux.merge(Flux.intervalMillis(0, 100).take(2), 
+           Flux.intervalMillis(50, 100).take(2))
+    .toStream()
+    .forEach(System.out::println);
+```
+
+```
+0
+0
+1
+1
+```
+
+第一个 intervalMillis 方法没有延迟，每隔 100 毫秒生成一个元素；第二个 intervalMillis 方法则是延迟 50 毫秒之后才发送第一个元素，时间间隔同样是 100 毫秒。
+
+和 merge 类似的还有一个 mergeSequential 方法。不同于 merge 操作符，mergeSequential 操作符则按照所有流被订阅的顺序，以流为单位进行合并。现在我们来看一下这段代码，这里仅仅将 merge 操作换成了 mergeSequential 操作。
+
+```java
+Flux.mergeSequential(Flux.intervalMillis(0, 100).take(2), 
+                     Flux.intervalMillis(50, 100).take(2))
+    .toStream()
+    .forEach(System.out::println);
+```
+
+```
+0
+1
+0
+1
+```
+
+显然从结果来看，mergeSequential 操作是等上一个流结束之后再 merge 新生成的流元素。
+
+- zip
+
+zip 操作符的合并规则比较特别，是将当前流中的元素与另外一个流中的元素按照一对一的方式进行合并，如下所示。
+
+![Drawing 7.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211212230050.png)
+
+使用 zip 操作符在合并时可以不做任何处理，由此得到的是一个元素类型为 Tuple2 的流，示例代码如下所示。
+
+```java
+Flux flux1 = Flux.just(1, 2);
+Flux flux2 = Flux.just(3, 4);
+Flux.zip(flux1, flux2)
+    .subscribe(System.out::println);
+```
+
+```
+[1,3]
+[2,4]
+```
+
+我们可以使用 zipWith 操作符实现同样的效果，示例代码如下所示。
+
+```java
+Flux.just(1, 2)
+    .zipWith(Flux.just(3, 4))
+	.subscribe(System.out::println);
+```
+
+另一方面，我们也可以通过自定义一个 BiFunction 函数来对合并过程做精细化的处理，这时候所得到的流的元素类型即为该函数的返回值类似，示例代码如下所示。
+
+```
+Flux.just(1, 2)
+    .zipWith(
+        Flux.just(3, 4), 
+        (s1, s2) -> String.format("%s+%s=%s", s1, s2, s1 + s2)
+    )
+	.subscribe(System.out::println);
+```
+
+```
+1+3=4
+2+4=6
+```
 
 
 
