@@ -141,17 +141,44 @@ ProcessEngine processEngine = ProcessEngineConfiguration.createStandaloneInMemPr
 
 流程引擎也可以使用`META-INF/processes.xml`文件进行配置和引导。
 
+## 2.2 错误处理
 
+参考资料：http://camunda-cn.shaochenfeng.com/user-guide/process-engine/error-handling/
 
+### 事务回滚
 
+标准的处理策略是向客户端抛出异常，即回滚当前事务。
 
+### Job 异步重试
 
+这意味着用户不会看到错误，而是“一切都成功”的对话框。 异常存储在Job中。重试策略将在稍后（当网络再次可用时）自动重新触发Job。
 
+### 捕获异常并使用排他网关
 
+> 网关分为：
+>
+> - 复杂网关（Complex Gateway）
+> - 并行网关（Parallel Gateway）
+> - 包含性网关（Inclusive Gateway）
+> - 排他性网关（Exclusive Gateway）
 
+![img](https://gitee.com/yanglu_u/ImgRepository/raw/master/error-result-xor.png)
 
+我们触发了“检查数据完整性”任务。 Java 服务可能会抛出“DataIncompleteException”。 但是，如果我们检查完整性，不完整的数据不是异常，而是预期的结果，因此我们更喜欢在评估流程变量的流程中使用 异或网关，例如，“#{dataComplete==false}” 。
 
+### 定义错误事件
 
+![img](https://gitee.com/yanglu_u/ImgRepository/raw/master/bpmn.boundary.error.event.png)
+
+可以明确地对错误进行建模，从而解决业务错误的用例。
+
+## 2.3 超时处理
+
+参考资料：https://camunda.com/best-practices/managing-the-task-lifecycle/
+
+可以在定义流程时，设置某段流程的超时时间。
+
+![image-20211207113925292](https://gitee.com/yanglu_u/ImgRepository/raw/master/image-20211207113925292.png)
 
 
 
