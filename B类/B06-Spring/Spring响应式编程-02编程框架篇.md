@@ -431,6 +431,8 @@ Reactor 框架为我们提供了大量操作符，用于操作 Flux 和 Mono 对
 
 **转换（Transforming）操作符**
 
+包括 buffer、window、map、flatMap 等。
+
 - buffer
 
 buffer 操作符的作用相当于把当前流中的元素统一收集到一个集合中，并把这个集合对象作为新的数据流。
@@ -513,6 +515,8 @@ Flux.just(1, 5)
 
 **过滤（Filtering）操作符**
 
+包括 filter、first/last、skip/skipLast、take/takeLast 等。
+
 - filter
 
 filter 操作符的含义与普通的过滤器类似，就是对流中包含的元素进行过滤，只留下满足指定过滤条件的元素，而过滤条件的指定一般是通过断言。
@@ -561,6 +565,8 @@ Flux.range(1, 100).takeLast(5).subscribe(System.out::println);
 ```
 
 **组合（Combining）操作符**
+
+包括 then/when、merge、zip 等。
 
 - then/when
 
@@ -688,9 +694,282 @@ Flux.just(1, 2)
 2+4=6
 ```
 
+# 08 | Reactor 操作符（下）：如何多样化裁剪响应式流？
 
+本节将继续介绍条件、裁剪、工具类的操作符。
 
+**条件（Conditional）操作符**
 
+所谓条件操作符，本质上就是提供了一个判断的依据来确定是否处理流中的元素。Reactor 中常用的条件操作符有 defaultIfEmpty、takeUntil、takeWhile、skipUntil 和 skipWhile 等。
 
+- defaultIfEmpty
 
+defaultIfEmpty 操作符针对空数据流提供了一个简单而有用的处理方法。
+
+```java
+@GetMapping("/orders/{id}")
+public Mono<ResponseEntity<Order>> findOrderById(@PathVariable String id) {
+     return orderService.findOrderById(id)
+        .map(ResponseEntity::ok)
+        .defaultIfEmpty(ResponseEntity.status(404).body(null));
+}
+```
+
+- takeUntil/takeWhile
+
+takeUntil 操作符的基本用法是 takeUntil (Predicate<? super T> predicate)，其中 Predicate 代表一种断言条件，该操作符将从数据流中提取元素直到断言条件返回 true。
+
+```java
+Flux.range(1, 100)
+    .takeUntil(i -> i == 10)
+    .subscribe(System.out::println);
+```
+
+输出结果是 1~10 的数字。
+
+```java
+Flux.range(1, 100)
+    .takeWhile(i -> i <= 10)
+    .subscribe(System.out::println);
+```
+
+输出结果也是 1~10 的数字。
+
+- skipUntil/skipWhile
+
+与 takeUntil 相对应，skipUntil 操作符的基本用法是 skipUntil (Predicate<? super T> predicate)。skipUntil 将丢弃原始数据流中的元素直到 Predicate 返回 true。
+
+与 takeWhile 相对应，skipWhile 操作符的基本用法是 skipWhile (Predicate<? super T> continuePredicate)，当 continuePredicate 返回 true 时才进行元素的丢弃。
+
+**裁剪（Reducing）操作符**
+
+裁剪操作符通常用于统计流中的元素数量，或者检查元素是否具有一定的属性。在 Reactor 中，常用的裁剪操作符有 any 、concat、count 和 reduce 等。
+
+- any
+
+any 操作符用于检查是否至少有一个元素具有所指定的属性，示例代码如下。
+
+```java
+Flux.just(3, 5, 7, 9, 11, 15, 16, 17)
+    .any(e -> e % 2 == 0)
+    .subscribe(isExisted -> System.out.println(isExisted));
+```
+
+```
+true
+```
+
+all 操作符，用来检查流中元素是否都满足同一属性。
+
+```java
+Flux.just("abc", "ela", "ade", "pqa", "kang")
+    .all(a -> a.contains("a"))
+    .subscribe(isAllContained -> System.out.println(isAllContained));
+```
+
+```
+true
+```
+
+- concat
+
+concat 操作符用来合并来自不同 Flux 的数据。与 merge 操作符不同，这种合并采用的是顺序的方式，所以严格意义上并不是一种合并操作，所以我们把它归到裁剪操作符类别中。
+
+```java
+Flux.concat(
+        Flux.range(1, 3),
+        Flux.range(4, 2),
+        Flux.range(6, 5)
+    ).subscribe(System.out::println);
+```
+
+输出结果是 1~10 的数字。
+
+- reduce
+
+裁剪操作符中最经典的就是这个 reduce 操作符。reduce 操作符对来自 Flux 序列中的所有元素进行累积操作并得到一个 Mono 序列，该 Mono 序列中包含了最终的计算结果。reduce 操作符示意图如下所示。
+
+![Drawing 1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211213230549.png)
+
+我们也可以通过一个 BiFunction 来实现任何自定义的复杂计算逻辑。
+
+```java
+Flux.range(1, 10)
+    .reduce((x, y) -> x + y)
+    .subscribe(System.out::println);
+```
+
+```
+55
+```
+
+与 reduce 操作符类似的还有一个 reduceWith 操作符，用来在 reduce 操作时指定一个初始值。
+
+```java
+Flux.range(1, 10)
+    .reduceWith(() -> 5, (x, y) -> x + y)
+    .subscribe(System.out::println);
+```
+
+```
+60
+```
+
+**工具（Utility）操作符**
+
+Reactor 中常用的工具操作符有 subscribe、timeout、block、log 和 debug 等。
+
+- subscribe
+
+subscirbe 操作符订阅序列的最通用方式，如下所示。
+
+```java
+//订阅序列的最通用方式，可以为我们的Subscriber实现提供所需的任意行为
+subscribe(Subscriber<T> subscriber);
+```
+
+基于这种方式，如果默认的 subscribe() 方法没有提供所需的功能，我们可以实现自己的 Subscriber。
+
+```java
+Subscriber<String> subscriber = new Subscriber<String>() {
+    volatile Subscription subscription; 
+
+    public void onSubscribe(Subscription s) {
+        subscription = s;
+        System.out.println("initialization");
+        subscription.request(1);
+    }
+
+    public void onNext(String s) {
+        System.out.println("onNext:" + s);
+        subscription.request(1);
+    }
+
+    public void onComplete() { 
+        System.out.println("onComplete");
+    }
+
+    public void onError(Throwable t) { 
+        System.out.println("onError:" + t.getMessage());
+    }
+};
+```
+
+由于订阅和数据处理可能发生在不同的线程中，因此我们使用 volatile 关键字来确保所有线程都具有对 Subscription 实例的正确引用。
+
+当订阅到达时，我们会通过 onSubscribe 回调通知 Subscriber。在 onNext 回调中，我们打印接收到的数据并请求下一个元素。
+
+现在，让我们通过 subscribe() 方法来使用这个 Subscriber，如下所示。
+
+```java
+Flux<String> flux = Flux.just("12", "23", "34");
+flux.subscribe(subscriber);
+```
+
+```
+initialization
+onNext:12
+onNext:23
+onNext:34
+onComplete
+```
+
+前面构建的自定义 Subscriber 虽然能够正常运作，但因为过于偏底层，因此并不推荐你使用。推荐的方法是扩展 Project Reactor 提供的 BaseSubscriber 类。
+
+```java
+class MySubscriber<T> extends BaseSubscriber<T> {
+    public void hookOnSubscribe(Subscription subscription) {
+        System.out.println("initialization");
+        request(1);
+    }
+
+    public void hookOnNext(T value) {
+        System.out.println("onNext:" + value);
+        request(1);
+    }
+}
+```
+
+- timeout
+
+timeout 操作符非常简单，保持原始的流发布者，当特定时间段内没有产生任何事件时，将生成一个异常。
+
+- block
+
+block 操作符在接收到下一个元素之前会一直阻塞。block 操作符常用来把响应式数据流转换为传统数据流。
+
+例如，使用如下方法将分别把 Flux 数据流和 Mono 数据流转变成普通的 List\<Order\> 对象和单个的 Order 对象，我们同样可以设置 block 操作的等待时间。
+
+```java
+public List<Order> getAllOrders() {
+    return orderservice.getAllOrders()
+	    .block(Duration.ofSecond(5));
+}
+ 
+public Order getOrderById(Long orderId) {
+    return orderservice.getOrderById(orderId)
+	    .block(Duration.ofSecond(2));
+}
+```
+
+- log
+
+Reactor 中专门提供了针对日志的工具操作符 log，它会观察所有的数据并使用日志工具进行跟踪。
+
+```java
+Flux.just(1, 2)
+    .log()
+    .subscribe(System.out::println);
+```
+
+执行结果如下所示（为了显示简洁，部分内容和格式做了调整）。
+
+```
+Info: | onSubscribe([Synchronous Fuseable] FluxArray.ArraySubscription)
+Info: | request(unbounded)
+Info: | onNext(1)
+1
+Info: | onNext(2)
+2
+Info: | onComplete()
+```
+
+- debug
+
+debug 的操作符用于启动调试模式，我们需要在程序开始的地方添加如下代码。
+
+```java
+Hooks.onOperator(providedHook -> 
+    providedHook.operatorStacktrace())
+```
+
+现在，所有的操作符在执行时都会保存与执行过程相关的附加信息。而当系统出现异常时，这些附加信息就相当于系统异常堆栈信息的一部分，方便开发人员进行问题的分析和排查。
+
+上述做法是全局性的，如果你只想观察某个特定的流，那么就可以使用检查点（checkpoint）这一调试功能。例如以下代码演示了如何通过检查点来捕获 0 被用作除数的场景，我们在代码中添加了一个名为“debug”的检查点。
+
+```java
+Mono.just(0).map(x -> 1 / x)
+    .checkpoint("debug")
+    .subscribe(System.out::println);
+```
+
+```
+Exception in thread "main" reactor.core.Exceptions$ErrorCallbackNotImplemented: java.lang.ArithmeticException: / by zero
+	Caused by: java.lang.ArithmeticException: / by zero
+	…
+ 
+Assembly trace from producer [reactor.core.publisher.MonoMap] :
+    reactor.core.publisher.Mono.map(Mono.java:2029)
+    com.jianxiang.reactor.demo.Debug.main(Debug.java:10)
+Error has been observed by the following operator(s):
+    |_  Mono.map(Debug.java:10)
+    |_  Mono.checkpoint(Debug.java:10)
+ 
+    Suppressed: reactor.core.publisher.FluxOnAssembly$AssemblySnapshotException: zero
+        at reactor.core.publisher.MonoOnAssembly.<init>(MonoOnAssembly.java:55)
+        at reactor.core.publisher.Mono.checkpoint(Mono.java:1304)
+        ... 1 more
+```
+
+可以看到，这个检查点信息会包含在异常堆栈中。根据需要在系统的关键位置上添加自定义的检查点，也是我们日常开发过程中的一种最佳实践。
 
