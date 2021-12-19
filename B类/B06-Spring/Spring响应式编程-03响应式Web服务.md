@@ -253,6 +253,200 @@ RouterFunction<ServerResponse> personRoute =
         .andRoute(POST("/orders").and(contentType(APPLICATION_JSON)), personHandler::createOrder);
 ```
 
+# 12 | WebClient：如何实现非阻塞式的跨服务远程调用？
+
+**创建并配置 WebClient**
+
+创建 WebClient 有两种方法，一种是通过它所提供的 create() 工厂方法。
+
+```java
+WebClient webClient = WebClient.create();
+// 或者初始化时指定 baseUrl
+WebClient webClient = WebClient.create("https://localhost:8081/accounts");
+```
+
+另一种是使用 WebClient Builder 构造器工具类。
+
+```java
+WebClient webClient = WebClient.builder().build();
+```
+
+创建完 WebClient 实例之后，就可以添加相关的配置项。
+
+```java
+WebClient webClient = WebClient.builder()
+	.baseUrl("https://localhost:8081/accounts")
+    .defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+	.defaultHeader(HttpHeaders.USER_AGENT, "Reactive WebClient")
+	.build();
+```
+
+**使用 WebClient 访问服务**
+
+- 构造 URL
+
+使用 WebClient 时可以在它提供的 uri() 方法中添加路径变量和参数值。
+
+```java
+webClient.get().uri("http://localhost:8081/accounts/{id}", 100);
+```
+
+我们也可以事先把这些路径变量和参数值拼装成一个 Map 对象。
+
+```java
+Map<String, Object> uriVariables = new HashMap<>();
+uriVariables.put("param1", "value1");
+uriVariables.put("param2", "value2");
+webClient.get().uri("http://localhost:8081/accounts/{param1}/{param2}", variables);
+```
+
+一旦我们准备好请求信息，就可以使用 WebClient 提供的一系列工具方法完成远程服务的访问，例如 retrieve() 方法。
+
+- retrieve() 方法
+
+retrieve() 方法是获取响应主体并对其进行解码的最简单方法。
+
+```java
+WebClient webClient = WebClient.create("http://localhost:8081");
+ 
+Mono<Account> result = webClient.get()
+        .uri("/accounts/{id}", id)
+	    .accept(MediaType.APPLICATION_JSON)
+        .retrieve()
+        .bodyToMono(Account.class);
+```
+
+- exchange() 方法
+
+如果希望对响应拥有更多的控制权，这时候我们可以使用 exchange() 方法来访问整个响应结果，该响应结果是一个 ClientResponse 对象，包含了响应的状态码、Cookie 等信息，示例代码如下所示。
+
+```java
+Mono<Account> result = webClient.get()
+    .uri("/accounts/{id}", id)
+    .accept(MediaType.APPLICATION_JSON)
+    .exchange() 
+    .flatMap(response -> response.bodyToMono(Account.class));
+```
+
+- 使用 RequestBody
+
+如果你有一个 Mono 或 Flux 类型的请求体，那么可以使用 WebClient 的 body() 方法来进行编码，使用示例如下所示。
+
+```java
+Mono<Account> accountMono = ... ;
+ 
+Mono<Void> result = webClient.post()
+            .uri("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(accountMono, Account.class)
+            .retrieve()
+            .bodyToMono(Void.class);
+```
+
+如果请求对象是一个普通的 POJO 而不是 Flux/Mono，则可以使用 syncBody() 方法作为一种快捷方式来传递请求，示例代码如下所示。
+
+```java
+Account account = ... ;
+ 
+Mono<Void> result = webClient.post()
+            .uri("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .syncBody(account)
+            .retrieve()
+            .bodyToMono(Void.class);
+```
+
+- 表单和文件提交
+
+当传递的请求体是一个 MultiValueMap 对象时，WebClient 默认发起的是表单提交。
+
+```java
+String baseUrl = "http://localhost:8081";
+WebClient webClient = WebClient.create(baseUrl);
+ 
+MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+map.add("username", "jianxiang");
+map.add("password", "password");
+ 
+Mono<String> mono = webClient.post()
+	.uri("/login")
+	.syncBody(map)
+	.retrieve()
+	.bodyToMono(String.class);
+```
+
+如果想提交 Multipart Data，我们可以使用 MultipartBodyBuilder 工具类来简化请求的构建过程，最终得到一个 MultiValueMap 对象。
+
+```java
+MultipartBodyBuilder builder = new MultipartBodyBuilder();
+builder.part("paramPart", "value");
+builder.part("filePart", new FileSystemResource("jianxiang.png"));
+builder.part("accountPart", new Account("jianxiang"));
+ 
+MultiValueMap<String, HttpEntity<?>> parts = builder.build();
+```
+
+再通过 WebClient 的 syncBody() 方法就可以实现请求提交。
+
+**WebClient 的其他使用技巧**
+
+- 请求拦截
+
+我们编写一个自定义的过滤器函数 logFilter()，代码如下所示。
+
+```java
+private ExchangeFilterFunction logFilter() {
+    return (clientRequest, next) -> {
+        logger.info("Request: {} {}", clientRequest.method(), clientRequest.url());
+        clientRequest.headers().forEach(
+            (name, values) -> values.forEach(value -> logger.info("{}={}", name, value))
+        );
+        return next.exchange(clientRequest);
+    };
+}
+```
+
+把该过滤器添加到请求链路中，代码如下所示。
+
+```java
+WebClient webClient = WebClient.builder()
+    .filter(logFilter())
+    .build();
+```
+
+- 异常处理
+
+当发起一个请求所得到的响应状态码为 4XX 或 5XX 时，WebClient 就会抛出一个 WebClientResponseException 异常，我们可以使用 onStatus() 方法来自定义对异常的处理方式，示例代码如下所示。
+
+```java
+public Flux<Account> listAccounts() {
+    return webClient.get()
+        .uri("/accounts)
+        .retrieve()
+        .onStatus(HttpStatus::is4xxClientError, clientResponse ->
+             Mono.error(new MyCustomClientException())
+         )
+        .onStatus(HttpStatus::is5xxServerError, clientResponse ->
+             Mono.error(new MyCustomServerException())
+         )
+        .bodyToFlux(Account.class);
+}
+```
+
+需要注意的是，这种处理方式只适用于使用 retrieve() 方法进行远程请求的场景，exchange() 方法在获取 4XX 或 5XX 响应的情况下不会引发异常。
+
+因此，当使用 exchange() 方法时，我们需要自行检查状态码并以合适的方式处理它们。
+
+
+
+
+
+
+
+
+
+
+
 
 
 
