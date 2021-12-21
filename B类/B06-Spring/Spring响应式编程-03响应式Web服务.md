@@ -437,7 +437,150 @@ public Flux<Account> listAccounts() {
 
 因此，当使用 exchange() 方法时，我们需要自行检查状态码并以合适的方式处理它们。
 
+# 13 | RSocket：一种新的高性能网络通信协议
 
+RSocket 是一款全新的协议，它基于响应式数据流，为我们提供了高性能的网络通信机制。
 
+**请求-响应模式的问题**
 
+HTTP 协议本身比较简单，只支持请求-响应模式。而这种模式对于很多应用场景来说是不合适的。典型的例子就是消息推送，以 HTTP 协议为例，如果客户端需要获取最新的推送消息，就必须使用轮询。客户端不停地发送请求到服务器来检查更新，这无疑造成了大量的资源浪费。
+
+请求-响应模式的另外一个问题是，如果某个请求的响应时间过长，会阻塞之后的其他请求的处理。
+
+**RSocket 协议与交互模式**
+
+RSocket 是一个二进制的协议，以异步消息的方式提供 4 种交互模式。
+
+- 请求-响应（request/response）模式：发送方在发送消息给接收方之后，等待与之对应的响应消息。
+- 请求-响应流（request/stream）模式：发送方的每个请求消息，都对应于接收方的一个消息流作为响应。
+- 即发-即忘（fire-and-forget）模式：发送方的请求消息没有与之对应的响应。
+- 通道（channel）模式：在发送方和接收方之间建立一个双向传输的通道。
+
+RSocket 采用的是自定义二进制协议，其本身的定位就是高性能通信协议，性能上比 HTTP 高出一个数量级。
+
+在交互模式上，与 HTTP 的请求-响应这种单向的交互模式不同，RSocket 倡导的是对等通信，不再使用传统的客户端-服务器端单向通信模式，而是在两端之间可以自由地相互发送和处理请求。RSocket 协议在交互方式上可以参考下图。
+
+![图片1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211221225704.png)
+
+**使用 RSocket 实现远程交互**
+
+首先需要引入如下依赖。
+
+```xml
+<dependency>
+    <groupId>io.rsocket</groupId>
+    <artifactId>rsocket-core</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.rsocket</groupId>
+    <artifactId>rsocket-transport-netty</artifactId>
+</dependency>
+```
+
+RSocket 接口的定义如下所示。
+
+```java
+public interface RSocket extends Availability, Closeable {
+
+    //推送元信息，数据可以自定义
+    Mono<Void> metadataPush(Payload payload);
+
+    //请求-响应模式，发送一个请求并接收一个响应。该协议也比 HTTP 更具优势，因为它是异步且多路复用的
+    Mono<Payload> requestResponse(Payload payload);
+
+    //即发-即忘模式，请求-响应的优化，在不需要响应时非常有用
+    Mono<Void> fireAndForget(Payload payload);
+
+    //请求-响应流模式，类似返回集合的请求/响应，集合将以流的方式返回，而不是等到查询完成
+    Flux<Payload> requestStream(Payload payload);
+
+    //通道模式，允许任意交互模型的双向消息流
+    Flux<Payload> requestChannel(Publisher<Payload> payloads);
+}
+```
+
+意到这几个方法的输入都是一个 Payload 消息对象，而不是一个响应式流对象。但 requestChannel 方法就不一样了，它的输入同样是一个代表响应式流的 Publisher 对象，这意味着此种模式下的输入输出都是响应式流，也就是说可以进行客户端和服务器端之间的双向交互。
+
+我们先来看如何构建 RSocket 服务器端，示例代码如下所示。
+
+```java
+RSocketFactory.receive()
+        .acceptor(((setup, sendingSocket) -> Mono.just(
+            new AbstractRSocket() {
+              @Override
+              public Mono<Payload> requestResponse(Payload payload) {
+                return Mono.just(DefaultPayload.create("Hello: " + payload.getDataUtf8()));
+              }
+            }
+        )))
+        .transport(TcpServerTransport.create("localhost", 7000))
+        .start()
+        .subscribe();
+```
+
+构建完服务器端，我们来构建客户端组件，如下所示。
+
+```java
+RSocket socket = RSocketFactory.connect()
+        .transport(TcpClientTransport.create("localhost", 7000))
+        .start()
+        .block();
+```
+
+现在，我们就可以使用 RSocket 的 requestResponse() 方法来发送请求并获取响应了，如下所示。
+
+```java
+socket.requestResponse(DefaultPayload.create("World"))
+        .map(Payload::getDataUtf8)
+        .doOnNext(System.out::println)
+        .doFinally(signalType -> socket.dispose())
+        .then()
+        .block();
+```
+
+执行这次请求，我们会在控制台上获取“Hello: World”。
+
+**集成 RSocket 与 Spring 框架**
+
+我们需要引入如下依赖。
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-rsocket</artifactId>
+</dependency>
+```
+
+构建如下所示一个简单 Controller。
+
+```java
+@Controller
+public class HelloController {
+
+    @MessageMapping("hello")
+    public Mono<String> hello(String input) {
+        return Mono.just("Hello: " + input);
+  }
+}
+```
+
+@MessageMapping 是 Spring 提供的一个注解，用来指定 WebSocket、RSocket 等协议中消息处理的目的地。
+
+为了访问这个 RSocket 端点，我们需要构建一个 RSocketRequester 对象，构建方式如下所示。
+
+```java
+@Autowired
+RSocketRequester.Builder builder;
+
+RSocketRequester requester = builder.dataMimeType(MimeTypeUtils.TEXT_PLAIN)
+            .connect(TcpClientTransport.create(7000)).block();
+```
+
+基于这个 RSocketRequester 对象，我们就可以通过它的 route 方法路由到前面通过 @MessageMapping 注解构建的 "hello" 端点，如下所示。
+
+```java
+Mono<String> response = requester.route("hello")
+        .data("World")
+        .retrieveMono(String.class);
+```
 
