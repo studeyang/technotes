@@ -97,6 +97,61 @@ Kubernetes 的上手门槛很低。通过 minikube 这类工具，就可以在�
 
 Kubernetes 使用了声明式API。所谓声明式，就是指你只需要提交一个定义好的 API 对象来声明你所期望的对象是什么样子即可，而无须过多关注如何达到最终的状态。Kubernetes 可以在无外界干预的情况下，完成对实际状态和期望状态的调和（Reconcile）工作。
 
+# 02 | 高屋建瓴：Kubernetes 的架构为什么是这样的？
+
+Kubernetes 的架构设计参考了 Borg 的架构设计，我们先来看看 Borg 架构长什么样？
+
+**Borg 的架构**
+
+我们先来看看 Borg 定义的两个概念，Cell 和 Cluster。
+
+Borg 用Cell 来定义一组机器资源。Cluster 即集群，一个数据中心可以同时运行一个或者多个集群，每个集群又可以有多个 Cell。
+
+![image (3).png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211224225320.png)
+
+Borg 主要模块包括 BorgMaster、Borglet 和调度器。
+
+下面我们来看看 Kuberenetes 的架构。
+
+**Kubernetes 的架构**
+
+Kubernetes 借鉴了 Borg 的整体架构思想，主要由 Master 和 Node 共同组成。
+
+![image (4).png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211224225510.png)
+
+在 Kubernetes 集群中也采用了分布式存储系统 Etcd，用于保存集群中的所有对象以及状态信息。
+
+**Kubernetes 的组件**
+
+Kubernetes 的控制面包含着 kube-apiserver、kube-scheduler、kube-controller-manager 这三大组件，我们也称为 Kubernetes 的三大件。
+
+kube-apiserver 是所有内部和外部的 API 请求操作的唯一入口。同时也负责整个集群的认证、授权、访问控制、服务发现等能力。
+
+Kube-Controller-Manager 负责维护整个 Kubernetes 集群的状态，比如多副本创建、滚动更新等。
+
+Kube-scheduler 的工作简单来说就是监听未调度的 Pod，按照预定的调度策略绑定到满足条件的节点上。
+
+了解完了控制面组件，我们再来看看 Node 节点。一般来说 Node 节点上会运行以下组件。
+
+- 容器运行时主要负责容器的镜像管理以及容器创建及运行。
+- Kubelet 负责维护 Pod 的生命周期，比如创建和删除 Pod 对应的容器。同时也负责存储和网络的管理。一般会配合 CSI、CNI 插件一起工作。
+- Kube-Proxy 主要负责 Kubernetes 内部的服务通信，在主机上维护网络规则并提供转发及负载均衡能力。
+
+除了上述这些核心组件外，通常我们还会在 Kubernetes 集群中部署一些 Add-on 组件，常见的有：
+
+- CoreDNS 负责为整个集群提供 DNS 服务；
+- Ingress Controller 为服务提供外网接入能力；
+- Dashboard 提供 GUI 可视化界面；
+- Fluentd + Elasticsearch 为集群提供日志采集、存储与查询等能力。
+
+**Master 和 Node 的交互方式**
+
+Kubernetes 中所有的状态都是采用上报的方式实现的。APIServer 不会主动跟 Kubelet 建立请求链接，所有的容器状态汇报都是由 Kubelet 主动向 APIServer 发起的。一旦启动 Kubelet 进程以后，它会主动向 APIServer 注册自己，这是 Kubernetes 推荐的 Node 管理方式。
+
+一旦新增的 Node 被 APIServer 纳管进来后，Kubelet 进程就会定时向 APIServer 汇报“心跳”，即汇报自身的状态，包括自身健康状态、负载数据统计等。当一段时间内心跳包没有更新，那么此时 kube-controller-manager 就会将其标记为NodeLost（失联）。
+
+
+
 
 
 
