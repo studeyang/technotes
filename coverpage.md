@@ -1,4 +1,4 @@
-<img src="https://cdn.jsdelivr.net/gh/dbses/technotes@master/img/cover4.jpg" alt="logo" style="zoom:7%;" />
+<img src="https://cdn.jsdelivr.net/gh/dbses/technotes@master/img/cover3.jpg" alt="logo" style="zoom:30%;" />
 
 # 互联网技术学习笔记
 
