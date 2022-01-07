@@ -37,7 +37,7 @@
 
 通过介绍 CRD 以及 Operator，让你可以“站在巨人的肩膀上”对 Kubernetes 进行“二次”开发。
 
-# 初识 Kubernetes
+# 模块一：初识 Kubernetes
 
 # 01 | 前世今生：Kubernetes 是如何火起来的？
 
@@ -150,29 +150,95 @@ Kubernetes 中所有的状态都是采用上报的方式实现的。APIServer �
 
 一旦新增的 Node 被 APIServer 纳管进来后，Kubelet 进程就会定时向 APIServer 汇报“心跳”，即汇报自身的状态，包括自身健康状态、负载数据统计等。当一段时间内心跳包没有更新，那么此时 kube-controller-manager 就会将其标记为NodeLost（失联）。
 
+# 03 | 集群搭建：手把手教你玩转 Kubernetes 集群搭建
 
 
 
 
 
+![image (4).png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211224225510.png)
+
+**常见的集群搭建方法**
+
+
+
+**集群升级**
+
+
+
+
+
+
+
+# 04 | 核心定义：Kubernetes 是如何搞定“不可变基础设施”的？
+
+
+
+![image (19).png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211225151648.png)
+
+**Pod 背后的设计理念**
+
+
+
+
+
+
+
+# 05 | K8s Pod：最小调度单元的使用进阶及实践
 
 # 部署高可用的业务
 
+# 06 | 无状态应用：剖析 Kubernetes 业务副本及水平扩展底层原理
 
+# 07 | 有状态应用：Kubernetes 如何通过 StatefulSet 支持有状态应用？
+
+# 08 | 配置管理：Kubernetes 管理业务配置方式有哪些？
+
+# 09 | 存储类型：如何挑选合适的存储插件？
+
+# 10 | 存储管理：怎样对业务数据进行持久化存储？
+
+# 11 | K8s Service：轻松搞定服务发现和负载均衡
+
+# 12 | Helm Charts：如何在生产环境中释放部署生产力？
 
 # 业务的日志与监控
 
+# 13 | 服务守护进程：如何在 Kubernetes 中运行 DaemonSet 守护进程？
 
+# 14 | 日志采集：如何在 Kubernetes 中做日志收集与管理？
+
+# 15 | Prometheus：Kubernetes 怎样实现自动化服务监控告警？
+
+# 16 | 迎战流量峰值：Kubernetes 怎样控制业务的资源水位？
+
+# 17 | 案例实战：教你快速搭建 Kubernetes 监控平台
 
 # 集群的安全性与稳定性
 
+# 18 | 权限分析：Kubernetes 集群权限管理那些事儿
 
+# 19 | 资源限制：如何保障你的 Kubernetes 集群资源不会被打爆
+
+# 20 | 资源优化：Kubernetes 中有 GC（垃圾回收）吗？
+
+# 21 | 优先级调度：你必须掌握的 Pod 抢占式资源调度
+
+# 22 | 安全机制：Kubernetes 如何保障集群安全？
+
+# 23 | 最后的防线：怎样对 Kubernetes 集群进行灾备和恢复？
 
 # 底层核心原理及可扩展性
 
+# 24 | 调度引擎：Kubernetes 如何高效调度 Pod？
 
+# 25 | 稳定基石：带你剖析容器运行时以及 CRI 原理
 
+# 26 | 网络插件：Kubernetes 搞定网络原来可以如此简单？
 
+# 27 | K8s CRD：如何根据需求自定义你的 API？
+
+# 28 | 面向 K8s 编程：如何通过 Operator 扩展 Kubernetes API？
 
 
 
