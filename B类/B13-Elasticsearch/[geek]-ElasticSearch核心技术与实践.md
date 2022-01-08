@@ -1,3 +1,5 @@
+> 课件地址：https://gitee.com/yanglu_u/geektime-ELK
+
 # 第一部分：初识 Elasticsearch
 
 ## 第1章：概述
@@ -9,9 +11,14 @@
 **内容综述及学习建议**
 
 从三个层面学习：
+
 开发：基本功能，底层原理，数据建模；
 运维：容量规划；性能优化；问题诊断；滚动升级；
-方案：解决搜索问题；大数据分析实践
+方案：解决搜索问题；大数据分析实践；
+
+**ElasticStack家族成员及应用场景**
+
+![image-20220108214815331](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108214815.png)
 
 ## 第2章：安装上手
 
@@ -19,7 +26,7 @@
 
 - 安装插件
 
-  bin/elasticsearch-plugin list
+  查看已安装插件：bin/elasticsearch-plugin list
 
   安装分词插件：bin/elasticsearch-plugin install analysis-icu
 
@@ -67,63 +74,119 @@
 
 ## 第3章：Elasticsearch 入门
 
-**基本概念：索引、文档和 REST API**
+**基本概念（1）：索引、文档和 REST API**
 
-- 文档
+![image-20220108224010136](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108224010.png)
 
-  文档是所有可探索数据的最小单元，相当于 MySQL 表中的一条记录；
+- 文档（Document）
 
-  元数据：_index, _type, _id, _source, _all, _version, _score
+文档是所有可搜索数据的最小单元，相当于 MySQL 表中的一条记录；
 
-- 索引
+<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108224441.png" alt="image-20220108224441455" style="zoom:50%;" />
 
-  索引是文档的容器，是一类文档的结合；
+- 文档的元数据
+
+用于标注文档的相关信息。
+
+_index, _type, _id, _source, _all, _version, _score
+
+<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108224556.png" alt="image-20220108224556296" style="zoom:50%;" />
+
+- 索引（Index）
+
+索引是文档的容器，是一类文档的结合，相当于 MySQL 表；
+
+<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108224911.png" alt="image-20220108224911111" style="zoom:50%;" />
 
 - Type
 
-  7.0 之前，一个 Index 可以设置多个 Types
+7.0 开始，一个 Index 只能创建一个 Types；
+
+- 概念类比
+
+<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108225259.png" alt="image-20220108225259906" style="zoom:50%;" />
 
 - REST API
 
-  ![image-20200917235323174](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200917235323174.png)
+![image-20200917235323174](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200917235323174.png)
 
-**基本概念：节点、集群、分片及副本**
+Index 相关 API
+```shell
+#查看索引相关信息
+GET kibana_sample_data_ecommerce
+
+#查看索引的文档总数
+GET kibana_sample_data_ecommerce/_count
+
+#查看前10条文档，了解文档格式
+POST kibana_sample_data_ecommerce/_search
+{
+}
+
+#_cat indices API
+#查看indices
+GET /_cat/indices/kibana*?v&s=index
+
+#查看状态为绿的索引
+GET /_cat/indices?v&health=green
+
+#按照文档个数排序
+GET /_cat/indices?v&s=docs.count:desc
+
+#查看具体的字段
+GET /_cat/indices/kibana*?pri&v&h=health,index,pri,rep,docs.count,mt
+
+#How much memory is used per index?
+GET /_cat/indices?v&h=i,tm&s=tm:desc
+```
+
+**基本概念（2）：节点、集群、分片及副本**
 
 - 分布式特性
 
-  高可用&可扩展
+高可用：
+
+服务高可用：允许有节点停止服务；<br>数据高可用：部分节点丢失，不会丢失数据；
+
+可扩展：存储水平扩容；
 
 - 节点
 
-  是一个 Elasticsearch 实例，每一个节点的名字可通过配置文件配置，或者启动时 -E node.name=node1 指定；
+是一个 Elasticsearch 实例，每一个节点的名字可通过配置文件配置，或者启动时 -E node.name=node1 指定；
 
-  1. Master-eligible nodes 和 Master Node
+1. Master-eligible nodes 和 Master Node
 
-     每个节点启动后，默认就是一个 Master eligible 节点，Master-eligible 节点可以参加选主流程，成为 Master 节点；
+   每个节点启动后，默认就是一个 Master eligible 节点，Master-eligible 节点可以参加选主流程，成为 Master 节点；
 
-  2. Data Node & Coordinating Node
+2. Data Node & Coordinating Node
 
-     Data Node：可以保存数据的节点，负责保存分片数据；
+   Data Node：可以保存数据的节点，负责保存分片数据；
 
-     Coordinating Node：负责接受 Client 的请求，将请求分发到合适的节点，最终把结果汇集到一起；
+   Coordinating Node：负责接受 Client 的请求，将请求分发到合适的节点，最终把结果汇集到一起；
 
-  3. 其他的节点类型
+3. 其他的节点类型
 
-     Hot & Warm Node：不同硬件配置的 Data Node，用来实现 Hot & Warm 架构；
+   Hot & Warm Node：不同硬件配置的 Data Node，用来实现 Hot & Warm 架构；
 
-     Machine Learning Node：负责跑机器学习的 Job，用来做异常检测；
+   Machine Learning Node：负责跑机器学习的 Job，用来做异常检测；
 
-     Tribe Node：连接到不同的 Elasticsearch 集群，支持将这些集群当成一个单独的集群处理；（5.3开始使用 Cross Cluster Search）
+   Tribe Node：连接到不同的 Elasticsearch 集群，支持将这些集群当成一个单独的集群处理；（5.3开始使用 Cross Cluster Search）
+
+开发环境中一个节点可以承担多种角色；生产环境中，应该设置单一角色的节点。
+
+![image-20220108230212143](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108230212.png)
 
 - 分片
 
-  主分片（Primary Shard）：用以解决数据水平扩展的问题，将数据分布到集群内的所有节点之上；
+主分片（Primary Shard）：用以解决数据水平扩展的问题。通过主分片，可以将数据分布到集群内的所有节点之上；
 
-  副本（Replica Shard）：用以解决数据高可用的问题，分片是主分片的拷贝；
+副本（Replica Shard）：用以解决数据高可用的问题，是主分片的拷贝；
 
-  ![image-20200918001419658](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200918001419658.png)
+一个三节点的集群中，blogs 索引的分片分布情况如下。
 
-  查看集群的健康状况：GET _cluster/health
+![image-20200918001419658](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200918001419658.png)
+
+
 
 **文档的基本 CRUD 与批量操作**
 
@@ -202,8 +265,6 @@
       ]
   }
   ```
-
-  
 
 - 批量查询 - msearch
 
