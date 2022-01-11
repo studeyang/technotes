@@ -1,8 +1,8 @@
+> 来自极客时间《ElasticSearch核心技术与实践》--
+>
 > 课件地址：https://gitee.com/yanglu_u/geektime-ELK
 
-# 第一部分：初识 Elasticsearch
-
-## 第1章：概述
+# 第1章：概述
 
 **课程介绍**
 
@@ -18,9 +18,9 @@
 
 **ElasticStack家族成员及应用场景**
 
-![image-20220108214815331](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108214815.png)
+![image-20220108214815331](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png)
 
-## 第2章：安装上手
+# 第2章：安装上手
 
 **Elasticsearch 的安装与简单配置**
 
@@ -72,17 +72,15 @@
 
   sudo ./logstash -f logstash.conf
 
-## 第3章：Elasticsearch 入门
+# 基本概念（1）：索引、文档和 REST API
 
-### 基本概念（1）：索引、文档和 REST API
-
-![image-20220108224010136](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108224010.png)
+![image-20220108224010136](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png)
 
 **文档（Document）**
 
 文档是所有可搜索数据的最小单元，相当于 MySQL 表中的一条记录；
 
-<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108224441.png" alt="image-20220108224441455" style="zoom:50%;" />
+<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png" alt="image-20220108224441455" style="zoom:50%;" />
 
 **文档的元数据**
 
@@ -90,7 +88,7 @@
 
 _index, _type, _id, _source, _all, _version, _score
 
-<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108224556.png" alt="image-20220108224556296" style="zoom:50%;" />
+<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png" alt="image-20220108224556296" style="zoom:50%;" />
 
 - 索引（Index）
 
@@ -108,9 +106,10 @@ _index, _type, _id, _source, _all, _version, _score
 
 - REST API
 
-![image-20200917235323174](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200917235323174.png)
+![image-20200917235323174](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231746.png)
 
 Index 相关 API
+
 ```shell
 #查看索引相关信息
 GET kibana_sample_data_ecommerce
@@ -140,7 +139,7 @@ GET /_cat/indices/kibana*?pri&v&h=health,index,pri,rep,docs.count,mt
 GET /_cat/indices?v&h=i,tm&s=tm:desc
 ```
 
-**基本概念（2）：节点、集群、分片及副本**
+# 基本概念（2）：节点、集群、分片及副本
 
 - 分布式特性
 
@@ -174,7 +173,7 @@ GET /_cat/indices?v&h=i,tm&s=tm:desc
 
 开发环境中一个节点可以承担多种角色；生产环境中，应该设置单一角色的节点。
 
-![image-20220108230212143](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108230212.png)
+![image-20220108230212143](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231746.png)
 
 - 分片
 
@@ -184,9 +183,9 @@ GET /_cat/indices?v&h=i,tm&s=tm:desc
 
 一个三节点的集群中，blogs 索引的分片分布情况如下。
 
-![image-20200918001419658](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200918001419658.png)
+![image-20200918001419658](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231746.png)
 
-**文档的基本 CRUD 与批量操作**
+# 文档的基本 CRUD 与批量操作
 
 - Index
 
@@ -300,7 +299,7 @@ POST kibana_sample_data_ecommerce/_msearch
 
 类似于书的索引页，是单词到文档 Id 的关系。
 
-![image-20200918234824217](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200918234824217.png)
+![image-20200918234824217](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231747.png)
 
 - 倒排索引的核心组成
 
@@ -313,7 +312,7 @@ POST kibana_sample_data_ecommerce/_msearch
 
 记录了单词对应的文档集合，由倒排索引项组成。倒排索引项分为：文档 ID、词频 TF、位置（Position）、偏移（Offset）。
 
-![image-20200918235940141](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200918235940141.png)
+![image-20200918235940141](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231747.png)
 
 **通过 Analyzer 进行分词**
 
@@ -435,11 +434,11 @@ Search API 可以分为两大类：
 
 - Request Body
 
-![image-20220111224839411](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111224839.png)
+![image-20220111224839411](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231748.png)
 
 - 搜索 Response
 
-![image-20220111224915804](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111224915.png)
+![image-20220111224915804](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231748.png)
 
 ### URI Search 详解
 
@@ -447,7 +446,7 @@ Search API 可以分为两大类：
 
 通过 URI query 实现搜索。
 
-![image-20220111225126976](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111225127.png)
+![image-20220111225126976](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231749.png)
 
 q: 指定查询语句，使用Query String Syntax
 
@@ -522,7 +521,7 @@ title:"Lord Rings"~2
 
 分页
 
-![image-20220111225948695](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111225948.png)
+![image-20220111225948695](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231749.png)
 
 排序
 
@@ -530,7 +529,7 @@ title:"Lord Rings"~2
 
 _source filtering
 
-![image-20220111230116033](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111230116.png)
+![image-20220111230116033](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231750.png)
 
 **脚本字段**
 
@@ -754,40 +753,3 @@ Bucket、Metric、Pipeline、Matrix
 bulk, mget, msearch
 
 每个索引都有一个 Mapping 定义；Mapping 可以被动态的创建；Mapping可以动态创建；可自定义 analyzer；Index Template 可以定义 Mapping 和 Settings；Dynamic Template 支持在具体的索引上指定规则；
-
-# 第二部分：深入了解 Elasticsearch
-
-## 第4章：深入搜索
-
-## 第5章：分布式特性及分布式搜索的机制
-
-## 第6章：深入聚合分析
-
-## 第7章：数据建模
-
-# 第三部分：管理 Elasticsearch 集群
-
-## 第8章：保护你的数据
-
-## 第9章：水平扩展 Elasticsearch 集群
-
-## 第10章：生产环境中的集群运维
-
-## 第11章：索引生命周期管理
-
-# 第四部分：利用 ELK 做大数据分析
-
-## 第12章：用 Logstash 和 Beats 构建数据管道
-
-## 第13章：用 Kibana 进行数据可视化分析
-
-## 第14章：探索 X-Pack 套件
-
-# 第五部分：应用实战工作坊
-
-## 实战1：电影探索服务
-
-## 实战2：Stackoverfow 用户调查问卷分析
-
-## 备战：Elastic 认证
-
