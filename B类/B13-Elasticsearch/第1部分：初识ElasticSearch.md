@@ -72,7 +72,9 @@
 
   sudo ./logstash -f logstash.conf
 
-# 基本概念（1）：索引、文档和 REST API
+# 第3章：基本概念（1）
+
+> 索引、文档和 REST API
 
 ![image-20220108224010136](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png)
 
@@ -82,29 +84,25 @@
 
 <img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png" alt="image-20220108224441455" style="zoom:50%;" />
 
-**文档的元数据**
-
-用于标注文档的相关信息。
+文档的元数据：用于标注文档的相关信息。
 
 _index, _type, _id, _source, _all, _version, _score
 
 <img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png" alt="image-20220108224556296" style="zoom:50%;" />
 
-- 索引（Index）
+**索引（Index）**
 
 索引是文档的容器，是一类文档的结合，相当于 MySQL 表；
 
 <img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108224911.png" alt="image-20220108224911111" style="zoom:50%;" />
 
-- Type
+Type：7.0 开始，一个 Index 只能创建一个 Types；
 
-7.0 开始，一个 Index 只能创建一个 Types；
-
-- 概念类比
+概念类比：
 
 <img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108225259.png" alt="image-20220108225259906" style="zoom:50%;" />
 
-- REST API
+**REST API**
 
 ![image-20200917235323174](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231746.png)
 
@@ -139,9 +137,11 @@ GET /_cat/indices/kibana*?pri&v&h=health,index,pri,rep,docs.count,mt
 GET /_cat/indices?v&h=i,tm&s=tm:desc
 ```
 
-# 基本概念（2）：节点、集群、分片及副本
+# 第4章：基本概念（2）
 
-- 分布式特性
+> 节点、集群、分片及副本
+
+**分布式特性**
 
 高可用：
 
@@ -149,33 +149,33 @@ GET /_cat/indices?v&h=i,tm&s=tm:desc
 
 可扩展：存储水平扩容；
 
-- 节点
+**节点**
 
 是一个 Elasticsearch 实例，每一个节点的名字可通过配置文件配置，或者启动时 -E node.name=node1 指定；
 
-1. Master-eligible nodes 和 Master Node
+- Master-eligible nodes 和 Master Node
 
-   每个节点启动后，默认就是一个 Master eligible 节点，Master-eligible 节点可以参加选主流程，成为 Master 节点；
+每个节点启动后，默认就是一个 Master eligible 节点，Master-eligible 节点可以参加选主流程，成为 Master 节点；
 
-2. Data Node & Coordinating Node
+- Data Node & Coordinating Node
 
-   Data Node：可以保存数据的节点，负责保存分片数据；
+Data Node：可以保存数据的节点，负责保存分片数据；
 
-   Coordinating Node：负责接受 Client 的请求，将请求分发到合适的节点，最终把结果汇集到一起；
+Coordinating Node：负责接受 Client 的请求，将请求分发到合适的节点，最终把结果汇集到一起；
 
-3. 其他的节点类型
+- 其他的节点类型
 
-   Hot & Warm Node：不同硬件配置的 Data Node，用来实现 Hot & Warm 架构；
+Hot & Warm Node：不同硬件配置的 Data Node，用来实现 Hot & Warm 架构；
 
-   Machine Learning Node：负责跑机器学习的 Job，用来做异常检测；
+Machine Learning Node：负责跑机器学习的 Job，用来做异常检测；
 
-   Tribe Node：连接到不同的 Elasticsearch 集群，支持将这些集群当成一个单独的集群处理；（5.3开始使用 Cross Cluster Search）
+Tribe Node：连接到不同的 Elasticsearch 集群，支持将这些集群当成一个单独的集群处理；（5.3开始使用 Cross Cluster Search）
 
 开发环境中一个节点可以承担多种角色；生产环境中，应该设置单一角色的节点。
 
 ![image-20220108230212143](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231746.png)
 
-- 分片
+**分片**
 
 主分片（Primary Shard）：用以解决数据水平扩展的问题。通过主分片，可以将数据分布到集群内的所有节点之上；
 
@@ -185,9 +185,9 @@ GET /_cat/indices?v&h=i,tm&s=tm:desc
 
 ![image-20200918001419658](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231746.png)
 
-# 文档的基本 CRUD 与批量操作
+# 第5章：文档的操作
 
-- Index
+**Index**
 
 Type 名，约定都用 _doc。
 
@@ -287,21 +287,21 @@ POST kibana_sample_data_ecommerce/_msearch
 {"query": {"match_all": {}}, "size": 2}
 ```
 
-**倒排索引介绍**
+# 第6章：倒排索引介绍
 
-- 正排索引
+**正排索引**
 
 类似于书的目录页，是文档 Id 到文档内容的关联。
 
 ![image-20200918234732001](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200918234732001.png)
 
-- 倒排索引
+**倒排索引**
 
 类似于书的索引页，是单词到文档 Id 的关系。
 
 ![image-20200918234824217](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231747.png)
 
-- 倒排索引的核心组成
+**倒排索引的核心组成**
 
 
 1. 单词词典（Term Dictionary）
@@ -407,9 +407,9 @@ Token Filters: Normalization, Folding, Collation, Transform
 
 [THULAC](https://github.com/microbun/elasticsearch-thulac-plugin)：THU Lexucal Analyzer for Chinese，清华大学自然语言处理和社会人文计算实验室的一套中文分词器。
 
-**Search API 概览**
+# 第7章：Search API 概览
 
-- Search API
+**Search API**
 
 Search API 可以分为两大类：
 
@@ -424,7 +424,7 @@ Search API 可以分为两大类：
    | /index1,index2/_search | index1和index2    |
    | /index*/_search        | 以index开关的索引 |
 
-- URI 查询
+**URI 查询**
 
 使用"q"，指定查询字符串；使用"query string syntax"，指定KV键值对。 
 
@@ -432,15 +432,15 @@ Search API 可以分为两大类：
 
 上面例子是搜索名叫 Eddie 的客户。
 
-- Request Body
+**Request Body**
 
 ![image-20220111224839411](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231748.png)
 
-- 搜索 Response
+**搜索 Response**
 
 ![image-20220111224915804](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231748.png)
 
-### URI Search 详解
+# 第8章：URI Search 详解
 
 **URI Search**
 
@@ -515,7 +515,7 @@ title:beautifl~1
 
 title:"Lord Rings"~2
 
-### Request Body 与 Query DSL 简介
+# 第9章：Request Body 与 Query DSL 简介
 
 **Request Body Search**
 
@@ -567,8 +567,6 @@ GET /comments/_doc/_search
 }
 ```
 
-### Query String & Simple Query String 查询
-
 **Query String**
 
 ```json
@@ -598,7 +596,7 @@ POST users/_search
   }
 ```
 
-### Dynamic Mapping 和常见字段类型
+# 第10章：Dynamic Mapping 和常见字段类型
 
 **什么是 Mapping**
 
@@ -655,7 +653,7 @@ Dynamic 设为 Strict，文档写入失败；
 | 字段可索引     | YES  | NO    | NO     |
 | Mapping 被更新 | YES  | NO    | NO     |
 
-### 显示 Mapping 设置与常见参数介绍
+**显示 Mapping 设置与常见参数介绍**
 
 显示定义一个 Mapping。
 
@@ -690,8 +688,6 @@ PUT users
 - positions：记录 doc id / term frequencies / term position
 - offsets：doc id / term frequencies / term position / character offects
 
-### 多字段特性及 Mapping 中配置自定义 Analyzer
-
 **多字段类型**
 
 厂商名字实现精确匹配
@@ -706,8 +702,6 @@ Tokenizer：将原始的文本按照一定的规则，切分为词；
 
 Token Filters：将 Tokenizer 输出的单词进行增加、修改、删除；
 
-### Index Template 和 Dynamic Template
-
 **什么是 Index Template？**
 
 Index Template 可以帮助你设定 Mappings 和 Settings，并按照一定的规则，自动匹配到新创建的索引之上。
@@ -716,7 +710,7 @@ Index Template 可以帮助你设定 Mappings 和 Settings，并按照一定的�
 
 根据 Elasticsearch 识别的数据类型，结合字段名称，来动态设定字段类型。
 
-### Elasticsearch 聚合分析简介
+# 第11章：Elasticsearch 聚合分析简介
 
 **聚合（Aggregation）**
 
@@ -732,7 +726,7 @@ Pipeline Aggregation：对其他的聚合结果进行二次聚合；
 
 Matrix Aggregration：支持对多个字段的操作并提供一个结果矩阵；
 
-### 第一部分总结
+# 第一部分总结
 
 **产品与使用场景**
 
