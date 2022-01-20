@@ -192,15 +192,27 @@ POST /products/_bulk
 
 ![image-20220118230345412](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220118230345.png)
 
+**单字符串多字段查询**
+
+在 Google 搜索引擎中就是这样一种场景，对于这种场景，通常需要用到 Disjunction Max Query。
+
+样例数据如下：
+
+```json
+PUT /blogs/_doc/1
+{
+    "title": "Quick brown rabbits",
+    "body": "Brown rabbits are commonly seen."
+}
+
+PUT /blogs/_doc/2
+{
+    "title": "Keeping pets healthy",
+    "body": "My quick brown fox eats rabbits on a regular basis."
+}
+```
+
+![image-20220120221441851](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220120221441.png)
 
 
-
-
-
-
-# 第5章：分布式特性及分布式搜索的机制
-
-# 第6章：深入聚合分析
-
-# 第7章：数据建模
 
