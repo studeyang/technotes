@@ -4,7 +4,8 @@
 - [进阶类](B类/README.md)
 - [架构类](C类/README.md)
 - [扩展类](D类/README.md)
-- [Python](Python/README.md)
+- More...
+  - [Python](Python/README.md)
 
 
 
