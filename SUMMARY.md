@@ -56,7 +56,8 @@
   - [《Redis设计与实现》读书笔记](B类/B05-Redis/《Redis设计与实现》读书笔记.md)
   - [Redis-01原理、协议及使用](B类/B05-Redis/Redis-01原理、协议及使用.md)
   - [Redis-02进阶](B类/B05-Redis/Redis-02进阶.md)
-
+  - [Redis核心技术与实战-基础篇](B类/B05-Redis/Redis核心技术与实战-01基础篇.md)
+  
 - Spring
   - [Spring的IoC容器](B类/B06-Spring/《Spring揭秘》第二部分-Spring的IoC容器.md)
   - [Spring AOP框架](B类/B06-Spring/《Spring揭秘》第三部分-Spring%20AOP框架.md)
