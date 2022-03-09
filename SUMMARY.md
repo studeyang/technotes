@@ -119,6 +119,7 @@
 
 - Kubernetes
   - [Kubernetes 原理剖析与实战应用](B类/B18-Kubernetes/Kubernetes%20原理剖析与实战应用.md)
+  - [深入剖析Kubernetes-基础篇](B类/B18-Kubernetes/深入剖析Kubernetes-01基础篇.md)
 
 ## 架构类
 
