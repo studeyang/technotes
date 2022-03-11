@@ -93,13 +93,139 @@ int pid = clone(main_function, stack_size, CLONE_NEWPID | SIGCHLD, NULL);
 
 这样，用户的应用进程就可以运行在这个虚拟的机器中，它能看到的自然也只有 Guest OS 的文件和目录，以及这个机器里的虚拟设备。这就是为什么虚拟机也能起到将不同的应用进程相互隔离的作用。
 
-![image-20220310224305526](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220310224305.png)
+根据实验，一个运行着 CentOS 的 KVM 虚拟机启动后，在不做优化的情况下，虚拟机自己就需要占用 100~200 MB 内存。此外，用户应用运行在虚拟机里面，它对宿主机操作系统的调用就不可避免地要经过虚拟化软件的拦截和处理，这本身又是一层性能损耗，尤其对计算资源、网络和磁盘 I/O 的损耗非常大。
+
+而相比之下，容器化后的用户应用，却依然还是一个宿主机上的普通进程，这就意味着这些因为虚拟化而带来的性能损耗都是不存在的；而另一方面，使用 Namespace 作为隔离手段的容器并不需要单独的 Guest OS，这就使得容器额外的资源占用几乎可以忽略不计。
+
+![image-20220311215134311](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220311215134.png)
 
 这幅图的右边，则用一个名为 Docker Engine 的软件替换了 Hypervisor。跟真实存在的虚拟机不同，在使用 Docker 的时候，并没有一个真正的“Docker 容器”运行在宿主机里面。Docker 项目帮助用户启动的，还是原来的应用进程，只不过在创建这些进程时，Docker 为它们加上了各种各样的 Namespace 参数。
 
 这时，这些进程就会觉得自己是各自 PID Namespace 里的第 1 号进程，只能看到各自 Mount Namespace 里挂载的目录和文件，只能访问到各自 Network Namespace 里的网络设备，就仿佛运行在一个个“容器”里面，与世隔绝。
 
 # 06 | 白话容器基础（二）：隔离与限制
+
+**隔离**
+
+基于 Linux Namespace 的隔离机制相比于虚拟化技术也有很多不足之处，其中最主要的问题就是：隔离得不彻底。
+
+首先，既然容器只是运行在宿主机上的一种特殊的进程，那么多个容器之间使用的就还是同一个宿主机的操作系统内核。这意味着，如果你要在 Windows 宿主机上运行 Linux 容器，或者在低版本的 Linux 宿主机上运行高版本的 Linux 容器，都是行不通的。
+
+其次，在 Linux 内核中，有很多资源和对象是不能被 Namespace 化的，最典型的例子就是：时间。如果你的容器中的程序使用 settimeofday(2) 系统调用修改了时间，整个宿主机的时间都会被随之修改，这显然不符合用户的预期。
+
+所以，在生产环境中，没有人敢把运行在物理机上的 Linux 容器直接暴露到公网上。
+
+**限制**
+
+还是以 PID Namespace 为例，虽然容器内的第 1 号进程在“障眼法”的干扰下只能看到容器里的情况，但是宿主机上，它作为第 100 号进程与其他所有进程之间依然是平等的竞争关系。这就意味着，虽然第 100 号进程表面上被隔离了起来，但是它所能够使用到的资源（比如 CPU、内存），却是可以随时被宿主机上的其他进程（或者其他容器）占用的。当然，这个 100 号进程自己也可能把所有资源吃光。这些情况，显然都不是一个“沙盒”应该表现出来的合理行为。
+
+而 Linux Cgroups 就是 Linux 内核中用来为进程设置资源限制的一个重要功能。Linux Cgroups 的全称是 Linux Control Group。它最主要的作用，就是限制一个进程组能够使用的资源上限，包括 CPU、内存、磁盘、网络带宽等等。
+
+在 Linux 中，Cgroups 给用户暴露出来的操作接口是文件系统，即它以文件和目录的方式组织在操作系统的 /sys/fs/cgroup 路径下。在 Ubuntu 16.04 机器里，我可以用 mount 指令把它们展示出来，这条命令是：
+
+```shell
+$ mount -t cgroup 
+cpuset on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
+cpu on /sys/fs/cgroup/cpu type cgroup (rw,nosuid,nodev,noexec,relatime,cpu)
+cpuacct on /sys/fs/cgroup/cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpuacct)
+blkio on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+memory on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
+...
+```
+
+可以看到，在 /sys/fs/cgroup 下面有很多诸如 cpuset、cpu、 memory 这样的子目录，也叫子系统。对 CPU 子系统来说，我们就可以看到如下几个配置文件，这个指令是：
+
+```shell
+$ ls /sys/fs/cgroup/cpu
+cgroup.clone_children cpu.cfs_period_us cpu.rt_period_us  cpu.shares notify_on_release
+cgroup.procs      cpu.cfs_quota_us  cpu.rt_runtime_us cpu.stat  tasks
+```
+
+> cfs_period 和 cfs_quota 这两个参数需要组合使用，可以用来限制进程在 cfs_period 的一段时间内，只能被分配到总量为 cfs_quota 的 CPU 时间。
+
+在对应的子系统下面创建一个目录，比如，我们现在进入 /sys/fs/cgroup/cpu 目录下：
+
+```shell
+root@ubuntu:/sys/fs/cgroup/cpu$ mkdir container
+root@ubuntu:/sys/fs/cgroup/cpu$ ls container/
+cgroup.clone_children cpu.cfs_period_us cpu.rt_period_us  cpu.shares notify_on_release
+cgroup.procs      cpu.cfs_quota_us  cpu.rt_runtime_us cpu.stat  tasks
+```
+
+这个目录就称为一个“控制组”。你会发现，操作系统会在你新创建的 container 目录下，自动生成该子系统对应的资源限制文件。
+
+现在，我们在后台执行这样一条脚本：
+
+```sehll
+$ while : ; do : ; done &
+[1] 226
+```
+
+显然，它执行了一个死循环，可以把计算机的 CPU 吃到 100%，根据它的输出，我们可以看到这个脚本在后台运行的进程号（PID）是 226。这样，我们可以用 top 指令来确认一下 CPU 有没有被打满：
+
+```shell
+$ top
+%Cpu0 :100.0 us, 0.0 sy, 0.0 ni, 0.0 id, 0.0 wa, 0.0 hi, 0.0 si, 0.0 st
+```
+
+在输出里可以看到，CPU 的使用率已经 100% 了（%Cpu0 :100.0 us）。而此时，我们可以通过查看 container 目录下的文件，看到 container 控制组里的 CPU quota 还没有任何限制（即：-1），CPU period 则是默认的 100 ms（100000 us）：
+
+```shell
+$ cat /sys/fs/cgroup/cpu/container/cpu.cfs_quota_us 
+-1
+$ cat /sys/fs/cgroup/cpu/container/cpu.cfs_period_us 
+100000
+```
+
+接下来，我们可以通过修改这些文件的内容来设置限制。比如，向 container 组里的 cfs_quota 文件写入 20 ms（20000 us）：
+
+```shell
+$ echo 20000 > /sys/fs/cgroup/cpu/container/cpu.cfs_quota_us
+```
+
+它意味着在每 100 ms 的时间里，被该控制组限制的进程只能使用 20 ms 的 CPU 时间，也就是说这个进程只能使用到 20% 的 CPU 带宽。接下来，我们把被限制的进程的 PID 写入 container 组里的 tasks 文件，上面的设置就会对该进程生效了：
+
+```shell
+$ echo 226 > /sys/fs/cgroup/cpu/container/tasks 
+```
+
+我们可以用 top 指令查看一下：
+
+```shell
+$ top
+%Cpu0 : 20.3 us, 0.0 sy, 0.0 ni, 79.7 id, 0.0 wa, 0.0 hi, 0.0 si, 0.0 st
+```
+
+可以看到，计算机的 CPU 使用率立刻降到了 20%（%Cpu0 : 20.3 us）。
+
+对于 Docker 等 Linux 容器项目来说，它们只需要在每个子系统下面，为每个容器创建一个控制组，然后在启动容器进程之后，把这个进程的 PID 填写到对应控制组的 tasks 文件中就可以了。
+
+```shell
+$ docker run -it --cpu-period=100000 --cpu-quota=20000 ubuntu /bin/bash
+```
+
+查看一下控制组里的资源限制文件的内容：
+
+```shell
+$ cat /sys/fs/cgroup/cpu/docker/5d5c9f67d/cpu.cfs_period_us 
+100000
+$ cat /sys/fs/cgroup/cpu/docker/5d5c9f67d/cpu.cfs_quota_us 
+20000
+```
+
+这就意味着这个 Docker 容器，只能使用到 20% 的 CPU 带宽。
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
