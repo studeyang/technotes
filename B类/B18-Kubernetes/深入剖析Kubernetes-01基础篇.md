@@ -215,25 +215,3 @@ $ cat /sys/fs/cgroup/cpu/docker/5d5c9f67d/cpu.cfs_quota_us
 
 这就意味着这个 Docker 容器，只能使用到 20% 的 CPU 带宽。
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
