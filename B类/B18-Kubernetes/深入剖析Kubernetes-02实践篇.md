@@ -68,6 +68,59 @@ kubeadm init 生成 bootstrap token 之后，你就可以在任意一台安装�
 
 任何一台机器想要成为 Kubernetes 集群中的一个节点，就必须在集群的 kube-apiserver 上注册。只要有了 cluster-info 里的 kube-apiserver 的地址、端口、证书，kubelet 就可以以“安全模式”连接到 apiserver 上，这样一个新的节点就部署完成了。
 
+---
+
+# 容器编排与Kubernetes作业管理 
+
+# 13 | 为什么我们需要Pod？
+
+通过前面的内容，我们知道了 Namespace 做隔离，Cgroups 做限制，rootfs 做文件系统，为什么 Kubernetes 项目又突然搞出一个 Pod 来呢？
+
+首先我们要先明白一个问题，容器的本质到底是什么？容器的本质是进程，容器镜像就是这个系统里的“.exe”安装包，Kubernetes 就是操作系统！
+
+我们登录到一台 Linux 机器里，执行一条如下所示的命令：`pstree -g`，展示当前系统中正在运行的进程的树状结构。
+
+```
+systemd(1)-+-accounts-daemon(1984)-+-{gdbus}(1984)
+           | `-{gmain}(1984)
+           |-acpid(2044)
+          ...      
+           |-lxcfs(1936)-+-{lxcfs}(1936)
+           | `-{lxcfs}(1936)
+           |-mdadm(2135)
+           |-ntpd(2358)
+           |-polkitd(2128)-+-{gdbus}(2128)
+           | `-{gmain}(2128)
+           |-rsyslogd(1632)-+-{in:imklog}(1632)
+           |  |-{in:imuxsock) S 1(1632)
+           | `-{rs:main Q:Reg}(1632)
+           |-snapd(1942)-+-{snapd}(1942)
+           |  |-{snapd}(1942)
+           |  |-{snapd}(1942)
+           |  |-{snapd}(1942)
+           |  |-{snapd}(1942)
+```
+
+不难发现，在一个真正的操作系统里，进程是以进程组的方式，“有原则地”组织在一起。比如，这里有一个叫作 rsyslogd 的程序，它负责的是 Linux 操作系统里的日志处理。可以看到，rsyslogd 的主程序 main，和它要用到的内核日志模块 imklog 等，同属于 1632 进程组。这些进程相互协作，共同完成 rsyslogd 程序的职责。
+
+> 注意：我在本篇中提到的“进程”，比如，rsyslogd 对应的 imklog，imuxsock 和 main，严格意义上来说，其实是 Linux 操作系统语境下的“线程”。
+
+已知 rsyslogd 由三个进程组成：一个 imklog 模块，一个 imuxsock 模块，一个 rsyslogd 自己的 main 函数主进程。这三个进程一定要运行在同一台机器上，否则，它们之间基于 Socket 的通信和文件交换，都会出现问题。
+
+现在，我要把 rsyslogd 这个应用给容器化，由于受限于容器的“单进程模型”，这三个模块必须被分别制作成三个不同的容器。而在这三个容器运行的时候，它们设置的内存配额都是 1 GB。假设我们的 Kubernetes 集群上有两个节点：node-1 上有 3 GB 可用内存，node-2 有 2.5 GB 可用内存。
+
+这时，假设我要用 Docker Swarm 来运行这个 rsyslogd 程序。为了能够让这三个容器都运行在同一台机器上，我就必须在另外两个容器上设置一个 affinity=main（与 main 容器有亲密性）的约束，即：它们俩必须和 main 容器运行在同一台机器上。
+
+然后，我顺序执行：“docker run main”“docker run imklog”和“docker run imuxsock”，创建这三个容器。这样，这三个容器都会进入 Swarm 的待调度队列。然后，main 容器和 imklog 容器都先后出队并被调度到了 node-2 上（这个情况是完全有可能的）。
+
+可是，当 imuxsock 容器出队开始被调度时，Swarm 就有点懵了：node-2 上的可用资源只有 0.5 GB 了，并不足以运行 imuxsock 容器；可是，根据 affinity=main 的约束，imuxsock 容器又只能运行在 node-2 上。
+
+这就是一个典型的成组调度（gang scheduling）没有被妥善处理的例子。
+
+但是，到了 Kubernetes 项目里，这样的问题就迎刃而解了：Pod 是 Kubernetes 里的原子调度单位。这就意味着，Kubernetes 项目的调度器，是统一按照 Pod 而非容器的资源需求进行计算的。所以，像 imklog、imuxsock 和 main 函数主进程这样的三个容器，正是一个典型的由三个容器组成的 Pod。Kubernetes 项目在调度时，自然就会去选择可用内存等于 3 GB 的 node-1 节点进行绑定，而根本不会考虑 node-2。
+
+
+
 
 
 
