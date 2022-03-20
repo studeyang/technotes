@@ -118,7 +118,8 @@
   - [Lua教程](B类/B16-Lua/[runoob]-Lua教程.md)
 
 - Kubernetes
-  - [Kubernetes 原理剖析与实战应用](B类/B18-Kubernetes/Kubernetes%20原理剖析与实战应用.md)
+  - [Kubernetes原理与实战-基础篇](B类/B18-Kubernetes/Kubernetes原理与实战-01基础篇.md)
+  - [Kubernetes原理与实战-进阶篇](B类/B18-Kubernetes/Kubernetes原理与实战-02进阶篇.md)
   - [深入剖析Kubernetes-基础篇](B类/B18-Kubernetes/深入剖析Kubernetes-01基础篇.md)
   - [深入剖析Kubernetes-实践篇](B类/B18-Kubernetes/深入剖析Kubernetes-02实践篇.md)
 
