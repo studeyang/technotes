@@ -534,9 +534,158 @@ PWD=/
 
 # 09 | 存储类型：如何挑选合适的存储插件？
 
+**Kubernetes 中的 Volume 是如何设计的？**
 
+Kubernetes 中 Volume 的生命周期是直接和 Pod 挂钩的。在 Pod 被删除时，才会对 Volume 进行解绑（unmount）、删除等操作。至于 Volume 中的数据是否会被删除，取决于Volume 的具体类型。
+
+为了丰富可以对接的存储后端，Kubernetes 中提供了很多volume plugin可供使用。
+
+![image-20220325222424963](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/20220325222425.png)
+
+**常见的几种内置 Volume 插件**
+
+这里我介绍几个日常工作和生产环境中经常使用到的几个插件。
+
+- ConfigMap 和 Secret
+
+- Downward API
+
+  DownwardAPI 可以帮助你获取 Pod 对象中定义的字段，比如 Pod 的标签（Labels）、Pod 的 IP 地址及 Pod 所在的命名空间（namespace）等。Downward API 有两种使用方法，既支持环境变量注入，也支持通过 Volume 挂载。
+
+  我们来看个 Volume 挂载的例子，如下是一个 Pod 的 yaml 文件：
+
+  ```yaml
+  $ cat downwardapi-volume-demo.yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: downwardapi-volume-demo
+    namespace: demo
+    labels:
+      zone: us-east-coast
+      cluster: downward-api-test-cluster1
+      rack: rack-123
+    annotations:
+      annotation1: "345"
+      annotation2: "456"
+  spec:
+    containers:
+      - name: volume-test-container
+        image: busybox:1.28
+        command: ["sh", "-c"]
+        args:
+        - while true; do
+            if [[ -e /etc/podinfo/labels ]]; then
+              echo -en '\n\n'; cat /etc/podinfo/labels; fi;
+            if [[ -e /etc/podinfo/annotations ]]; then
+              echo -en '\n\n'; cat /etc/podinfo/annotations; fi;
+            sleep 5;
+          done;
+        volumeMounts:
+          - name: podinfo
+            mountPath: /etc/podinfo
+    volumes:
+      - name: podinfo
+        downwardAPI:
+          items:
+            - path: "labels"
+              fieldRef:
+                fieldPath: metadata.labels
+            - path: "annotations"
+              fieldRef:
+                fieldPath: metadata.annotations
+  ```
+
+  我们先创建这个 Pod，并通过kubectl logs来查看它的输出日志：
+
+  ```shell
+  $ kubectl create -f downwardapi-volume-demo.yaml
+  pod/downwardapi-volume-demo created
+  $ kubectl get pod -n demo
+  NAME                      READY   STATUS    RESTARTS   AGE
+  downwardapi-volume-demo   1/1     Running   0          5s
+  $ kubectl logs -n demo -f downwardapi-volume-demo
+  
+  cluster="downward-api-test-cluster1"
+  rack="rack-123"
+  zone="us-east-coast"
+  
+  annotation1="345"
+  annotation2="456"
+  kubernetes.io/config.seen="2020-09-03T12:01:58.1728583Z"
+  kubernetes.io/config.source="api"
+  
+  cluster="downward-api-test-cluster1"
+  rack="rack-123"
+  zone="us-east-coast"
+  
+  annotation1="345"
+  annotation2="456"
+  kubernetes.io/config.seen="2020-09-03T12:01:58.1728583Z"
+  kubernetes.io/config.source="api"
+  ```
+
+  从上面的日志输出，我们可以看到 Downward API 可以通过 Volume 挂载到 Pod 里面，并被容器获取。
+
+- EmptyDir
+
+  在 Kubernetes 中，我们也可以使用临时存储，类似于创建一个 temp dir。我们将这种类型的插件叫作 EmptyDir，从名字就可以知道，在刚开始创建的时候，就是空的临时文件夹。在 Pod 被删除后，也一同被删除，所以并不适合保存关键数据。
+
+  在使用的时候，可以参照如下的方式使用 EmptyDir：
+
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: empty-dir-vol-demo
+    namespace: demo
+  spec:
+    containers:
+    - image: busybox:1.28
+      name: volume-test-container
+      volumeMounts:
+      - mountPath: /cache
+        name: cache-volume
+    volumes:
+    - name: cache-volume
+      emptyDir: {}
+  ```
+
+  一般来说，EmptyDir 可以用来做一些临时存储，比如为耗时较长的计算任务存储中间结果或者作为共享卷为同一个 Pod 内的容器提供数据等等。
+
+- HostPath
+
+  我们再来看 HostPath，它和 EmptyDir 一样，都是利用宿主机的存储为容器分配资源。但是两者有个很大的区别，就是 HostPath 中的数据并不会随着 Pod 被删除而删除，而是会持久地存放在该节点上。
+
+  下面是一个使用 HostPath 的例子：
+
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: hostpath-demo
+    namespace: demo
+  spec:
+    containers:
+    - image: nginx:1.19.2
+      name: container-demo
+      volumeMounts:
+        - mountPath: /test-pd
+          name: hostpath-volume
+    volumes:
+    - name: hostpath-volume 
+      hostPath:
+        path: /data  # 对应宿主机上的绝对路径
+        type: Directory # 可选字段，默认是 Directory
+  ```
+
+上述介绍的这几款插件，目前依然能够照常使用，也是社区自身稳定支持的插件。但是对于一些云厂商和第三方的插件，社区已经不推荐继续使用内置的方式了，而是推荐你通过 CSI（Container Storage Interface，容器存储接口）来使用这些插件。
 
 # 10 | 存储管理：怎样对业务数据进行持久化存储？
+
+
+
+
 
 # 11 | K8s Service：轻松搞定服务发现和负载均衡
 
