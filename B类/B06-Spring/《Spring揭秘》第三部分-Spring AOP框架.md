@@ -57,7 +57,7 @@ Java 界的 AOP 框架或者说产品，可谓 AOP 土地上的一朵奇葩，�
 
   这些将要在其之上进行织入操作的系统执行点称之为 Joinpoint。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/一般程序流程图.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/一般程序流程图.png)
 
   基本上，只要允许，程序执行过程中的任何时点都可以作为横切逻辑的织入点，而所有这些执行时点都是 Joinpoint。
 
@@ -69,7 +69,7 @@ Java 界的 AOP 框架或者说产品，可谓 AOP 土地上的一朵奇葩，�
 
   After Advice 就是在相应连接点之后执行的 Advice 类型，但该类型的 Advice 还可以细分为三种：After returning Advice; After throwing Advice; After Advice。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/各种Advice的执行时机.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/各种Advice的执行时机.png)
 
   Around Advice：在 Joinpoint 前后都执行。
 
@@ -87,7 +87,7 @@ Java 界的 AOP 框架或者说产品，可谓 AOP 土地上的一朵奇葩，�
 
   符合 Pointcut 所指定的条件，将在织入过程中被织入横切逻辑的对象，称为目标对象。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/AOP 各个概念所处的场景.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/AOP 各个概念所处的场景.png)
 
 # 第8章 Spring AOP概述及其实现机制
 
@@ -106,7 +106,7 @@ Spring AOP 的 AOL 语言为 Java，所在 Spring AOP 对 AOP 的概念进行了
 
 - 8.2.1 设计模式之代理模式
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/代理模式相关类关系示意图.jpg)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/代理模式相关类关系示意图.jpg)
 
   SubjectProxy 内部持有 SubjectImpl 的引用，实现请求的转发。
 
@@ -138,7 +138,7 @@ Spring 中以接口定义 org.springframework.aop.Pointcut 作为其 AOP 框架�
 
 - 9.2.1 常见的 Pointcut
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/常见的Pointcut.jpg)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/常见的Pointcut.jpg)
 
 - 9.2.2 扩展 Pointcut (Customize Pointcut)
 
@@ -148,7 +148,7 @@ Spring 中以接口定义 org.springframework.aop.Pointcut 作为其 AOP 框架�
 
 Spring AOP 加入了开源组织 AOP Alliance（http://aopalliance.sourceforge.net/），图 9-4 中就是 Spring 中各种 Advice 类型实现与 AOP Alliance 中标准接口之间的关系。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Spring中Advice略图.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Spring中Advice略图.jpg)
 
 - 9.3.1 per-class 类型的 Advice
 
@@ -164,7 +164,7 @@ Spring AOP 加入了开源组织 AOP Alliance（http://aopalliance.sourceforge.n
 
 Advisor 代表 Spring 中的 Aspect，但是，与正常的 Aspect 不同，Advisor 通常只持有一个 Pointcut 和一个 Advice。而理论上，Aspect 定义中可以有多个 Pointcut 和多个 Advice，所以，我们可以认为 Advisor 是一种特殊的 Aspect。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Advisor分支.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Advisor分支.jpg)
 
 - 9.4.1 PointcutAdvisor 家族
 

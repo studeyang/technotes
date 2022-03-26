@@ -112,7 +112,7 @@ public String wrong() throws InterruptedException {
 
 结果输出日志如下：
 
-![image-20210603214203964](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210603214204.png)
+![image-20210603214203964](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210603214204.png)
 
 初始大小 900 符合预期，还需要填充 100 个元素。
 
@@ -155,7 +155,7 @@ public String right() throws InterruptedException {
 
 输出日志如下：
 
-![image-20210603214437847](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210603214437.png)
+![image-20210603214437847](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210603214437.png)
 
 **踩坑3：使用了 ConcurrentHashMap 但没有充分利用其基于 CAS 安全的方法导致性能问题**
 
@@ -263,7 +263,7 @@ public String good() throws InterruptedException {
 
 结果如下：
 
-![image-20210603222119527](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210603222119.png)
+![image-20210603222119527](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210603222119.png)
 
 性能提升了 2.8s/0.3s = 9.3 倍。
 
@@ -357,11 +357,11 @@ public Map testRead() {
 
 10 万次写操作，CopyOnWriteArray 比同步的 ArrayList 慢 11 倍：
 
-![image-20210603223419463](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210603223419.png)
+![image-20210603223419463](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210603223419.png)
 
 100 万次读操作，CopyOnWriteArray 比同步的 ArrayList 快 5 倍：
 
-![image-20210603223834431](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210603223834.png)
+![image-20210603223834431](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210603223834.png)
 
 - 解决方案
 
@@ -568,7 +568,7 @@ public long wrong() {
 
 输出日志如下：
 
-![image-20210605232953516](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210605232953.png)
+![image-20210605232953516](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210605232953.png)
 
 可以看到，100 次下单操作成功了 65 次，10 种商品总计 10000 件，库存总计为 9805， 消耗了 195 件符合预期（65 次下单成功，每次下单包含三件商品），总耗时 50 秒。
 
@@ -576,11 +576,11 @@ public long wrong() {
 
 使用 JDK 自带的 VisualVM 工具来跟踪一下，重新执行方法后不久就可以看到，线程 Tab 中提示了死锁问题，根据提示点击右侧线程 Dump 按钮进行线程抓取操作：
 
-![image-20210605233231724](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210605233231.png)
+![image-20210605233231724](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210605233231.png)
 
 查看抓取出的线程栈，在页面中部可以看到如下日志：
 
-![image-20210605233302370](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210605233302.png)
+![image-20210605233302370](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210605233302.png)
 
 为什么会有死锁问题呢?
 
@@ -613,7 +613,7 @@ public long right() {
 
 测试一下 right 方法，不管执行多少次都是 100 次成功下单，而且性能相当高，达到了 3000 以上的 TPS：
 
-![image-20210605233946803](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210605233946.png)
+![image-20210605233946803](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210605233946.png)
 
 > 这里通过避免循环等待从而避免了死锁。
 >
@@ -825,7 +825,7 @@ public void init() {
 
 日志打印如下：
 
-![image-20210606233305715](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210606233305.png)
+![image-20210606233305715](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210606233305.png)
 
 - 原因分析
 
@@ -856,7 +856,7 @@ public int right() throws ExecutionException, InterruptedException {
 
 连接池一般对客户端提供获得连接、归还连接的接口，并暴露最小空闲连接数、最大连接数等可配置参数，在内部则实现连接建立、连接心跳保持、连接管理、空闲连接回收、连接可用性检测等功能。连接池的结构示意图，如下所示：
 
-![image-20210608214800283](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608214800.png)
+![image-20210608214800283](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210608214800.png)
 
 涉及 TCP 连接的客户端 SDK，对外提供 API 有三种方式。
 
@@ -962,7 +962,7 @@ java.io.IOException: Socket Closed
 
 对源码分析后，类结构图如下：
 
-![image-20210607223205707](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210607223205.png)
+![image-20210607223205707](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210607223205.png)
 
 Jedis 继承了 BinaryJedis，BinaryJedis 中保存了单个 Client 的实例，Client 最终继承了 Connection，Connection 中保存了单个 Socket 的实例，和 Socket 对应的两个读写流。
 
@@ -1023,7 +1023,7 @@ public String wrong1() {
 
 访问这个接口几次后查看应用线程情况，可以看到有大量叫作 Connection evictor 的线程，且这些线程不会销毁：
 
-![image-20210608223510845](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608223510.png)
+![image-20210608223510845](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210608223510.png)
 
 - 原因分析
 
@@ -1036,7 +1036,7 @@ public String wrong1() {
 
 60 秒之后连接处于 CLOSE_WAIT 状态，最终彻底关闭。
 
-![image-20210608224132693](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608224132.png)
+![image-20210608224132693](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210608224132.png)
 
 这 2 点证明，CloseableHttpClient 属于第二种模式，即内部带有连接池的 API，其背后是 连接池，最佳实践一定是复用。
 
@@ -1106,11 +1106,11 @@ spring.datasource.hikari.register-mbeans=true
 
 启动程序并通过 JConsole 连接进程后，可以看到默认情况下最大连接数为 10：
 
-![image-20210608225553808](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608225553.png)
+![image-20210608225553808](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210608225553.png)
 
 使用 wrk 对应用进行压测，可以看到连接数一下子从 0 到了 10，有 20 个线程在等待获取连接:
 
-![image-20210608225629304](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608225629.png)
+![image-20210608225629304](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210608225629.png)
 
 不久就出现了无法获取数据库连接的异常，如下所示：
 
@@ -1128,7 +1128,7 @@ spring.datasource.hikari.maximum-pool-size=50
 
 然后，再观察一下这个参数是否适合当前压力，满足需求的同时也不占用过多资源。从监控来看这个调整是合理的，有一半的富余资源，再也没有线程需要等待连接了：
 
-![image-20210608230846125](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210608230846.png)
+![image-20210608230846125](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210608230846.png)
 
 > 其实，看到错误日志后再调整已经有点儿晚了。更合适的做法是，对类似数据库连接池的重要资源进行持续检测，并设置一半的使用量作为报警阈值，出现预警后及时扩容。
 
@@ -1609,7 +1609,7 @@ MySQL 支持多种存储引擎，最常使用的是 InnoDB，因为它支持事�
 
 各个数据页组成一个双向链表，每个数据页中的记录按照主键顺序组成单向链表；每一个数据页中有一个页目录，方便按照主键查询记录。数据页的结构如下：
 
-![image-20210618221306629](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210618221306.png)
+![image-20210618221306629](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210618221306.png)
 
 > 这里最大记录上面一条记录应该是”记录22 PK=22“
 
@@ -1633,7 +1633,7 @@ MySQL InnoDB 引擎就是这么存储数据的。
 
 为了解决这个问题，InnoDB 引入了 B+ 树。
 
-![image-20210618221415794](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210618221415.png)
+![image-20210618221415794](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210618221415.png)
 
 上图叶子节点下面方块中的省略号是实际数据，这样的 B+ 树就是聚簇索引。由于数据在物理上只会保存一份，所以聚簇索引只能有一个。
 
@@ -1643,7 +1643,7 @@ InnoDB 会自动使用主键作为聚簇索引的索引键，如果没有主键�
 
 为了实现非主键字段的快速搜索，就引出了二级索引，如下图所示：
 
-![image-20210618230129544](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210618230129.png)
+![image-20210618230129544](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210618230129.png)
 
 这次二级索引的叶子节点中保存的不是实际数据，而是主键，获得主键值后去聚簇索引中获得数据行。这个过程就叫作回表。
 
@@ -1712,7 +1712,7 @@ select DATA_LENGTH, INDEX_LENGTH from information_schema.TABLES where TABLE_NAME
 explain select * from person where NAME='name1';
 ```
 
-![image-20210618233223988](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210618233224.png)
+![image-20210618233223988](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210618233224.png)
 
 可以发现，key 字段代表实际走的是哪个索引，其值是 name_score，说明走的是 name_score 这个索引。
 
@@ -1724,7 +1724,7 @@ type 字段代表了访问表的方式，其值 ref 说明是二级索引等值�
 explain select NAME,SCORE from person where NAME='name1';
 ```
 
-![image-20210618233518044](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210618233518.png)
+![image-20210618233518044](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210618233518.png)
 
 可以看到，Extra 列多了一行 Using index 的提示，证明这次查询直接查的是二级索引，免去了回表。
 
@@ -1754,7 +1754,7 @@ explain select NAME,SCORE from person where NAME='name1';
 EXPLAIN SELECT * FROM person WHERE NAME LIKE '%name123' LIMIT 100
 ```
 
-![image-20210619215651693](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619215651.png)
+![image-20210619215651693](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210619215651.png)
 
 type=ALL 代表了全表扫描。
 
@@ -1764,7 +1764,7 @@ type=ALL 代表了全表扫描。
 EXPLAIN SELECT * FROM person WHERE NAME LIKE 'name123%' LIMIT 100
 ```
 
-![image-20210619215815097](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619215815.png)
+![image-20210619215815097](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210619215815.png)
 
 type=range 表示走索引扫描，key=name_score 看到实际走了 name_score 索引。
 
@@ -1776,7 +1776,7 @@ type=range 表示走索引扫描，key=name_score 看到实际走了 name_score 
 EXPLAIN SELECT * FROM person WHERE LENGTH(NAME)=7
 ```
 
-![image-20210619220237343](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619220237.png)
+![image-20210619220237343](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210619220237.png)
 
 索引保存的是索引列的原始值，而不是经过函数计算后的值。如果需要针对函数调用走数据库索引的话，只能保存一份函数变换后的值，然后重新针对这个计算列做索引。
 
@@ -1788,7 +1788,7 @@ EXPLAIN SELECT * FROM person WHERE LENGTH(NAME)=7
 EXPLAIN SELECT * FROM person WHERE SCORE>45678
 ```
 
-![image-20210619220555444](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619220555.png)
+![image-20210619220555444](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210619220555.png)
 
 在联合索引的情况下，数据是按照索引第一列排序，第一列数据相同时才会按照第二列排序。尝试把搜索条件加入 name 列：
 
@@ -1796,7 +1796,7 @@ EXPLAIN SELECT * FROM person WHERE SCORE>45678
 EXPLAIN SELECT * FROM person WHERE SCORE>45678 AND NAME LIKE 'NAME45%'
 ```
 
-![image-20210619220819281](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619220819.png)
+![image-20210619220819281](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210619220819.png)
 
 可以看到走了 name_score 索引。
 
@@ -1818,7 +1818,7 @@ EXPLAIN SELECT * FROM person WHERE SCORE>45678 AND NAME LIKE 'NAME45%'
 explain select * from person where NAME>'name84059' and create_time>'2020-01-24 05:00:00'
 ```
 
-![image-20210619223039194](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619223039.png)
+![image-20210619223039194](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210619223039.png)
 
 type=All，其执行计划是全表扫描。
 
@@ -1828,7 +1828,7 @@ type=All，其执行计划是全表扫描。
 explain select * from person where NAME>'name84059' and create_time>'2020-01-24 06:00:00'
 ```
 
-![image-20210619223258891](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619223259.png)
+![image-20210619223258891](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210619223259.png)
 
 type=range，key=create_time，走了 create_time 索引，而不是 name_score 联合索引。
 
@@ -1846,7 +1846,7 @@ MySQL 维护了表的统计信息，可以使用下面的命令查看：
 SHOW TABLE STATUS LIKE 'person'
 ```
 
-![image-20210619223540752](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210619223540.png)
+![image-20210619223540752](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210619223540.png)
 
 总行数是 100086 行，CPU 成本是 100086*0.2=20017 左右。
 
@@ -2807,11 +2807,11 @@ System.out.println(ObjectSizeCalculator.getObjectSize(map)); // 72M
 
 ArrayList 占用内存 21M，HashMap 占用的内存 72M。使用 MAT 工具进一步分析堆可以证明，ArrayList 在内存占用上性价比很高， 77% 是实际的数据（16000000/20861992）。
 
-![image-20210625222048765](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210625222048.png)
+![image-20210625222048765](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210625222048.png)
 
 而 HashMap 只有 22%（16000000/72386640）。
 
-![image-20210625222155881](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210625222155.png)
+![image-20210625222155881](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210625222155.png)
 
 **踩坑25：LinkedList 插入元素一定比 ArrayList 快吗？**
 
@@ -2964,7 +2964,7 @@ Java 代码中出现 NullPointerException 场景有以下 5 种：
 
 线上可以使用 Arths。
 
-![image-20210627215345967](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210627215351.png)
+![image-20210627215345967](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210627215351.png)
 
 第二个红框表示，Arthas 启动后被附加到了 JVM 进程;
 
@@ -3356,7 +3356,7 @@ Logback、Log4j、Log4j2、commons-logging、JDK 自带的 java.util.logging 等
 
 SLF4J（Simple Logging Facade For Java）是为了统一各类日志框架而诞生的。如下图所示：
 
-![image-20210703223513586](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210703223513.png)
+![image-20210703223513586](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210703223513.png)
 
 SLF4J 实现了三种功能：
 
@@ -3418,7 +3418,7 @@ public class LoggingController {
 
 执行方法后出现了日志重复记录的问题：
 
-![image-20210703232939441](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210703232939.png)
+![image-20210703232939441](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210703232939.png)
 
 - 原因分析
 
@@ -3652,7 +3652,7 @@ public void performance(@RequestParam(name = "count", defaultValue = "1000") int
 
 执行程序后可以看到，记录 1000 次日志和 10000 次日志的调用耗时，分别是 6.3 秒和 44.5 秒：
 
-![image-20210705233722881](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210705233723.png)
+![image-20210705233722881](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210705233723.png)
 
 对于只记录文件日志的代码了来说，这个耗时挺长的。
 
@@ -3719,7 +3719,7 @@ public class OutputStreamAppender<E> extends UnsynchronizedAppenderBase<E> {
 
 测试一下可以发现，记录 1000 次日志和 10000 次日志的调用耗时，分别是 735 毫秒和 668 毫秒：
 
-![image-20210705234705019](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210705234705.png)
+![image-20210705234705019](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210705234705.png)
 
 **踩坑32：关于 AsyncAppender 异步日志的坑**
 
@@ -3786,7 +3786,7 @@ public void manylog(@RequestParam(name = "count", defaultValue = "1000") int cou
 
 执行方法后发现，耗时很短但出现了日志丢失:我们要记录 1000 条日志，最终控制台只能 搜索到 215 条日志，而且日志的行号变为了一个问号。
 
-![image-20210706223428032](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210706223428.png)
+![image-20210706223428032](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210706223428.png)
 
 - 原因分析
 
@@ -3853,7 +3853,7 @@ public void index() {
 
 结果如下：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210706230654.png" alt="image-20210706230653935" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210706230654.png" alt="image-20210706230653935" style="zoom:50%;" />
 
 可以看出，前两种方式都调用了 slowString 方法，耗时都是 1 秒；
 
@@ -4003,7 +4003,7 @@ private static void linesTest() throws IOException {
 
 结果如下：
 
-![image-20210707233223237](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210707233223.png)
+![image-20210707233223237](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210707233223.png)
 
 可以看到，实现了全文件的读取、统计了整个文件的行数，并没有出现 OOM；读取 200 万行数据耗时 760ms，读取 20 万行数据仅需 267ms。这些都可以说明，File.lines 方法并不是一次性读取整个文件的，而是按需读取。
 
@@ -4048,7 +4048,7 @@ private static void wrong() {
 
 运行后马上可以在日志中看到如下错误：
 
-![image-20210707234030337](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210707234030.png)
+![image-20210707234030337](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210707234030.png)
 
 - 原因分析
 
@@ -4177,7 +4177,7 @@ private static void largerBufferOperation() throws IOException {
 
 结果如下：
 
-![image-20210708232406733](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210708232407.png)
+![image-20210708232406733](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210708232407.png)
 
 可以看到，第一种方式虽然使用了缓冲流，但逐字节的操作因为方法调用次数实在太多还是慢，耗时 1.4 秒；后面两种方式的性能差不多，耗时 110 毫秒左右。
 
@@ -4202,7 +4202,7 @@ private static void fileChannelOperation() throws IOException {
 
 测试结果如下：
 
-![image-20210708233906937](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210708233907.png)
+![image-20210708233906937](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210708233907.png)
 
 可以看到，最慢的是单字节读写文件流的方式，耗时 183 秒，最快的是 FileChannel.transferTo 方式进行流转发的方式，耗时 50 毫秒。两者耗时相差达到 3600 倍！
 

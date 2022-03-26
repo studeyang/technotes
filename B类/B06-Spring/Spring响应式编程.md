@@ -8,7 +8,7 @@
 
 在响应式编程领域存在一个核心的理念，即全栈式响应式编程，也就是响应式开发方式的有效性取决于在整个请求链路的各个环节是否都采用了响应式编程模型。基于这一理念，我结合常见的分布式服务架构中的完整请求链路来设计了课程体系。
 
-![Drawing 5.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211208223049.png)
+![Drawing 5.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211208223049.png)
 
 - 基本概念篇：介绍响应式编程的核心组件与技术体系。
 - 编程框架篇：介绍 Spring 5 中内置的响应式编程框架 Project Reactor。
@@ -39,13 +39,13 @@ process(result);
 
 这个实现过程类似于下面的调用。
 
-![Drawing 1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211208225347.png)
+![Drawing 1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211208225347.png)
 
 服务 B 的线程 B 在整个过程的 CPU 利用效率是很低的，很多时间线程被浪费在了 I/O 阻塞上，无法执行其他的处理过程。
 
 继续分析服务 A 中的处理过程，可以得到以下的时序图。
 
-![Drawing 3.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211208225611.png)
+![Drawing 3.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211208225611.png)
 
 上面所展示的整个过程中，每一个环节都可能是同步阻塞的。针对同步阻塞问题，在技术上也可以引入一些实现技术来将同步调用转化为异步调用。
 
@@ -55,7 +55,7 @@ process(result);
 
 回调的含义如下图所示。
 
-![Drawing 5.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211208225735.png)
+![Drawing 5.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211208225735.png)
 
 回调的最大问题是复杂性，一旦在执行流程中包含了多层的异步执行和回调，那么就会形成一种嵌套结构，给代码的开发和调试带来很大的挑战。所以回调很难大规模地组合起来使用，因为很快就会导致代码难以理解和维护，从而造成所谓的“回调地狱”问题。
 
@@ -92,13 +92,13 @@ public interface Future<V> {
 
 在这一模式中，发布者和订阅者之间可以没有直接的交互，而是通过发送事件到事件处理平台的方式来完成整合，如下图所示。
 
-![Drawing 9.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211208230127.png)
+![Drawing 9.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211208230127.png)
 
 我们可以基于同一套事件发布机制和事件处理平台来应对多种业务场景，不同的场景只需要发送不同的事件即可。
 
 如果我们聚焦于服务 A 的内部，采用发布-订阅模式进行重构如下。
 
-![Drawing 11.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211208230307.png)
+![Drawing 11.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211208230307.png)
 
 如果我们在这些层上都对某个事件进行了订阅，那么就可以对其分别进行处理，并最终将处理结果从服务 A 传播到服务 B 中。
 
@@ -114,7 +114,7 @@ public interface Future<V> {
 
 关于响应式，业界也存在一个著名的响应式宣言，下图就是响应式宣言的官方网站给出的，对于这一宣言的图形化描述。
 
-![Drawing 13.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211208224400.png)
+![Drawing 13.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211208224400.png)
 
 可以看到，即时响应性（Responsive）、回弹性（Resilient）、弹性（Elastic）以及消息驱动（Message Driven）构成了响应式宣言的主体内容。响应式宣言认为，具备上图中各个特性的系统，就可以称为响应式系统。
 
@@ -133,7 +133,7 @@ public interface Future<V> {
 - 流的处理模型：存在两种基本的实现机制--推和拉。
 - 流量控制：使用有界阻塞队列。
 
-![Drawing 9.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211209224847.png)
+![Drawing 9.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211209224847.png)
 
 这种阻塞行为是不可能实现异步操作的，所以结合上一讲中的讨论结果，无论从回弹性、弹性还是即时响应性出发，有界阻塞队列都不是我们想要的解决方案。
 
@@ -203,7 +203,7 @@ cancel()：用来取消这次订阅。
 
 请注意，**Subscription 对象是确保生产者和消费者针对数据处理速度达成一种动态平衡的基础，也是流量控制中实现背压机制的关键所在**，我们可以通过下图来进一步理解整个数据请求和处理过程。
 
-![Drawing 11.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211209230532.png)
+![Drawing 11.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211209230532.png)
 
 **响应式流的技术生态圈**
 
@@ -233,7 +233,7 @@ Netflix Hystrix 使用了 HystrixCircuitBreaker 类来实现熔断器。该类�
 
 Hystrix 以秒为单位来统计系统中所有请求的处理情况，然后每次取最近 10 秒的数据来进行计算。如果失败率超过一定阈值，就进行熔断。这里的 10 秒就是一个滑动窗口，参考其官网的一幅图，如下所示。
 
-![图片0.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210220934.png)
+![图片0.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211210220934.png)
 
 上图演示了 Hystrix 滑动窗口策略，把 10 秒时间拆分成了 10 个格子，我们把这种格子称为桶 Bucket。每个桶中的数据就是这一秒中所处理的请求数量，并针对处理结果的状态做了分类。然后每当收集好一个新的桶后，就会丢弃掉最旧的一个桶，所以窗口是滑动的。
 
@@ -245,7 +245,7 @@ Hystrix 以秒为单位来统计系统中所有请求的处理情况，然后每
 
 Spring Cloud Gateway 中的核心概念就是过滤器（Filter），围绕过滤器的请求处理流程如下图所示。
 
-![图片1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210221331.png)
+![图片1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211210221331.png)
 
 过滤器用于在响应 HTTP 请求之前或之后修改请求本身及对应的响应结果。Spring Cloud Gateway 中提供了一个全局过滤器（GlobalFilter）的概念，对所有路由都生效。
 
@@ -268,7 +268,7 @@ public class JWTAuthFilter implements GlobalFilter {
 
 在 WebFlux 中，对 HTTP 请求的处理过程涉及了 HandlerMapping、HandlerAdapter、HandlerResultHandler 类之间的交互，整个流程如下图所示。
 
-![图片3.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210223401.png)
+![图片3.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211210223401.png)
 
 我们直接来看用于完成上图流程的 Handle 方法定义，该方法实现了流式处理请求机制，如下所示。
 
@@ -301,7 +301,7 @@ WebFlux 功能非常强大，不仅包含了对创建和访问响应式 HTTP 端
 
 Spring WebFlux 提供了完整的支持响应式开发的服务端技术栈，Spring WebFlux 的整体架构如下图所示。
 
-![Drawing 1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210224812.png)
+![Drawing 1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211210224812.png)
 
 上图针对传统 spring-webmvc 技术栈和新型的 spring-webflux 技术栈做了一个对比。
 
@@ -317,7 +317,7 @@ Spring WebFlux 提供了完整的支持响应式开发的服务端技术栈，Sp
 
 在 Spring Data 的基础上，Spring 5 也全面提供了一组响应式数据访问模型。
 
-![Drawing 2.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210230046.png)
+![Drawing 2.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211210230046.png)
 
 可以看到，上图底部明确把 Spring Data 划分为两大类型，一类是支持 JDBC、JPA 和部分 NoSQL 的传统 Spring Data Repository，而另一类则是支持 Mongo、Cassandra、Redis、Couchbase 等的响应式 Spring Data Reactive Repository。
 
@@ -325,7 +325,7 @@ Spring WebFlux 提供了完整的支持响应式开发的服务端技术栈，Sp
 
 这里的 CSS 是对客户服务系统 Customer Service System 的简称。客户服务是电商、健康类业务场景中非常常见的一种业务场景，我们将通过构建一个精简但又完整的系统来展示 Spring 5 中响应式编程相关的设计理念和各项技术组件。ReactiveSpringCSS 整体架构。
 
-![Drawing 3.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211210225139.png)
+![Drawing 3.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211210225139.png)
 
 customer-service 一般会与用户账户服务 account-service 进行交互以获取生成工单所需的用户账户信息。针对 order-service，其定位是订单服务，customer-service 也需要从该服务中查询订单信息。
 
@@ -367,7 +367,7 @@ Reactor 框架可以单独使用。和集成其他第三方库一样，如果想
 
 响应式流规范的基本组件是一个异步的数据序列，在 Reactor 框架中，我们可以把这个异步数据序列表示成如下形式。
 
-![Drawing 1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211211223350.png)
+![Drawing 1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211211223350.png)
 
 上图中的异步序列模型从语义上可以用如下公式表示。
 
@@ -393,7 +393,7 @@ onNext x 0..N [onError | onComplete]
 
 Flux 代表的是一个包含 0 到 n 个元素的异步序列，Reactor 官网给出了它的示意图，如下所示。
 
-![Drawing 3.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211211223550.png)
+![Drawing 3.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211211223550.png)
 
 > 上图中的“operator”代表的是操作符，红色的叉号代表异常，“|”符号则代表序列正常结束。
 
@@ -426,7 +426,7 @@ public Flux<Account> getAccountList() {
 
 我们再来看 Reactor 所提供的 Mono 组件。Mono 数据序列中只包含 0 个或 1 个元素，如下图所示。
 
-![Drawing 5.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211211223958.png)
+![Drawing 5.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211211223958.png)
 
 我们同样通过一个服务层的方法来演示 Mono 组件的用法，示例代码如下。
 
@@ -459,7 +459,7 @@ public Mono<Account> getAccountById(@PathVariable Long id) {
 
 操作符的执行效果如下所示。
 
-![Drawing 7.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211211224757.png)
+![Drawing 7.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211211224757.png)
 
 在 Reactor 中，可以把操作符分成转换、过滤、组合、条件、数学、日志、调试等几大类。
 
@@ -482,7 +482,7 @@ Reactor 使用了一个枚举类型 OverflowStrategy 来定义这些背压处理
 
 Reactor 官网给出的 onBackpressureBuffer 操作符的弹珠图如下所示。
 
-![Drawing 9.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211211225124.png)
+![Drawing 9.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211211225124.png)
 
 onBackpressureBuffer 操作符有很多种可以选择的配置项，我们可以用来灵活控制它的行为。
 
@@ -542,7 +542,7 @@ Flux.range(2020, 5).subscribe(System.out::println);
 
 通过 interval() 所具备的一组重载方法，我们可以分别指定这个数据序列中第一个元素发布之前的延迟时间，以及每个元素之间的时间间隔。它的弹珠图，如下所示。
 
-![图片9.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211211225842.png)
+![图片9.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211211225842.png)
 
 可以看到，上图中每个元素发布时相当于添加了一个定时器的效果。使用 interval() 方法的示例代码如下所示。
 
@@ -787,7 +787,7 @@ Flux.range(1, 25)
 
 window 操作符的作用类似于 buffer，不同的是 window 操作符是把当前流中的元素收集到另外的 Flux 序列中，而不是一个集合，代表的是一种对序列进行开窗的操作。官方给出的弹珠图，如下所示。
 
-![Drawing 1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211212222358.png)
+![Drawing 1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211212222358.png)
 
 示例代码如下。
 
@@ -830,7 +830,7 @@ number-2
 
 flatMap 操作符执行的也是一种映射操作，但与 map 不同，该操作符会把流中的每个元素映射成一个流而不是一个元素。弹珠图如下所示。
 
-![Drawing 3.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211212222950.png)
+![Drawing 3.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211212222950.png)
 
 示例代码如下。
 
@@ -944,7 +944,7 @@ public Mono<Void> updateOrders(Flux<Order> orders) {
 
 merge 操作符用来把多个 Flux 流合并成一个 Flux 序列，而合并的规则就是按照流中元素的实际生成的顺序进行，它的弹珠图如下所示。
 
-![Drawing 5.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211212225103.png)
+![Drawing 5.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211212225103.png)
 
 merge 操作符的代码示例如下所示，我们通过 Flux.intervalMillis() 方法分别创建了两个 Flux 序列，然后将它们 merge 之后打印出来。
 
@@ -986,7 +986,7 @@ Flux.mergeSequential(Flux.intervalMillis(0, 100).take(2),
 
 zip 操作符的合并规则比较特别，是将当前流中的元素与另外一个流中的元素按照一对一的方式进行合并，如下所示。
 
-![Drawing 7.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211212230050.png)
+![Drawing 7.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211212230050.png)
 
 使用 zip 操作符在合并时可以不做任何处理，由此得到的是一个元素类型为 Tuple2 的流，示例代码如下所示。
 
@@ -1121,7 +1121,7 @@ Flux.concat(
 
 裁剪操作符中最经典的就是这个 reduce 操作符。reduce 操作符对来自 Flux 序列中的所有元素进行累积操作并得到一个 Mono 序列，该 Mono 序列中包含了最终的计算结果。reduce 操作符示意图如下所示。
 
-![Drawing 1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211213230549.png)
+![Drawing 1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211213230549.png)
 
 我们也可以通过一个 BiFunction 来实现任何自定义的复杂计算逻辑。
 
@@ -1318,11 +1318,11 @@ Error has been observed by the following operator(s):
 
 Spring WebMVC 使用了“管道-过滤器（Pipe-Filter）”架构模式，使用了 Servlet 中的过滤器链（FilterChain）来对请求进行拦截，如下图所示。
 
-![Drawing 0.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211214225534.png)
+![Drawing 0.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211214225534.png)
 
 我们知道 WebMVC 运行在 Servlet 容器上，当 HTTP 请求通过 Servlet 容器时就会被转换为一个 ServletRequest 对象，而最终返回一个 ServletResponse 对象，一次请求的详细流程如下图所示。
 
-![img](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211214222446.jpg)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211214222446.jpg)
 
 在执行过程中，DispatcherServlet 会在应用上下文中搜索所有 HandlerMapping。如果我们使用了 @RequestMapping，那么会找到 RequestMappingHandlerMapping，对应的 HandlerAdapter 就是 RequestMappingHandlerAdapter
 
@@ -1354,7 +1354,7 @@ public interface HandlerAdapter {
 
 Spring WebMVC 的整体架构，如下图所示。
 
-![Drawing 1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211214230501.png)
+![Drawing 1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211214230501.png)
 
 **Spring WebFlux 技术栈**
 
@@ -1391,7 +1391,7 @@ public interface HandlerAdapter {
 
 另一方面，WebFlux 中还提供了 RouterFunctionMapping 和 HandlerFunctionAdapter 组合，专门用来提供基于函数式编程的开发模式。这样 Spring WebFlux 的整体架构图就演变成这样。
 
-![Drawing 2.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211214231324.png)
+![Drawing 2.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211214231324.png)
 
 **对比 WebFlux 和 WebMVC 的处理模型**
 
@@ -1399,17 +1399,17 @@ WebMVC 建立在阻塞 I/O 之上，我们来分析这种模型下线程处理�
 
 假设有一个工作线程会处理来自客户端的请求，所有请求构成一个请求队列，并由一个线程按顺序进行处理。针对一个请求，线程需要执行两部分工作，首先是接受请求，然后再对其进行处理，如下图所示。
 
-![Drawing 3.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211214231434.png)
+![Drawing 3.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211214231434.png)
 
 从这个简单的图中，我们可以得出结论，线程效率低下。
 
 相比之下，WebFlux 构建在非阻塞 API 之上，这意味着没有操作需要与 I/O 阻塞线程进行交互。接受和处理请求的效率很高，如下图所示。
 
-![Drawing 4.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211214231507.png)
+![Drawing 4.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211214231507.png)
 
 如果是在多线程的场景下会发生什么呢？
 
-![Drawing 5.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211214231544.png)
+![Drawing 5.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211214231544.png)
 
 当处理用户请求涉及太多的线程实例时，相互之间就需要协调资源，这是由于它们之间的不一致性会导致性能下降。
 
@@ -1419,9 +1419,9 @@ WebMVC 建立在阻塞 I/O 之上，我们来分析这种模型下线程处理�
 
 这里我们截取 300 和 3000 并发用户场景下的结果进行对比，如下面两张图所示。
 
-![Drawing 6.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211214231912.png)
+![Drawing 6.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211214231912.png)
 
-![Drawing 7.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211214231919.png)
+![Drawing 7.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211214231919.png)
 
 可以看到，在 300 并发用户的测试用例下，WebMVC 和 WebFlux 的表现比较接近，意味着在并发量不高的情况下，非阻塞式的请求处理过程并没有太多优势；
 
@@ -1718,7 +1718,7 @@ RSocket 采用的是自定义二进制协议，其本身的定位就是高性能
 
 在交互模式上，与 HTTP 的请求-响应这种单向的交互模式不同，RSocket 倡导的是对等通信，不再使用传统的客户端-服务器端单向通信模式，而是在两端之间可以自由地相互发送和处理请求。RSocket 协议在交互方式上可以参考下图。
 
-![图片1.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211221225704.png)
+![图片1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211221225704.png)
 
 **使用 RSocket 实现远程交互**
 

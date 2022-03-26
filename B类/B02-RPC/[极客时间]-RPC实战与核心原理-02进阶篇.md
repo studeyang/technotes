@@ -26,7 +26,7 @@
 
 那到这儿，一个比较完善的 RPC 框架基本就完成了，功能也差不多就是这些了。按照分层设计的原则，我将这些功能模块分为了四层，具体内容见图示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120074255.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120074255.jpg" style="zoom:25%;" />
 
 **可扩展的架构**
 
@@ -40,7 +40,7 @@
 
 加上了插件功能之后，我们的 RPC 框架就包含了两大核心体系——核心功能体系与插件体系，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120074512.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120074512.jpg" style="zoom:25%;" />
 
 这时，整个架构就变成了一个微内核架构。
 
@@ -64,7 +64,7 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 通过获取服务 IP 的集合来完成接口跟服务提供者 IP 的映射。这就是我要说的 PRC 框架的服务发现机制，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120074524.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120074524.jpg" style="zoom:25%;" />
 
 从图中，服务发现可以分为2步：
 
@@ -79,7 +79,7 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 好，先带着这个问题，简单地看下 DNS 的流程：
 
-![image-20201120084913757](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120084913.png)
+![image-20201120084913757](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120084913.png)
 
 可以从下面2个问题思考一下：
 
@@ -92,7 +92,7 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 将域名绑定到这台负载均衡设备上，通过 DNS 拿到负载均衡的 IP。这样服务调用的时候，服务调用方就可以直接跟 VIP 建立连接，然后由 VIP 机器完成 TCP 转发，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120084924.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120084924.jpg" style="zoom:25%;" />
 
 这个方案确实能解决 DNS 遇到的一些问题，但在 RPC 场景里面也并不是很合适，原因有以下几点：
 
@@ -107,7 +107,7 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 整体的思路很简单，就是搭建一个 ZooKeeper 集群作为注册中心集群，服务注册的时候只需要向 ZooKeeper 节点写入注册信息即可，利用 ZooKeeper 的 Watcher 机制完成服务订阅与服务下发功能，整体流程如下图：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120084934.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120084934.jpg" style="zoom:25%;" />
 
 1. 服务平台管理端先在 ZooKeeper 中创建2个路径，`/service/com.demo.xxService/provider`和`/service/com.demo.xxService/consumer`，分别用来存储服务提供方的节点信息和服务调用方的节点信息。
 2. 当服务提供方发起注册时，会在服务提供方目录中创建一个临时节点，节点中存储该服务提供方的注册信息。
@@ -132,7 +132,7 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 因为要求最终一致性，我们可以考虑采用消息总线机制。注册数据可以全量缓存在每个注册中心内存中，通过消息总线来同步数据。当有一个注册中心节点接收到服务节点注册时，会产生一个消息推送给消息总线，再通过消息总线通知给其它注册中心节点更新数据并进行服务下发，从而达到注册中心间数据最终一致性，具体流程如下图所示：
 
-![image-20201120085043182](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085043.png)
+![image-20201120085043182](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085043.png)
 
 - 当有服务上线，注册中心节点收到注册请求，服务列表数据发生变化，会生成一个消息，推送给消息总线，每个消息都有整体递增的版本。
 - 消息总线会主动推送消息到各个注册中心，同时注册中心也会定时拉取消息。对于获取到消息的在消息回放模块里面回放，只接受大于本地版本号的消息，小于本地版本号的消息直接丢弃，从而实现最终一致性。
@@ -157,7 +157,7 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 整个过程如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085104.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085104.jpg" style="zoom:25%;" />
 
 接口调用某台机器的时候已经不能响应了，那为什么 RPC 框架还会继续把请求发到这台有问题的机器上呢？
 
@@ -184,7 +184,7 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 具体状态间转换图如下：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085126.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085126.jpg" style="zoom:25%;" />
 
 系统初始化，如果建立连接成功，那就是健康状态，否则就是死亡状态；
 
@@ -217,11 +217,11 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 举个具体例子你可能就明白了，比如我们要求新上线的节点只允许某个 IP 可以调用，那我们的注册中心会把这条规则下发到服务调用方。在调用方收到规则后，在选择具体要发请求的节点前，会先通过筛选规则过滤节点集合，按照这个例子的逻辑，最后会过滤出一个节点，这个节点就是我们刚才新上线的节点。通过这样的改造，RPC 调用流程就变成了这样：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085132.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085132.jpg" style="zoom:25%;" />
 
 这个筛选过程在我们的 RPC 里面有一个专业名词，就是“路由策略”，而上面例子里面的路由策略是我们常见的 IP 路由策略，用于限制可以调用服务提供方的 IP。使用了 IP 路由策略后，整个集群的调用拓扑如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085139.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085139.jpg" style="zoom:25%;" />
 
 **参数路由**
 
@@ -237,7 +237,7 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 我们可以给所有的服务提供方节点都打上标签，用来区分新老应用节点。在服务调用方发生请求的时候，我们可以很容易地拿到请求参数，也就是我们例子中的商品 ID，我们可以根据注册中心下发的规则来判断当前商品 ID 的请求是过滤掉新应用还是老应用的节点。因为规则对所有的调用方都是一样的，从而保证对应同一个商品 ID 的请求要么是新应用的节点，要么是老应用的节点。使用了参数路由策略后，整个集群的调用拓扑如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085151.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085151.jpg" style="zoom:25%;" />
 
 相比 IP 路由，参数路由支持的灰度粒度更小，他为服务提供方应用提供了另外一个服务治理的手段。灰度发布功能是 RPC 路由功能的一个典型应用场景，通过 RPC 路由策略的组合使用可以让服务提供方更加灵活地管理、调用自己的流量，进一步降低上线可能导致的风险。
 
@@ -247,7 +247,7 @@ CAP 定理，它指出对于一个分布式系统，不可能同时满足以下�
 
 有一次碰上流量高峰，突然发现线上服务的可用率降低了，经过排查发现，是因为其中有几台机器比较旧，由于负载太高，扛不住压力。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085200.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085200.jpg" style="zoom:25%;" />
 
 RPC 框架有没有什么智能负载的机制，能及时地自动控制服务节点接收到的访问量？
 
@@ -255,7 +255,7 @@ RPC 框架有没有什么智能负载的机制，能及时地自动控制服务�
 
 当我们的一个服务节点无法支撑现有的访问量时，我们会部署多个节点，组成一个集群，然后通过负载均衡，将请求分发给这个集群下的每个服务节点。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085218.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085218.jpg" style="zoom:25%;" />
 
 负载均衡主要分为软负载和硬负载。软负载就是在一台或多台服务器上安装负载均衡的软件，如 LVS、Nginx 等；<br>硬负载就是通过硬件设备来实现的负载均衡，如 F5 服务器等。<br>负载均衡的算法主要有随机法、轮询法、最小连接法等。
 
@@ -265,7 +265,7 @@ RPC 框架有没有什么智能负载的机制，能及时地自动控制服务�
 
 RPC 的负载均衡完全是由 RPC 框架自身实现，RPC 的服务调用都会与注册中心下发的所有服务节点建立长连接，在每次发起 RPC 调用时，服务调用者都会通过配置的负载均衡插件，自主选择一个服务节点，发起 RPC 调用请求。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085236.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085236.jpg" style="zoom:25%;" />
 
 RPC 负载均衡策略一般包括随机权重、Hash、轮询。
 
@@ -287,7 +287,7 @@ RPC 负载均衡策略一般包括随机权重、Hash、轮询。
 
 整体的设计方案如下图所示：
 
-![image-20201120085314326](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085314.png)
+![image-20201120085314326](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085314.png)
 
 解释一下关键步骤：
 
@@ -332,7 +332,7 @@ hash 一致性算法，适用于服务有状态的的场景，但是实际上很
 
 这个机制是怎么实现的呢？
 
-![image-20201120085356725](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085356.png)
+![image-20201120085356725](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085356.png)
 
 调用端在发起 RPC 调用时，会经过负载均衡，选择一个节点发送请求，当发送失败时我们就可以捕获异常，根据特定的异常触发重试，重新通过负载均衡选择一个节点发送请求消息，并且记录请求的重试次数，当重试次数达到用户配置的重试次数的时候，就返回给调用端动态代理一个失败异常。
 
@@ -353,7 +353,7 @@ hash 一致性算法，适用于服务有状态的的场景，但是实际上很
 
 这样，一个可靠的重试机制就诞生了，如下图：
 
-![image-20201120085520186](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085520.png)
+![image-20201120085520186](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085520.png)
 
 **课后思考**
 
@@ -369,13 +369,13 @@ hash 一致性算法，适用于服务有状态的的场景，但是实际上很
 
 服务提供方要上线的时候，一般是通过部署系统完成实例重启。在这个过程中，服务提供方并不会告诉调用方他们需要操作哪些机器。而调用方也无法预测到提供方要对哪些机器重启上线，因此负载均衡就有可能把正在重启的机器选出来，从而导致调用失败。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085631.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085631.jpg" style="zoom:25%;" />
 
 **关闭流程**
 
 这时候，你可能会想到，RPC 里面不是有服务发现吗？当服务提供方关闭前，先通知注册中心进行下线，注册中心告诉调用方进行节点摘除。关闭流程如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085637.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085637.jpg" style="zoom:25%;" />
 
 但是这样也有不足，比如：
 
@@ -400,7 +400,7 @@ hash 一致性算法，适用于服务有状态的的场景，但是实际上很
 
 考虑到有些业务请求可能处理时间长，或者存在被挂住的情况，为了避免一直等待造成应用无法正常退出，我们可以在 ShutdownHook 里面加上超时时间控制，超时强制退出应用。超时时间可设定成 10s，基本就可以了。整个流程如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085655.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085655.jpg" style="zoom:25%;" />
 
 **总结**
 
@@ -426,7 +426,7 @@ Tomcat 关闭的时候也是先从外层到里层逐层进行关闭，先保证�
 
 首先调用方需要获取服务提供方启动的时间，通过服务发现，除了可以拿到 IP 列表，还需要拿到对应的启动时间。我们把这个时间作用在负载均衡上，如果是基于权重的负载均衡算法，就让权重随着时间推移慢慢增加，增加到设置的权重值。整个过程如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085703.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085703.jpg" style="zoom:25%;" />
 
 那当我在大批量重启服务的时候，会不会导致没有重启的机器因为扛的流量太大而出现问题？
 
@@ -446,7 +446,7 @@ Tomcat 关闭的时候也是先从外层到里层逐层进行关闭，先保证�
 
 我们可以在服务提供方应用启动后，接口注册到注册中心前，预留一个 Hook，让用户（指使用 RPC 框架的程序员）可以实现可扩展的 Hook 逻辑。用户可以在 Hook 里面模拟调用逻辑，并且用户也可以在 Hook 里面事先预加载一些资源，只有等所有的资源都加载完成后，最后才把接口注册到注册中心。整个应用启动过程如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085711.jpg" style="zoom: 25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085711.jpg" style="zoom: 25%;" />
 
 # 15 | 熔断限流：业务如何实现自我保护?
 
@@ -460,13 +460,13 @@ RPC 是解决分布式系统通信问题的一大利器，而分布式系统的�
 
 假如服务端某个负载压力过高，我们该如何保护这个节点呢？
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085718.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085718.jpg" style="zoom:25%;" />
 
 限流。那是在服务端的业务逻辑中做限流吗？有没有更优雅的方式？
 
 我们可以在 RPC 框架中集成限流的功能，让使用方自己去配置限流阈值；我们还可以在服务端添加限流逻辑，当调用端发送请求过来时，服务端在执行业务逻辑之前先执行限流逻辑，如果发现访问量过大并且超出了限流的阈值，就让服务端直接抛回给调用端一个限流异常，否则就执行正常的业务逻辑。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085724.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085724.jpg" style="zoom:25%;" />
 
 那服务端的限流逻辑又该如何实现呢？
 
@@ -494,13 +494,13 @@ RPC 框架真正强大的地方在于它的治理功能，我们可以通过 RPC
 
 举个例子，假如我要发布一个服务 B，而服务 B 又依赖服务 C，当一个服务 A 来调用服务 B 时，服务 B 的业务逻辑调用服务 C，而这时服务 C 响应超时了，由于服务 B 依赖服务 C，C 超时直接导致 B 的业务逻辑一直等待，而这个时候服务 A 在频繁地调用服务 B，服务 B 就可能会因为堆积大量的请求而导致服务宕机。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085731.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085731.jpg" style="zoom:25%;" />
 
 由此可见，服务 B 调用服务 C，服务 C 执行业务逻辑出现异常时，会影响到服务 B，甚至可能会引起服务 B 宕机。这还只是 A->B->C 的情况，试想一下 A->B->C->D->……呢？在整个调用链中，只要中间有一个服务出现问题，都可能会引起上游的所有服务出现一系列的问题，甚至会引起整个调用链的服务都宕机，这是非常恐怖的。
 
 所以说，在一个服务作为调用端调用另外一个服务时，为了防止被调用的服务出现问题而影响到作为调用端的这个服务，这个服务也需要进行自我保护。最有效的自我保护方式就是熔断。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085738.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085738.jpg" style="zoom:25%;" />
 
 我们可以先了解下熔断机制。
 
@@ -514,7 +514,7 @@ RPC 框架真正强大的地方在于它的治理功能，我们可以通过 RPC
 
 熔断机制主要是保护调用端，调用端在发出请求的时候会先经过熔断器。我们可以回想下 RPC 的调用流程：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085745.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085745.jpg" style="zoom:25%;" />
 
 你看图的话，有没有想到在哪个步骤整合熔断器会比较合适呢？
 
@@ -537,7 +537,7 @@ RPC 框架真正强大的地方在于它的治理功能，我们可以通过 RPC
 
 在早期业务量不大的情况下，我们通过会选择最简单的方法，就是把服务实例统一管理，所有请求都用一个共享的“大池子”来处理。服务调用方跟服务提供方之间的调用拓扑如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085752.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085752.jpg" style="zoom:25%;" />
 
 后期因为业务发展丰富了，流量也会渐渐多起来。我们可以尝试把应用提供方这个大池子划分出不同规格的小池子，而不同小池子之间的隔离带，就是我们在 RPC 里面所说的分组，它可以实现流量隔离。
 
@@ -547,7 +547,7 @@ RPC 框架真正强大的地方在于它的治理功能，我们可以通过 RPC
 
 分组的标准可以按照重要级别。这个原则就是保障核心应用不受影响。有了分组之后 ，服务调用方跟服务提供方之间的调用拓扑就如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085800.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085800.jpg" style="zoom:25%;" />
 
 那通过这种分组进行流量隔离，对调用方应用会不会有影响呢？
 

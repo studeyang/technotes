@@ -32,15 +32,15 @@
 
 **总体架构**
 
-![image-20201213223546190](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201213223556.png)
+![image-20201213223546190](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201213223556.png)
 
 **数据模型**
 
-![image-20201215225448872](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201215225448.png)
+![image-20201215225448872](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201215225448.png)
 
 **接口模型**
 
-![image-20201213224924821](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201213224924.png)
+![image-20201213224924821](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201213224924.png)
 
 以上三个方面是一个系统本质，无论使用什么语言实现，都离不开这三方面。
 

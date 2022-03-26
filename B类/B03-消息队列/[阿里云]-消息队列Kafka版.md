@@ -10,13 +10,13 @@
 
 一个消息队列Kafka版集群包括Producer、Kafka Broker、Consumer Group、ZooKeeper。
 
-![系统架构](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201117225936.png)
+![系统架构](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201117225936.png)
 
 Zookeeper：管理集群的配置、选举 Leader 分区、并且在 Consumer Group 发生变化时，进行负载均衡。
 
 消息队列 Kafka 版采用发布/订阅模型，如下图所示。
 
-![发布订阅模型](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201117231304.png)
+![发布订阅模型](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201117231304.png)
 
 一个 Consumer Group 可以同时订阅多个 Topic；
 

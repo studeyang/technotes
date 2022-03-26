@@ -85,7 +85,7 @@ Jupyter 官方的 Binder 平台（介绍文档：https://mybinder.readthedocs.io
 
 比如这样一个[GitHub 文件](https://github.com/binder-examples/python2_with_3/blob/master/index3.ipynb)。在[Binder](https://mybinder.org/)中，你只要输入其对应的 GitHub Repository 的名字或者 URL，就能在云端打开整个 Repository，选择你需要的[notebook](https://mybinder.org/v2/gh/binder-examples/python2_with_3/master?filepath=index3.ipynb)，你就能看到下图这个界面。
 
-![image-20211207232540300](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211207232540.png)
+![image-20211207232540300](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211207232540.png)
 
 每一个 Jupyter 的运行单元都包含了 In、Out 的 Cell。如图所示，你可以使用 Run 按钮，运行单独的一个 Cell。当然，你也可以在此基础上加以修改，或者新建一个 notebook，写成自己想要的程序。
 

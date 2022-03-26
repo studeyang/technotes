@@ -2,7 +2,7 @@
 
 目前，我们公司各团队配置中心使用各异，电商使用的是 Spring Cloud Config，支付使用的是 Apollo，APP 团队使用的是 Apollo+Nacos。为了更好地应对公司业务的发展，统一基础设施技术栈必不可少。
 
-<img src="https://gitee.com/yanglu_u/img2022/raw/master/image-20220222140242719.png" alt="image-20220222140242719"  />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222140242719.png" alt="image-20220222140242719"  />
 
 > 图片来源：[直播《如何做好微服务基础设施选型》](https://www.bilibili.com/video/BV1GR4y137RS?spm_id_from=333.999.0.0)--李运华
 
@@ -74,21 +74,21 @@
 
 ### 场景一：调用服务端
 
-![image-20220222142033442](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222142033442.png)
+![image-20220222142033442](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222142033442.png)
 
 测试结果如下：
 
-![image-20220222142102625](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222142102625.png)
+![image-20220222142102625](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222142102625.png)
 
 通过压测发现，Nacos读配置的TPS大约是11000左右 ，写配置TPS大约是1800左右，而Apollo读配置TPS大约是1100，写配置TPS大约310，Nacos读写性能优势非常明显。
 
 ### 场景二：调用客户端
 
-![image-20220222142123826](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222142123826.png)
+![image-20220222142123826](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222142123826.png)
 
 测试结果如下：
 
-![image-20220222142232508](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222142232508.png)
+![image-20220222142232508](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222142232508.png)
 
 可见，读性能相差不大。
 
@@ -345,11 +345,11 @@ public class WebApplication {
 
 下面以 test1.config 配置为例。nacos 配置文件如下：
 
-![image-20220222143101832](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222143101832.png)
+![image-20220222143101832](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222143101832.png)
 
 启动配置如下：
 
-![image-20220222143133401](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222143133401.png)
+![image-20220222143133401](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222143133401.png)
 
 测试代码如下：
 
@@ -369,7 +369,7 @@ public class TestController {
 
 执行结果为：
 
-![image-20220222143208909](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222143208909.png)
+![image-20220222143208909](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222143208909.png)
 
 本地的配置并没有达到覆盖的效果。
 
@@ -377,7 +377,7 @@ public class TestController {
 
 我们不妨先改造一下程序启动类。
 
-![image-20220222143652521](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222143652521.png)
+![image-20220222143652521](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222143652521.png)
 
 通过断点可以看到，应用配置（这里指 nacos 中的 zebra-service.yml，下同）的优先级是在公共配置之前的，这点是必要的。
 
@@ -387,13 +387,13 @@ public class TestController {
 
 稍作修改一下：
 
-![image-20220222143612121](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222143612121.png)
+![image-20220222143612121](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222143612121.png)
 
 **问题解决**
 
 再测试一下本地配置是否覆盖。
 
-![image-20220222143742655](https://gitee.com/yanglu_u/img2022/raw/master/image-20220222143742655.png)
+![image-20220222143742655](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20220222143742655.png)
 
 本地的配置已达到覆盖的效果。最终的启动类代码为：
 

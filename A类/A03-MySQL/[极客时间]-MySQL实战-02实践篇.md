@@ -22,7 +22,7 @@ select name from CUser where id_card = 'xxxxxxxyyyyyyzzzzz';
 
 我们还是用第 4 篇文章[《深入浅出索引（上）》](https://github.com/dbses/TechNotes/blob/master/A-03 MySQL/[极客时间]-MySQL实战-01基础篇.md#04--深入浅出索引上)中的例子来说明，假设字段 k 上的值都不重复。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/InnoDB%20的索引组织结构.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/InnoDB%20的索引组织结构.png)
 
 接下来，我们就从这两种索引对查询语句和更新语句的性能影响来进行分析。
 
@@ -119,7 +119,7 @@ mysql> insert into t(id,k) values(id1,k1),(id2,k2);
 
 假设k1 所在的数据页在内存 (InnoDB buffer pool) 中，k2 所在的数据页不在内存中。下图是带 change buffer 的更新状态图。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/带%20change%20buffer%20的更新过程.png" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/带%20change%20buffer%20的更新过程.png" style="zoom: 67%;" />
 
 分析这条更新语句，你会发现它涉及了四个部分：内存、redo log（ib_log_fileX）、 数据表空间（t.ibd）、系统表空间（ibdata1）。
 
@@ -135,7 +135,7 @@ mysql> insert into t(id,k) values(id1,k1),(id2,k2);
 
 如果读语句发生在更新语句后不久，内存中的数据都还在，那么此时的这两个读操作就与系统表空间（ibdata1）和 redo log（ib_log_fileX）无关了。所以，我在图中就没画出这两部分。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/带%20change%20buffer%20的读过程.png" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/带%20change%20buffer%20的读过程.png" style="zoom:67%;" />
 
 从图中可以看到：
 
@@ -190,13 +190,13 @@ select * from t where a between 10000 and 20000;
 
 下图是使用 explain 命令看到的这条语句的执行情况。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/使用%20explain%20命令查看语句执行情况.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/使用%20explain%20命令查看语句执行情况.png)
 
 可以看到，key 这个字段值是 'a'，表示优化器选择了索引 a。
 
 在我们已经准备好的包含了 10 万行数据的表上，我们再做如下操作。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/session%20A%20和%20session%20B%20的执行流程.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/session%20A%20和%20session%20B%20的执行流程.png)
 
 session A 开启了一个事务。随后，session B 把数据都删除后，又调用了 idata 这个存储过程，插入了 10 万行数据。这时候，session B 的查询语句 select * from t where a between 10000 and 20000 就不会再选择索引 a 了。我们可以通过慢查询日志（slow log）来查看一下具体的执行情况。
 
@@ -216,7 +216,7 @@ select * from t force index(a) where a between 10000 and 20000;/*Q2*/
 
 这两条 SQL 语句执行完成后的慢查询日志如下图。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/slow%20log%20结果.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/slow%20log%20结果.png)
 
 可以看到，Q1 扫描了 10 万行，显然是走了全表扫描，执行时间是 40 毫秒。Q2 扫描了 10001 行，执行了 21 毫秒。也就是说，我们在没有使用 force index 的时候，MySQL 用错了索引，导致了更长的执行时间。
 
@@ -234,7 +234,7 @@ select * from t force index(a) where a between 10000 and 20000;/*Q2*/
 
   我们可以使用 show index 方法，看到一个索引的基数。如下图所示，就是表 t 的 show index 的结果 。虽然这个表的每一行的三个字段值都是一样的，但是在统计信息中，这三个索引的基数值并不同，而且其实都不准确。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/t%20的%20show%20index%20结果.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/t%20的%20show%20index%20结果.png)
 
 - MySQL 采样统计方法
 
@@ -249,7 +249,7 @@ select * from t force index(a) where a between 10000 and 20000;/*Q2*/
 
 其实索引统计只是一个输入，对于一个具体的语句来说，优化器还要判断，执行这个语句本身要扫描多少行。接下来，我们再一起看看优化器预估的，这两个语句的扫描行数是多少。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/意外的%20explain%20结果.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/意外的%20explain%20结果.png)
 
 rows 这个字段表示的是预计扫描行数。其中，Q1 的结果还是符合预期的，rows 的值是 104620；但是 Q2 的 rows 值是 37116，偏差就大了。而图 1 中我们用 explain 命令看到的 rows 是只有 10001 行，是这个偏差误导了优化器的判断。
 
@@ -263,7 +263,7 @@ rows 这个字段表示的是预计扫描行数。其中，Q1 的结果还是符
 
 既然是统计信息不对，那就修正。analyze table t 命令，可以用来重新统计索引信息。我们来看一下执行效果。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/执行%20analyze%20table%20t%20命令恢复的%20explain%20结果.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/执行%20analyze%20table%20t%20命令恢复的%20explain%20结果.png)
 
 所以在实践中，如果你发现 explain 的结果预估的 rows 值跟实际情况差距比较大，可以采用这个方法来处理。
 
@@ -277,7 +277,7 @@ select * from t where (a between 1 and 1000) and (b between 50000 and 100000) or
 
 从条件上看，这个查询没有符合条件的记录，因此会返回空集合。在开始执行这条语句之前，你可以先设想一下，如果你来选择索引，会选择哪一个呢？为了便于分析，我们先来看一下 a、b 这两个索引的结构图。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/a、b%20索引的结构图.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/a、b%20索引的结构图.jpg)
 
 如果使用索引 a 进行查询，那么就是扫描索引 a 的前 1000 个值，然后取到对应的 id，再到主键索引上去查出每一行，然后根据字段 b 来过滤。显然这样需要扫描 1000 行；如果使用索引 b 进行查询，那么就是扫描索引 b 的最后 50001 个值，与上面的执行过程相同，也是需要回到主键索引上取值再判断，所以需要扫描 50001 行。
 
@@ -285,7 +285,7 @@ select * from t where (a between 1 and 1000) and (b between 50000 and 100000) or
 
 执行 explain 的结果如下图所示。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/使用%20explain%20方法查看执行计划%202.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/使用%20explain%20方法查看执行计划%202.png)
 
 可以看到，返回结果中 key 字段显示，这次优化器选择了索引 b，而 rows 字段显示需要扫描的行数是 50198。
 
@@ -302,7 +302,7 @@ select * from t where (a between 1 and 1000) and (b between 50000 and 100000) or
 
 我们来看看第二个例子。刚开始分析时，我们认为选择索引 a 会更好。现在，我们就来看看执行效果：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/使用不同索引的语句执行耗时.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/使用不同索引的语句执行耗时.png)
 
 可以看到，原本语句需要执行 2.23 秒，而当你使用 force index(a) 的时候，只用了 0.05 秒，比优化器的选择快了 40 多倍。也就是说，优化器没有选择正确的索引，force index 起到了“矫正”的作用。
 
@@ -312,7 +312,7 @@ select * from t where (a between 1 and 1000) and (b between 50000 and 100000) or
 
 既然优化器放弃了使用索引 a，说明 a 还不够合适，所以**第二种方法就是，我们可以考虑修改语句，引导 MySQL 使用我们期望的索引。**比如，在这个例子里，显然把“order by b limit 1” 改成 “order by b,a limit 1” ，语义的逻辑是相同的。我们来看看改之后的效果：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/order%20by%20b,a%20limit%201%20执行结果.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/order%20by%20b,a%20limit%201%20执行结果.png)
 
 之前优化器选择使用索引 b，是因为它认为使用索引 b 可以避免排序（b 本身是索引，已经是有序的了，如果选择索引 b 的话，不需要再做排序，只需要遍历），所以即使扫描行数多，也判定为代价更小。现在 order by b,a 这种写法，要求按照 b,a 排序，就意味着使用这两个索引都需要排序。因此，扫描行数成了影响决策的主要条件，于是此时优化器选了只需要扫描 1000 行的索引 a。
 
@@ -326,7 +326,7 @@ select * from (select * from t where (a between 1 and 1000) and (b between 50000
 
 下图是执行效果。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/改写%20SQL%20的%20explain.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/改写%20SQL%20的%20explain.png)
 
 在这个例子里，我们用 limit 100 让优化器意识到，使用 b 索引代价是很高的。其实是我们根据数据特征诱导了一下优化器，也不具备通用性。
 
@@ -374,11 +374,11 @@ alter table SUser add index index2(email(6));
 
 第一个语句创建的 index1 索引里面，包含了每个记录的整个字符串，索引的示意图如下。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/email%20索引结构.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/email%20索引结构.jpg)
 
 而第二个语句创建的 index2 索引里面，对于每个记录都是只取前 6 个字节，索引的示意图如下。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/企业微信截图_20200730001458.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/企业微信截图_20200730001458.png)
 
 从图中你可以看到，由于 email(6) 这个索引结构中每个邮箱字段都只取前 6 个字节（即：zhangs），所以占用的空间会更小，这就是使用前缀索引的优势。但，这同时带来的损失是，可能会增加额外的记录扫描次数。
 
@@ -527,7 +527,7 @@ InnoDB 在处理更新语句的时候，只做了写日志这一个磁盘操作�
 
 “孔乙己赊账”的整个操作过程是怎么样的？假设原来孔乙己欠账 10 文，这次又要赊 9 文。
 
-![image-20200729232057894](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/企业微信截图_20200729234839.png)
+![image-20200729232057894](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/企业微信截图_20200729234839.png)
 
 > 回到文章开头的问题，你不难想象，平时执行很快的更新操作，其实就是在写内存和日志，而 MySQL 偶尔“抖”一下的那个瞬间，可能就是在刷脏页（flush）。
 
@@ -537,7 +537,7 @@ InnoDB 在处理更新语句的时候，只做了写日志这一个磁盘操作�
 
 这个场景，对应的就是 InnoDB 的 redo log 写满了。这时候系统会停止所有更新操作，把 checkpoint 往前推进，redo log 留出空间可以继续写。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/企业微信截图_20200730234028.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/企业微信截图_20200730234028.png)
 
 > checkpoint 可不是随便往前修改一下位置就可以的。比如图 2 中，把 checkpoint 位置从 CP 推进到 CP’，就需要将两个点之间的日志（浅绿色部分），对应的所有脏页都flush 到磁盘上。之后，图中从 write pos 到 CP’之间就是可以再写入的 redo log 的区域。
 
@@ -618,7 +618,7 @@ InnoDB 每次写入的日志都有一个序号，当前写入的序号跟 checkp
 
 图中的 F1、F2 就是上面我们通过脏页比例和 redo log 写入速度算出来的两个值。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/企业微信截图_20200730234718.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/企业微信截图_20200730234718.png)
 
 > 现在你知道了，InnoDB 会在后台刷脏页，而刷脏页的过程是要将内存页写入磁盘。所以，无论是你的查询语句在需要内存的时候可能要求淘汰一个脏页，还是由于刷脏页的逻辑会占用 IO 资源并可能影响到了你的更新语句，都可能是造成你从业务端感知到MySQL“抖”了一下的原因。
 >
@@ -672,7 +672,7 @@ InnoDB 每次写入的日志都有一个序号，当前写入的序号跟 checkp
 
 我们先再来看一下 InnoDB 中一个索引的示意图。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/企业微信截图_20200730235302.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/企业微信截图_20200730235302.png)
 
 图1 B+ 树索引示意图
 
@@ -696,7 +696,7 @@ delete 命令其实只是把记录的位置，或者数据页标记为了“可�
 
 假设图 1 中 page A 已经满了，这时我要再插入一行数据，会怎样呢？
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/企业微信截图_20200729232329.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/企业微信截图_20200729232329.png)
 
 图2 插入数据导致页分裂
 
@@ -716,7 +716,7 @@ delete 命令其实只是把记录的位置，或者数据页标记为了“可�
 
 > 你可以使用 alter table A engine=InnoDB 命令来重建表。在 MySQL 5.5 版本之前，这个命令的执行流程跟上述的差不多，区别只是这个临时表 B 不需要你自己创建，MySQL 会自动完成转存数据、交换表名、删除旧表的操作。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/会话%20A、B%20执行时序图.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/会话%20A、B%20执行时序图.png)
 
 图3 改锁表 DDL
 
@@ -730,7 +730,7 @@ delete 命令其实只是把记录的位置，或者数据页标记为了“可�
 4. 临时文件生成后，将日志文件中的操作应用到临时文件，得到一个逻辑数据上与表 A 相同的数据文件，对应的就是图中 state3 的状态；
 5. 用临时文件替换表 A 的数据文件。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/会话%20A、B、C%20的执行流程.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/会话%20A、B、C%20的执行流程.png)
 
 图4 Online DDL
 
@@ -805,7 +805,7 @@ MyISAM 引擎把一个表的总行数存在了磁盘上，因此执行 count(*) 
 
 我们假设从上到下是按照时间顺序执行的，同一行语句是在同一时刻执行的。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/调整顺序后，会话%20A、B%20的执行时序图.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/调整顺序后，会话%20A、B%20的执行时序图.png)
 
 你会看到，在最后一个时刻，三个会话 A、B、C 会同时查询表 t 的总行数，但拿到的结果却不同。这和 InnoDB 的事务设计有关系，**可重复读是它默认的隔离级别**，在代码上就是通过多版本并发控制，也就是 MVCC 来实现的。每一行记录都要判断自己是否对这个会话可见，因此对于 count(*) 请求来说，InnoDB 只好把数据一行一行地读出依次判断，可见的行才能够用于计算“基于这个查询”的表的总行数。
 
@@ -840,11 +840,11 @@ Redis 的数据不能永久地留在内存里，所以你会找一个地方把�
 
 1. 一种是，查到的 100 行结果里面有最新插入记录，而 Redis 的计数里还没加 1；
 
-   ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/email(6)%20索引结构.jpg)
+   ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/email(6)%20索引结构.jpg)
 
 2. 另一种是，查到的 100 行结果里没有最新插入的记录，而 Redis 的计数里已经加了 1。
 
-   ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/会话%20A、B%20的执行时序图.png)
+   ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/会话%20A、B%20的执行时序图.png)
 
 在并发系统里面，我们是无法精确控制不同线程的执行时刻的，因为存在图中的这种操作序列，所以，我们说即使 Redis 正常工作，这个计数值还是逻辑上不精确的。
 
@@ -852,7 +852,7 @@ Redis 的数据不能永久地留在内存里，所以你会找一个地方把�
 
 我们这篇文章要解决的问题，都是由于 InnoDB 要支持事务，从而导致 InnoDB 表不能把 count(*) 直接存起来，然后查询的时候直接返回形成的。现在我们就利用“事务”这个特性，把问题解决掉。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/使用explain命令查看语句的执行情况.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/使用explain命令查看语句的执行情况.png)
 
 我们来看下现在的执行结果。虽然会话 B 的读操作仍然是在 T3 执行的，但是因为这时候更新事务还没有提交，所以计数值加 1 这个操作对会话 B 还不可见。因此，会话 B 看到的结果里， 查计数值和“最近 100 条记录”看到的结果，逻辑上就是一致的。
 
@@ -933,13 +933,13 @@ select city,name,age from t where city='杭州' order by name limit 1000;
 
 在 city 字段上创建索引之后，我们用 explain 命令来看看这个语句的执行情况。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/全排序的%20OPTIMIZER_TRACE%20部分结果.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/全排序的%20OPTIMIZER_TRACE%20部分结果.png)
 
 > Extra 这个字段中的“Using filesort”表示的就是需要排序
 
 MySQL 会给每个线程分配一块内存用于排序，称为 sort_buffer。这个 SQL 查询语句执行流程如下所示 ：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/rowid%20排序的%20OPTIMIZER_TRACE%20部分输出.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/rowid%20排序的%20OPTIMIZER_TRACE%20部分输出.png)
 
 1. 初始化 sort_buffer，确定放入 name、city、age 这三个字段；
 2. 从索引 city 找到第一个满足 city='杭州’条件的主键 id，也就是图中的 ID_X；
@@ -953,7 +953,7 @@ MySQL 会给每个线程分配一块内存用于排序，称为 sort_buffer。�
 
 以上流程可以通过下图来描述：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/企业微信截图_20200730235823.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/企业微信截图_20200730235823.png)
 
 > 图 3 全字段排序
 
@@ -987,7 +987,7 @@ select @b-@a;
 
 这个方法是通过查看 OPTIMIZER_TRACE 的结果来确认的，你可以从 number_of_tmp_files 中看到是否使用了临时文件。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/引入(city,name)联合索引后，查询语句的执行计划.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/引入(city,name)联合索引后，查询语句的执行计划.png)
 
 图4 全排序的 OPTIMIZER_TRACE 部分结果
 
@@ -1031,7 +1031,7 @@ max_length_for_sort_data，是 MySQL 中专门控制用于排序的行数据的�
 
 这个执行流程的示意图如下，我把它称为 rowid 排序。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/city和name联合索引示意图.png" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/city和name联合索引示意图.png" style="zoom:67%;" />
 
 对比图 3 的全字段排序流程图你会发现，rowid 排序多访问了一次表 t 的主键索引，就是步骤 7。
 
@@ -1041,7 +1041,7 @@ max_length_for_sort_data，是 MySQL 中专门控制用于排序的行数据的�
 
 首先，图中的 examined_rows 的值还是 4000，表示用于排序的数据是 4000 行。但是 select @b-@a 这个语句的值变成 5000 了。因为这时候除了排序过程外，在排序完成后，还要根据 id 去原表取值。由于语句是 limit 1000，因此会多读 1000 行。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/city%20字段的索引示意图.png" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/city%20字段的索引示意图.png" style="zoom:67%;" />
 
 从 OPTIMIZER_TRACE 的结果中，你还能看到另外两个信息也变了。
 
@@ -1060,7 +1060,7 @@ alter table t add index city_user(city, name);
 
 作为与 city 索引的对比，我们来看看这个索引的示意图。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/引入(city,name,age)联合索引后，查询语句的执行计划.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/引入(city,name,age)联合索引后，查询语句的执行计划.png)
 
 在这个索引里面，我们依然可以用树搜索的方式定位到第一个满足 city='杭州’的记录，并且额外确保了，接下来按顺序取“下一条记录”的遍历过程中，只要 city 的值是杭州，name 的值就一定是有序的。这样整个查询过程的流程就变成了：
 
@@ -1069,13 +1069,13 @@ alter table t add index city_user(city, name);
 3. 从索引 (city,name) 取下一个记录主键 id；
 4. 重复步骤 2、3，直到查到第 1000 条记录，或者是不满足 city='杭州’条件时循环结束。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/rowid排序.jpg" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/rowid排序.jpg" style="zoom:67%;" />
 
 > 可以看到，这个查询过程不需要临时表，也不需要排序。
 
 接下来，我们用 explain 的结果来印证一下。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/statement%20格式%20binlog%20示例.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/statement%20格式%20binlog%20示例.png)
 
 从图中可以看到，Extra 字段中没有 Using filesort 了，也就是不需要排序了。而且由于 (city,name) 这个联合索引本身有序，所以这个查询也不用把 4000 行全都读一遍，只要找到满足条件的前 1000 条记录就可以退出了。也就是说，在我们这个例子里，只需要扫描 1000 次。
 
@@ -1093,15 +1093,15 @@ alter table t add index city_user_age(city, name, age);
 2. 从索引 (city,name,age) 取下一个记录，同样取出这三个字段的值，作为结果集的一部分直接返回；
 3. 重复执行步骤 2，直到查到第 1000 条记录，或者是不满足 city='杭州’条件时循环结束。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/引入(city,name)联合索引后，查询语句的执行计划.jpg" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/引入(city,name)联合索引后，查询语句的执行计划.jpg" style="zoom:67%;" />
 
 然后，我们来对比看看3次的 explain 的结果。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/全排序的%20OPTIMIZER_TRACE%20部分结果.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/全排序的%20OPTIMIZER_TRACE%20部分结果.png)
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/statement%20格式%20binlog%20示例.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/statement%20格式%20binlog%20示例.png)
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/delete%20执行%20warnings.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/delete%20执行%20warnings.png)
 
 可以看到，Extra 字段里面多了“Using index”，表示的就是使用了覆盖索引，性能上会快很多。
 
@@ -1159,7 +1159,7 @@ select word from words order by rand() limit 3;
 
 我们先用 explain 命令来看看这个语句的执行情况。
 
-![使用 explain 命令查看语句的执行情况](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/使用%20explain%20命令查看语句的执行情况.png)
+![使用 explain 命令查看语句的执行情况](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/使用%20explain%20命令查看语句的执行情况.png)
 
 Extra 字段显示 Using temporary，表示的是需要使用临时表；Using filesort，表示的是需要执行排序操作。因此这个 Extra 的意思就是，需要临时表，并且需要在临时表上排序。
 
@@ -1191,7 +1191,7 @@ select word from words order by rand() limit 3;
 
 现在，我来把完整的排序执行流程图画出来。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/随机排序完整流程图1.png" alt="随机排序完整流程图1" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/随机排序完整流程图1.png" alt="随机排序完整流程图1" style="zoom:67%;" />
 
 图中的 pos 就是位置信息。
 
@@ -1229,7 +1229,7 @@ SELECT * FROM `information_schema`.`OPTIMIZER_TRACE`\G
 
 OPTIMIZER_TRACE 部分结果如下：
 
-![OPTIMIZER_TRACE部分结果](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/OPTIMIZER_TRACE部分结果.png)
+![OPTIMIZER_TRACE部分结果](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/OPTIMIZER_TRACE部分结果.png)
 
 > 图 5 OPTIMIZER_TRACE 部分结果
 
@@ -1256,7 +1256,7 @@ OPTIMIZER_TRACE 部分结果如下：
 
 这里我简单画了一个优先队列排序过程的示意图。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/优先队列排序算法示例.png" alt="优先队列排序算法示例" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/优先队列排序算法示例.png" alt="优先队列排序算法示例" style="zoom: 50%;" />
 
 > 图 6 优先队列排序算法示例
 
@@ -1375,7 +1375,7 @@ select count(*) from tradelog where month(t_modified)=7;
 
 如果对字段做了函数计算，就用不上索引了，这是 MySQL 的规定。为什么条件是 where t_modified='2018-7-1’的时候可以用上索引，而改成 where month(t_modified)=7 的时候就不行了？
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/t_modified索引示意图.png" alt="t_modified索引示意图" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/t_modified索引示意图.png" alt="t_modified索引示意图" style="zoom: 67%;" />
 
 如果你的 SQL 语句条件用的是 where t_modified='2018-7-1’的话，引擎就会按照上面绿色箭头的路线，快速定位到 t_modified='2018-7-1’需要的结果。但是，如果计算 month() 函数的话，你会看到传入 7 的时候，在树的第一层就不知道该怎么办了。对索引字段做函数操作，可能会破坏索引值的有序性，因此优化器就决定放弃走树搜索功能。
 
@@ -1383,7 +1383,7 @@ select count(*) from tradelog where month(t_modified)=7;
 
 在这个例子里，放弃了树搜索功能，优化器可以选择遍历主键索引，也可以选择遍历索引 t_modified，优化器对比索引大小后发现，索引 t_modified 更小，遍历这个索引比遍历主键索引来得更快。因此最终还是会选择索引 t_modified。我们使用 explain 命令，查看一下这条 SQL 语句的执行结果。
 
-![explain结果](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/explain结果.png)
+![explain结果](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/explain结果.png)
 
 key="t_modified"表示的是，使用了 t_modified 这个索引；我在测试表数据中插入了 10 万行数据，rows=100335，说明这条语句扫描了整个索引的所有值；Extra 字段的 Using index，表示的是使用了覆盖索引。
 
@@ -1416,7 +1416,7 @@ select * from tradelog where tradeid=110717;
 >
 > 验证结果如下图所示：
 >
-> <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200803233504319.png" alt="image-20200803233504319" style="zoom: 67%;" />
+> <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200803233504319.png" alt="image-20200803233504319" style="zoom: 67%;" />
 
 在 MySQL 中，字符串和数字做比较的话，是将字符串转换成数字。那为什么有数据类型转换，就需要走全索引扫描呢？
 
@@ -1478,13 +1478,13 @@ insert into trade_detail values(11, 'aaaaaaac', 4, 'commit');
 select d.* from tradelog l, trade_detail d where d.tradeid=l.tradeid and l.id=2;
 ```
 
-![语句Q1的explain结果](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/语句Q1的explain结果.png)
+![语句Q1的explain结果](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/语句Q1的explain结果.png)
 
 第一行显示优化器会先在交易记录表 tradelog 上查到 id=2 的行，这个步骤用上了主键索引，rows=1 表示只扫描一行；<br>第二行 key=NULL，表示没有用上交易详情表 trade_detail 上的 tradeid 索引，进行了全表扫描。
 
 在这个执行计划里，是从 tradelog 表中取 tradeid 字段，再去 trade_detail 表里查询匹配字段。因此，我们把 tradelog 称为驱动表，把 trade_detail 称为被驱动表，把 tradeid 称为关联字段。我们看下这个 explain 结果表示的执行流程：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/语句Q1的执行过程.png" alt="语句Q1的执行过程" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/语句Q1的执行过程.png" alt="语句Q1的执行过程" style="zoom:67%;" />
 
 - 第 1 步，是根据 id 在 tradelog 表里找到 L2 这一行；
 - 第 2 步，是从 L2 中取出 tradeid 字段的值；
@@ -1520,7 +1520,7 @@ CONVERT() 函数，在这里的意思是把输入的字符串转成 utf8mb4 字�
 select l.operator from tradelog l , trade_detail d where d.tradeid=l.tradeid and d.id=4;
 ```
 
-![案例三的对比验证explain结果](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/案例三的对比验证explain结果.png)
+![案例三的对比验证explain结果](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/案例三的对比验证explain结果.png)
 
 这个语句里 trade_detail 表成了驱动表，但是 explain 结果的第二行显示，这次的查询操作用上了被驱动表 tradelog 里的索引 (tradeid)，扫描行数是 1。
 
@@ -1560,7 +1560,7 @@ select d.* from tradelog l, trade_detail d where d.tradeid=l.tradeid and l.id=2;
    select d.* from tradelog l , trade_detail d where d.tradeid=CONVERT(l.tradeid USING utf8) and l.id=2; 
    ```
 
-   ![SQL语句优化后的explain结果](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/SQL语句优化后的explain结果.png)
+   ![SQL语句优化后的explain结果](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/SQL语句优化后的explain结果.png)
 
    这里，我主动把 l.tradeid 转成 utf8，就避免了被驱动表上的字符编码转换，从 explain 结果可以看到，这次索引走对了。
 
@@ -1614,13 +1614,13 @@ select * from t where id=1;
 
 - 等 MDL 锁
 
-![Waiting for table metadata lock 状态示意图](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Waiting%20for%20table%20metadata%20lock%20状态示意图.png)
+![Waiting for table metadata lock 状态示意图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Waiting%20for%20table%20metadata%20lock%20状态示意图.png)
 
 出现这个状态表示的是，现在有一个线程正在表 t 上请求或者持有 MDL 写锁，把 select 语句堵住了。
 
 在 MySQL 5.7 版本下复现这个场景，也很容易。如图 3 所示，我给出了简单的复现步骤。
 
-![MySQL 5.7 中 Waiting for table metadata lock 的复现步骤](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/MySQL%205.7%20中%20Waiting%20for%20table%20metadata%20lock%20的复现步骤.png)
+![MySQL 5.7 中 Waiting for table metadata lock 的复现步骤](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/MySQL%205.7%20中%20Waiting%20for%20table%20metadata%20lock%20的复现步骤.png)
 
 session A 通过 lock table 命令持有表 t 的 MDL 写锁，而 session B 的查询需要获取 MDL 读锁。所以，session B 进入等待状态。这类问题的处理方式，就是找到谁持有 MDL 写锁，然后把它 kill 掉。
 
@@ -1645,7 +1645,7 @@ session A 通过 lock table 命令持有表 t 的 MDL 写锁，而 session B 的
 select * from information_schema.processlist where id=1;
 ```
 
-![Waiting for table flush 状态示意图](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Waiting%20for%20table%20flush%20状态示意图.png)
+![Waiting for table flush 状态示意图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Waiting%20for%20table%20flush%20状态示意图.png)
 
 这个状态表示的是，现在有一个线程正要对表 t 做 flush 操作。
 
@@ -1660,13 +1660,13 @@ select * from information_schema.processlist where id=1;
 
 现在，我们一起来复现一下这种情况，复现步骤如图 6 所示：
 
-![Waiting for table flush 的复现步骤](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Waiting%20for%20table%20flush%20的复现步骤.png)
+![Waiting for table flush 的复现步骤](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Waiting%20for%20table%20flush%20的复现步骤.png)
 
 > 在 session A 中，我故意每行都调用一次 sleep(1)，这样这个语句默认要执行 10 万秒，在这期间表 t 一直是被 session A“打开”着。然后，session B 的 flush tables t 命令再要去关闭表 t，就需要等 session A 的查询结束。这样，session C 要再次查询的话，就会被 flush 命令堵住了。
 
 下面是 show processlist 的结果：
 
-![Waiting for table flush 的 show processlist 结果](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Waiting%20for%20table%20flush%20的%20show%20processlist%20结果.png)
+![Waiting for table flush 的 show processlist 结果](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Waiting%20for%20table%20flush%20的%20show%20processlist%20结果.png)
 
 - 等行锁
 
@@ -1676,15 +1676,15 @@ select * from t where id=1 lock in share mode;
 
 由于访问 id=1 这个记录时要加读锁，如果这时候已经有一个事务在这行记录上持有一个写锁，我们的 select 语句就会被堵住。复现步骤和现场如下：
 
-![行锁复现](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/行锁复现.png)
+![行锁复现](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/行锁复现.png)
 
-![行锁 show processlist 现场](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/行锁%20show%20processlist%20现场.png)
+![行锁 show processlist 现场](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/行锁%20show%20processlist%20现场.png)
 
 session A 启动了事务，占有写锁，还不提交，是导致 session B 被堵住的原因。
 
 > 这个问题并不难分析，但问题是怎么查出是谁占着这个写锁。如果你用的是 MySQL 5.7 版本，可以通过 sys.innodb_lock_waits 表查到。查询方法是：
 >
-> ![通过 sys.innodb_lock_waits 查行锁](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/通过%20sys.innodb_lock_waits%20查行锁.png)
+> ![通过 sys.innodb_lock_waits 查行锁](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/通过%20sys.innodb_lock_waits%20查行锁.png)
 >
 > 可以看到，4 号线程是造成堵塞的罪魁祸首。而干掉这个罪魁祸首的方式，就是 KILL QUERY 4 或 KILL 4。
 >
@@ -1702,7 +1702,7 @@ select * from t where c=50000 limit 1;
 
 > 作为确认，你可以看一下慢查询日志。注意，这里为了把所有语句记录到 slow log 里，我在连接后先执行了 set long_query_time=0，将慢查询日志的时间阈值设置为 0。
 >
-> ![全表扫描 5 万行的 slow log](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/全表扫描%205%20万行的%20slow%20log.png)
+> ![全表扫描 5 万行的 slow log](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/全表扫描%205%20万行的%20slow%20log.png)
 >
 > Rows_examined 显示扫描了 50000 行。你可能会说，不是很慢呀，11.5 毫秒就返回了，我们线上一般都配置超过 1 秒才算慢查询。但你要记住：**坏查询不一定是慢查询**。我们这个例子里面只有 10 万行记录，数据量大起来的话，执行时间就线性涨上去了。
 
@@ -1712,21 +1712,21 @@ select * from t where c=50000 limit 1;
 select * from t where id=1;
 ```
 
-![扫描一行却执行得很慢](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/扫描一行却执行得很慢.png)
+![扫描一行却执行得很慢](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/扫描一行却执行得很慢.png)
 
 虽然扫描行数是 1，但执行时间却长达 800 毫秒。把这个 slow log 的截图再往下拉一点，你可以看到下一个语句，select * from t where id=1 lock in share mode，执行时扫描行数也是 1 行，执行时间是 0.2 毫秒。
 
-![加上 lock in share mode 的 slow log](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/加上%20lock%20in%20share%20mode%20的%20slow%20log.png)
+![加上 lock in share mode 的 slow log](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/加上%20lock%20in%20share%20mode%20的%20slow%20log.png)
 
-![两个语句的输出结果](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/两个语句的输出结果.png)
+![两个语句的输出结果](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/两个语句的输出结果.png)
 
 第一个语句的查询结果里 c=1，带 lock in share mode 的语句返回的是 c=1000001。复现步骤如下：
 
-![复现步骤](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/复现步骤.png)
+![复现步骤](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/复现步骤.png)
 
 session A 先用 start transaction with consistent snapshot 命令启动了一个事务，之后 session B 才开始执行 update 语句。session B 执行完 100 万次 update 语句后，id=1 这一行处于什么状态呢？你可以从图 16 中找到答案。
 
-![image-20200807003435755](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200807003435755.png)
+![image-20200807003435755](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200807003435755.png)
 
 session B 更新完 100 万次，生成了 100 万个回滚日志 (undo log)。
 
@@ -1760,7 +1760,7 @@ commit;
 
 如下图所示就是基本的主备切换流程。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/全字段排序.jpg" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/全字段排序.jpg" style="zoom:67%;" />
 
 （图1：MySQL 主备切换流程）
 
@@ -1780,7 +1780,7 @@ commit;
 
 下图中画出的就是一个 update 语句在节点 A 执行，然后同步到节点 B 的完整流程图。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/mixed%20格式和%20now().png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/mixed%20格式和%20now().png)
 
 （图2：主备流程图）
 
@@ -1837,7 +1837,7 @@ show binlog events in 'master.000001';
 
 命令看 binlog 中的内容。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/MySQL%20主备切换流程.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/MySQL%20主备切换流程.jpg)
 
 （图3：statement 格式 binlog 示例）
 
@@ -1851,7 +1851,7 @@ show binlog events in 'master.000001';
 
 为了说明 statement 和 row 格式的区别，我们来看一下这条 delete 命令的执行效果图：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/主备流程图.png" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/主备流程图.png" style="zoom:67%;" />
 
 （图4：delete 执行 warnings）
 
@@ -1866,7 +1866,7 @@ show binlog events in 'master.000001';
 
 那么，如果我把 binlog 的格式改为 binlog_format=‘row’， 是不是就没有这个问题了呢？我们先来看看这时候 binog 中的内容吧。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/表%20t%20的磁盘文件.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/表%20t%20的磁盘文件.png" style="zoom:50%;" />
 
 （图5：row 格式 binlog 示例）
 
@@ -1881,7 +1881,7 @@ show binlog events in 'master.000001';
 mysqlbinlog -vv data/master.000001 --start-position=8900;
 ```
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/row%20格式%20binlog%20示例的详细信息.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/row%20格式%20binlog%20示例的详细信息.png)
 
 （图6：row 格式 binlog 示例的详细信息）
 
@@ -1928,7 +1928,7 @@ insert into t values(10,10, now());
 
 先不要着急说结果，我们一起来看一下这条语句执行的效果。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/引入(city,name,age)联合索引后，查询语句的执行流程.jpg" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/引入(city,name,age)联合索引后，查询语句的执行流程.jpg" style="zoom: 67%;" />
 
 （图7：mixed 格式和 now()）
 
@@ -1936,7 +1936,7 @@ insert into t values(10,10, now());
 
 接下来，我们再用 mysqlbinlog 工具来看看：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/TIMESTAMP%20命令.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/TIMESTAMP%20命令.png)
 
 （图8：TIMESTAMP 命令）
 
@@ -1962,7 +1962,7 @@ mysqlbinlog master.000001  --start-position=2738 --stop-position=2973 | mysql -h
 
 因此，我们可以认为正常情况下主备的数据是一致的。也就是说，图 1 中 A、B 两个节点的内容是一致的。其实，图 1 中我画的是 M-S 结构，但实际生产上使用比较多的是双 M 结构，也就是图 9 所示的主备切换流程。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/分区表间隙锁示例.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/分区表间隙锁示例.png)
 
 （图 9：MySQL 主备切换流程 -- 双 M 结构）
 
@@ -2068,7 +2068,7 @@ insert into t values('2017-4-1',1),('2018-4-1',1);
 
 表 t 的磁盘文件如下图：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/用%20MyISAM%20表锁验证.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/用%20MyISAM%20表锁验证.png)
 
 我在表 t 中初始化插入了两行记录，按照定义的分区规则，这两行记录分别落在 p_2018 和 p_2019 这两个分区上。
 
@@ -2080,23 +2080,23 @@ insert into t values('2017-4-1',1),('2018-4-1',1);
 
 我先给你举个在分区表加间隙锁的例子，目的是说明对于 InnoDB 来说，这是 4 个表。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/MySQL%20主备切换流程%20--%20双%20M%20结构.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/MySQL%20主备切换流程%20--%20双%20M%20结构.jpg)
 
 session A 的 select 语句对索引 ftime 上这两个记录之间的间隙加了锁。如果是一个普通表的话，那么 T1 时刻，在表 t 的 ftime 索引上，间隙和加锁状态应该是下图这样的（普通表的加锁范围）。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/分区表的%20MDL%20锁.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/分区表的%20MDL%20锁.png)
 
 也就是说，‘2017-4-1’ 和’2018-4-1’ 这两个记录之间的间隙是会被锁住的。那么，sesion B 的两条插入语句应该都要进入锁等待状态。
 
 但是，从上面的实验效果可以看出，session B 的第一个 insert 语句是可以执行成功的。这是因为，对于引擎来说，p_2018 和 p_2019 是两个不同的表，也就是说 2017-4-1 的下一个记录并不是 2018-4-1，而是 p_2018 分区的 supremum。所以 T1 时刻，在表 t 的 ftime 索引上，间隙和加锁的状态其实是下图这样的（分区表的加锁范围）。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/普通表的加锁范围.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/普通表的加锁范围.jpg)
 
 由于分区表的规则，session A 的 select 语句其实只操作了分区 p_2018，因此加锁范围就是图 4 中深绿色的部分。所以，session B 要写入一行 ftime 是 2018-2-1 的时候是可以成功的，而要写入 2017-12-1 这个记录，就要等 session A 的间隙锁。
 
 这时候的 show engine innodb status 的部分结果如下图。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/row%20格式%20binlog%20示例.png" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/row%20格式%20binlog%20示例.png" style="zoom: 50%;" />
 
 看完 InnoDB 引擎的例子，我们再来一个 MyISAM 分区表的例子。
 
@@ -2104,7 +2104,7 @@ session A 的 select 语句对索引 ftime 上这两个记录之间的间隙加�
 
 我首先用 alter table t engine=myisam，把表 t 改成 MyISAM 表；然后，我再用下面这个例子说明，对于 MyISAM 引擎来说，这是 4 个表。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/session%20B%20被锁住信息.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/session%20B%20被锁住信息.png)
 
 在 session A 里面，我用 sleep(100) 将这条语句的执行时间设置为 100 秒。由于 MyISAM 引擎只支持表锁，所以这条 update 语句会锁住整个表 t 上的读。
 
@@ -2130,7 +2130,7 @@ session A 的 select 语句对索引 ftime 上这两个记录之间的间隙加�
 
 下图就是我创建的一个包含了很多分区的表 t_myisam，执行一条插入语句后报错的情况。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/insert%20语句报错.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/insert%20语句报错.png)
 
 可以看到，这条 insert 语句，明显只需要访问一个分区，但语句却无法执行。
 
@@ -2152,11 +2152,11 @@ MySQL 从 5.7.17 开始，将 MyISAM 分区表标记为即将弃用 (deprecated)
 
 分区表的 MDL 锁如下图所示：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/分区表%20t%20的加锁范围.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/分区表%20t%20的加锁范围.jpg)
 
 show processlist 结果如下图所示：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/show%20processlist%20结果.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/show%20processlist%20结果.png)
 
 可以看到，虽然 session B 只需要操作 p_2107 这个分区，但是由于 session A 持有整个表 t 的 MDL 锁，就导致了 session B 的 alter 语句被堵住。
 

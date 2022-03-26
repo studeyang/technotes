@@ -20,7 +20,7 @@ struct sdshdr {
 };
 ```
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090833.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090833.png)
 
 free 属性的值为 0，表示这个 SDS 没有分配任何未使用空间；<br>len 属性的值为 5，表示这个 SDS 保存了一个五字节长的字符串；<br>buf 属性是一个 char 类型的数组，数组的前五个字节分别保存了 'R'、'e'、'd'、'i'、's' 五个字符，而最后一个字节则保存了空字符 '\0'。
 
@@ -28,7 +28,7 @@ free 属性的值为 0，表示这个 SDS 没有分配任何未使用空间；<b
 
 **2.2 SDS与C字符串的区别 **
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090838.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090838.png)
 
 - 2.2.1 常数复杂度获取字符串长度 
 
@@ -93,7 +93,7 @@ typedef struct list {
 } list;
 ```
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090844.png" style="zoom: 80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090844.png" style="zoom: 80%;" />
 
 Redis 的链表实现的特性可以总结如下：
 
@@ -139,7 +139,7 @@ Redis 的字典使用哈希表作为底层实现，一个哈希表里面可以�
 
   下图展示了一个大小为 4 的空哈希表，没有包含任何键值对。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090850.png" style="zoom:80%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090850.png" style="zoom:80%;" />
 
 - 4.1.2 哈希表节点
 
@@ -162,7 +162,7 @@ Redis 的字典使用哈希表作为底层实现，一个哈希表里面可以�
   } dictEntry;
   ```
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090854.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090854.png)
 
 - 4.1.3 字典
 
@@ -204,7 +204,7 @@ struct redisServer {
 
 dbnum属性的值由服务器配置的database选项决定，默认情况下，该选项的值为16，所以Redis服务器默认会创建16个数据库。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090859.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090859.png)
 
 **9.2 切换数据库 **
 
@@ -235,7 +235,7 @@ dbnum属性的值由服务器配置的database选项决定，默认情况下，�
 
 **10.3 RDB文件结构**
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090909.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090909.jpg)
 
 > 用全大写单词标识常量，用全小写单词标示变量和数据。本章展示的所有 RDB 文件结构图都遵循这一规则。
 
@@ -251,7 +251,7 @@ check_sum 是一个 8 字节长的无符号整数，保存着一个校验和。
 
 例如：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090913.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090913.jpg)
 
 - 10.3.1 databases部分
 - 10.3.2 key_value_pairs部分

@@ -246,7 +246,7 @@ System.out.println(message);
 
 如果此时你将调用线程 dump 出来的话，会是下图这个样子。
 
-![调用栈信息](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/调用栈信息.png)
+![调用栈信息](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/调用栈信息.png)
 
 本来发送请求是异步的，但是调用线程却阻塞了，说明 Dubbo 帮我们做了异步转同步的事情。通过调用栈，你能看到线程是阻塞在 DefaultFuture.get() 方法上，所以可以推断：Dubbo 异步转同步的功能应该是通过 DefaultFuture 这个类实现的。
 
@@ -333,7 +333,7 @@ DefaultFuture 里面唤醒等待的线程，用的是 signal()，而不是 signa
 
 信号量模型可以简单概括为：**一个计数器，一个等待队列，三个方法**。在信号量模型里，计数器和等待队列对外是不可见的，所以只能通过信号量模型提供的三个方法来访问它们，这三个方法分别是：init()、down() 和 up()。你可以结合下图来形象化地理解。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/信号量模型图.png" alt="信号量模型图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/信号量模型图.png" alt="信号量模型图" style="zoom:67%;" />
 
 这三个方法详细的语义具体如下所示。
 
@@ -500,11 +500,11 @@ class Cache<K,V> {
 
 如果源头数据的数据量不大，就可以采用一次性加载的方式，这种方式最简单（可参考下图），只需在应用启动的时候把源头数据查询出来，依次调用类似上面示例代码中的 put() 方法就可以了。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/缓存一次性加载示意图.png" alt="缓存一次性加载示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/缓存一次性加载示意图.png" alt="缓存一次性加载示意图" style="zoom:67%;" />
 
 如果源头数据量非常大，那么就需要按需加载了，按需加载也叫懒加载，指的是只有当应用查询缓存，并且数据不在缓存里的时候，才触发加载源头相关数据进缓存的操作。下面你可以结合文中示意图看看如何利用 ReadWriteLock 来实现缓存的按需加载。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/缓存按需加载示意图.png" alt="缓存按需加载示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/缓存按需加载示意图.png" alt="缓存按需加载示意图" style="zoom:67%;" />
 
 **实现缓存的按需加载**
 
@@ -853,7 +853,7 @@ void moveIfAtOrigin(double newX, double newY){
 
 对账系统的处理逻辑很简单，你可以参考下面的对账系统流程图。目前对账系统的处理逻辑是首先查询订单，然后查询派送单，之后对比订单和派送单，将差异写入差异库。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/对账系统流程图.png" alt="对账系统流程图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/对账系统流程图.png" alt="对账系统流程图" style="zoom:67%;" />
 
 对账系统的代码抽象之后，也很简单，核心代码如下，就是在一个单线程里面循环查询订单、派送单，然后执行对账，最后将写入差异库。
 
@@ -876,11 +876,11 @@ while(存在未对账订单) {
 
 目前的对账系统，由于订单量和派送单量巨大，所以查询未对账订单 getPOrders() 和查询派送单 getDOrders() 相对较慢，那有没有办法快速优化一下呢？目前对账系统是单线程执行的，图形化后是下图这个样子。对于串行化的系统，优化性能首先想到的是能否**利用多线程并行处理**。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/对账系统单线程执行示意图.png" alt="对账系统单线程执行示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/对账系统单线程执行示意图.png" alt="对账系统单线程执行示意图" style="zoom:67%;" />
 
 所以，这里你应该能够看出来这个对账系统里的瓶颈：查询未对账订单 getPOrders() 和查询派送单 getDOrders() 是否可以并行处理呢？显然是可以的，因为这两个操作并没有先后顺序的依赖。这两个最耗时的操作并行之后，执行过程如下图所示。对比一下单线程的执行示意图，你会发现同等时间里，并行执行的吞吐量近乎单线程的 2 倍，优化效果还是相对明显的。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/对账系统并行执行示意图.png" alt="对账系统并行执行示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/对账系统并行执行示意图.png" alt="对账系统并行执行示意图" style="zoom:67%;" />
 
 思路有了，下面我们再来看看如何用代码实现。在下面的代码中，我们创建了两个线程 T1 和 T2，并行执行查询未对账订单 getPOrders() 和查询派送单 getDOrders() 这两个操作。在主线程中执行对账操作 check() 和差异写入 save() 两个操作。不过需要注意的是：主线程需要等待线程 T1 和 T2 执行完才能执行 check() 和 save() 这两个操作，为此我们通过调用 T1.join() 和 T2.join() 来实现等待，当 T1 和 T2 线程退出时，调用 T1.join() 和 T2.join() 的主线程就会从阻塞态被唤醒，从而执行之后的 check() 和 save()。
 
@@ -971,19 +971,19 @@ while(存在未对账订单){
 
 前面我们将 getPOrders() 和 getDOrders() 这两个查询操作并行了，但这两个查询操作和对账操作 check()、save() 之间还是串行的。很显然，这两个查询操作和对账操作也是可以并行的，也就是说，在执行对账操作的时候，可以同时去执行下一轮的查询操作，这个过程可以形象化地表述为下面这幅示意图。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/完全并行执行示意图.png" alt="完全并行执行示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/完全并行执行示意图.png" alt="完全并行执行示意图" style="zoom:67%;" />
 
 那接下来我们再来思考一下如何实现这步优化，两次查询操作能够和对账操作并行，对账操作还依赖查询操作的结果，这明显有点生产者 - 消费者的意思，两次查询操作是生产者，对账操作是消费者。既然是生产者 - 消费者模型，那就需要有个队列，来保存生产者生产的数据，而消费者则从这个队列消费数据。
 
 不过针对对账这个项目，我设计了两个队列，并且两个队列的元素之间还有对应关系。具体如下图所示，订单查询操作将订单查询结果插入订单队列，派送单查询操作将派送单插入派送单队列，这两个队列的元素之间是有一一对应的关系的。两个队列的好处是，对账操作可以每次从订单队列出一个元素，从派送单队列出一个元素，然后对这两个元素执行对账操作，这样数据一定不会乱掉。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/双队列示意图.png" alt="双队列示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/双队列示意图.png" alt="双队列示意图" style="zoom:67%;" />
 
 下面再来看如何用双队列来实现完全的并行。一个最直接的想法是：一个线程 T1 执行订单的查询工作，一个线程 T2 执行派送单的查询工作，当线程 T1 和 T2 都各自生产完 1 条数据的时候，通知线程 T3 执行对账操作。这个想法虽看上去简单，但其实还隐藏着一个条件，那就是线程 T1 和线程 T2 的工作要步调一致，不能一个跑得太快，一个跑得太慢，只有这样才能做到各自生产完 1 条数据的时候，通知线程 T3。
 
 下面这幅图形象地描述了上面的意图：线程 T1 和线程 T2 只有都生产完 1 条数据的时候，才能一起向下执行，也就是说，线程 T1 和线程 T2 要互相等待，步调要一致；同时当线程 T1 和 T2 都生产完一条数据的时候，还要能够通知线程 T3 执行对账操作。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/同步执行示意图.png" alt="同步执行示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/同步执行示意图.png" alt="同步执行示意图" style="zoom:67%;" />
 
 **用 CyclicBarrier 实现线程同步**
 
@@ -1093,7 +1093,7 @@ Java 在 1.5 版本之前所谓的线程安全的容器，主要指的就是**�
 
 并发容器虽然数量非常多，但依然是前面我们提到的四大类：List、Map、Set 和 Queue，下面的并发容器关系图，基本上把我们经常用的容器都覆盖到了。
 
-![并发容器关系图](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/并发容器关系图.png)
+![并发容器关系图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/并发容器关系图.png)
 
 - （一）List
 
@@ -1105,11 +1105,11 @@ Java 在 1.5 版本之前所谓的线程安全的容器，主要指的就是**�
 
   CopyOnWriteArrayList 内部维护了一个数组，成员变量 array 就指向这个内部数组，所有的读操作都是基于 array 进行的，如下图所示，迭代器 Iterator 遍历的就是 array 数组。
 
-  ![执行迭代的内部结构图](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/执行迭代的内部结构图.png)
+  ![执行迭代的内部结构图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/执行迭代的内部结构图.png)
 
   如果在遍历 array 的同时，还有一个写操作，例如增加元素，CopyOnWriteArrayList 是如何处理的呢？CopyOnWriteArrayList 会将 array 复制一份，然后在新复制处理的数组上执行增加元素的操作，执行完之后再将 array 指向这个新的数组。通过下图你可以看到，读写是可以并行的，遍历操作一直都是基于原 array 执行，而写操作则是基于新 array 进行。
 
-  ![执行增加元素的内部结构图](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/执行增加元素的内部结构图.png)
+  ![执行增加元素的内部结构图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/执行增加元素的内部结构图.png)
 
   使用 CopyOnWriteArrayList 需要注意的“坑”主要有两个方面。
 
@@ -1127,7 +1127,7 @@ Java 在 1.5 版本之前所谓的线程安全的容器，主要指的就是**�
 
   下面这个表格总结了 Map 相关的实现类对于 key 和 value 的要求，你可以对比学习。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Map 相关的实现类对于 key 和 value 的要求.png" alt="Map 相关的实现类对于 key 和 value 的要求" style="zoom:80%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Map 相关的实现类对于 key 和 value 的要求.png" alt="Map 相关的实现类对于 key 和 value 的要求" style="zoom:80%;" />
 
   ConcurrentSkipListMap 里面的 SkipList 本身就是一种数据结构，中文一般都翻译为“跳表”。跳表插入、删除、查询操作平均的时间复杂度是 O(log n)，理论上和并发线程数没有关系，所以在并发度非常高的情况下，若你对 ConcurrentHashMap 的性能还不满意，可以尝试一下 ConcurrentSkipListMap。
 
@@ -1149,11 +1149,11 @@ Java 在 1.5 版本之前所谓的线程安全的容器，主要指的就是**�
 
      其实现有 ArrayBlockingQueue、LinkedBlockingQueue、SynchronousQueue、LinkedTransferQueue、PriorityBlockingQueue 和 DelayQueue。内部一般会持有一个队列，这个队列可以是数组（其实现是 ArrayBlockingQueue）也可以是链表（其实现是 LinkedBlockingQueue）；甚至还可以不持有队列（其实现是 SynchronousQueue），此时生产者线程的入队操作必须等待消费者线程的出队操作。而 LinkedTransferQueue 融合 LinkedBlockingQueue 和 SynchronousQueue 的功能，性能比 LinkedBlockingQueue 更好；PriorityBlockingQueue 支持按照优先级出队；DelayQueue 支持延时出队。
 
-     <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/单端阻塞队列示意图.png" alt="单端阻塞队列示意图" style="zoom:80%;" />
+     <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/单端阻塞队列示意图.png" alt="单端阻塞队列示意图" style="zoom:80%;" />
 
   2. **双端阻塞队列**：其实现是 LinkedBlockingDeque。
 
-     <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/双端阻塞队列示意图.png" alt="双端阻塞队列示意图" style="zoom:80%;" />
+     <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/双端阻塞队列示意图.png" alt="双端阻塞队列示意图" style="zoom:80%;" />
 
   3. **单端非阻塞队列**：其实现是 ConcurrentLinkedQueue。
 
@@ -1299,7 +1299,7 @@ native boolean compareAndSwapLong(Object o, long offset, long expected, long x);
 
 Java SDK 并发包里提供的原子类内容很丰富，我们可以将它们分为五个类别：**原子化的基本数据类型、原子化的对象引用类型、原子化数组、原子化对象属性更新器**和**原子化的累加器**。这五个类别提供的方法基本上是相似的，并且每个类别都有若干原子类，你可以通过下面的原子类组成概览图来获得一个全局的印象。下面我们详细解读这五个类别。
 
-![原子类组成概览图](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/原子类组成概览图.png)
+![原子类组成概览图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/原子类组成概览图.png)
 
 1. 原子化的基本数据类型
 
@@ -1645,11 +1645,11 @@ Integer result = futureTask.get();
 
 以前初中语文课文里有一篇著名数学家华罗庚先生的文章《统筹方法》，这篇文章里介绍了一个烧水泡茶的例子，文中提到最优的工序应该是下面这样：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/烧水泡茶最优工序.png" alt="烧水泡茶最优工序" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/烧水泡茶最优工序.png" alt="烧水泡茶最优工序" style="zoom:67%;" />
 
 下面我们用程序来模拟一下这个最优工序。我们专栏前面曾经提到，并发编程可以总结为三个核心问题：分工、同步和互斥。编写并发程序，首先要做的就是分工，所谓分工指的是如何高效地拆解任务并分配给线程。对于烧水泡茶这个程序，一种最优的分工方案可以是下图所示的这样：用两个线程 T1 和 T2 来完成烧水泡茶程序，T1 负责洗水壶、烧开水、泡茶这三道工序，T2 负责洗茶壶、洗茶杯、拿茶叶三道工序，其中 T1 在执行泡茶这道工序时需要等待 T2 完成拿茶叶的工序。对于 T1 的这个等待动作，你应该可以想出很多种办法，例如 Thread.join()、CountDownLatch，甚至阻塞队列都可以解决，不过今天我们用 Future 特性来实现。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/烧水泡茶最优分工方案.png" alt="烧水泡茶最优分工方案" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/烧水泡茶最优分工方案.png" alt="烧水泡茶最优分工方案" style="zoom:67%;" />
 
 下面的示例代码就是用这一章提到的 Future 特性来实现的。首先，我们创建了两个 FutureTask——ft1 和 ft2，ft1 完成洗水壶、烧开水、泡茶的任务，ft2 完成洗茶壶、洗茶杯、拿茶叶的任务；这里需要注意的是 ft1 这个任务在执行泡茶任务前，需要等待 ft2 把茶叶拿来，所以 ft1 内部需要引用 ft2，并在执行泡茶之前，调用 ft2 的 get() 方法实现等待。
 
@@ -1745,7 +1745,7 @@ save(r3);
 
 我们用 CompletableFuture 重新实现前面曾提及的烧水泡茶程序。在下面的程序中，我们分了 3 个任务：任务 1 负责洗水壶、烧开水，任务 2 负责洗茶壶、洗茶杯和拿茶叶，任务 3 负责泡茶。其中任务 3 要等待任务 1 和任务 2 都完成后才能开始。这个分工如下图所示。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/烧水泡茶分工方案.png" alt="烧水泡茶分工方案" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/烧水泡茶分工方案.png" alt="烧水泡茶分工方案" style="zoom:67%;" />
 
 下面是代码实现。
 
@@ -1828,11 +1828,11 @@ T1: 泡茶...
 
 你可以站在分工的角度类比一下工作流。任务是有时序关系的，比如有**串行关系、并行关系、汇聚关系**等。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/串行关系.png" alt="串行关系" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/串行关系.png" alt="串行关系" style="zoom:67%;" />
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/并行关系.png" alt="并行关系" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/并行关系.png" alt="并行关系" style="zoom:67%;" />
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/汇聚关系.png" alt="汇聚关系" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/汇聚关系.png" alt="汇聚关系" style="zoom:67%;" />
 
 烧水泡茶程序中的汇聚关系是一种 AND 聚合关系，这里的 AND 指的是所有依赖的任务（烧开水和拿茶叶）都完成后才开始执行当前任务（泡茶）。OR 聚合关系指的是依赖的任务只要有一个完成就可以执行当前任务。
 
@@ -2176,7 +2176,7 @@ return m;
 
 下面我用现实世界里的工作流程图描述了并发编程领域的简单并行任务、聚合任务和批量并行任务，辅以这些流程图，相信你一定能将你的思维模式转换到现实世界里来。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/简单并行任务、聚合任务和批量并行任务示意图.png" alt="简单并行任务、聚合任务和批量并行任务示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/简单并行任务、聚合任务和批量并行任务示意图.png" alt="简单并行任务、聚合任务和批量并行任务示意图" style="zoom:67%;" />
 
 上面提到的简单并行、聚合、批量并行这三种任务模型，基本上能够覆盖日常工作中的并发场景了，但还是不够全面，因为还有一种“分治”的任务模型没有覆盖到。**分治**，顾名思义，即分而治之，是一种解决复杂问题的思维方法和模式；具体来讲，指的是**把一个复杂的问题分解成多个相似的子问题，然后再把子问题分解成更小的子问题，直到子问题简单到可以直接求解**。理论上来讲，解决每一个问题都对应着一个任务，所以对于问题的分治，实际上就是对于任务的分治。
 
@@ -2186,7 +2186,7 @@ return m;
 
 这里你需要先深入了解一下分治任务模型，分治任务模型可分为两个阶段：一个阶段是**任务分解**，也就是将任务迭代地分解为子任务，直至子任务可以直接计算出结果；另一个阶段是**结果合并**，即逐层合并子任务的执行结果，直至获得最终结果。下图是一个简化的分治任务模型图，你可以对照着理解。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/简版分治任务模型图.png" alt="简版分治任务模型图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/简版分治任务模型图.png" alt="简版分治任务模型图" style="zoom:67%;" />
 
 在这个分治任务模型里，任务和分解后的子任务具有相似性，这种相似性往往体现在任务和子任务的算法是相同的，但是计算的数据规模是不同的。具备这种相似性的问题，我们往往都采用递归算法。
 
@@ -2238,7 +2238,7 @@ ForkJoinPool 本质上也是一个生产者 - 消费者的实现，但是更加�
 
 ForkJoinPool 中的任务队列采用的是双端队列，工作线程正常获取任务和“窃取任务”分别是从任务队列不同的端消费，这样能避免很多不必要的数据竞争。我们这里介绍的仅仅是简化后的原理，ForkJoinPool 的实现远比我们这里介绍的复杂。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/ForkJoinPool 工作原理图.png" alt="ForkJoinPool 工作原理图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/ForkJoinPool 工作原理图.png" alt="ForkJoinPool 工作原理图" style="zoom:67%;" />
 
 **模拟 MapReduce 统计单词数量**
 

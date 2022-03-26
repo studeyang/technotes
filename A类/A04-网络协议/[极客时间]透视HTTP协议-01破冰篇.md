@@ -25,7 +25,7 @@ HTTP 协议是怎么来的？它最开始是什么样子的？又是如何一步
 
 1989 年，任职于欧洲核子研究中心（CERN）的蒂姆·伯纳斯 - 李（Tim Berners-Lee）发表了一篇论文。提出了在互联网上构建超链接文档系统的构想。这篇论文中他确立了三项关键技术。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200804232133361.png" alt="image-20200804232133361" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200804232133361.png" alt="image-20200804232133361" style="zoom:50%;" />
 
 1. URI：即统一资源标识符，作为互联网上资源的唯一身份；
 2. HTML：即超文本标记语言，描述超文本文档；
@@ -51,7 +51,7 @@ HTTP/1.0 版本在 1996 年正式发布。它在多方面增强了 0.9 版，形
 
 1995 年，网景的 Netscape Navigator 和微软的 Internet Explorer 开始了著名的“浏览器大战”。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200804232638245.png" alt="image-20200804232638245" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200804232638245.png" alt="image-20200804232638245" style="zoom: 50%;" />
 
 再一次极大地推动了 Web 的发展，HTTP/1.0 也在这个过程中经受了实践检验。于是在“浏览器大战”结束之后的 1999 年，HTTP/1.1 发布了 RFC 文档，编号为 2616，正式确立了延续十余年的传奇。
 
@@ -101,7 +101,7 @@ HTTP/2 的制定充分考虑了现今互联网的现状：宽带、移动、不�
 
 先看一下 HTTP 的名字：“超文本传输协议”，它可以拆成三个部分，分别是：“超文本”、“传输”和“协议”。我们从后往前来逐个解析，理解了这三个词，我们也就明白了什么是 HTTP。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200804234649206.png" alt="image-20200804234649206" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200804234649206.png" alt="image-20200804234649206" style="zoom:50%;" />
 
 - 协议
 
@@ -175,7 +175,7 @@ HTML 是超文本的载体，是一种标记语言，使用各种标签描述文
 
 这里我画了一个思维导图，也可以算是这个专栏系列文章的“知识地图”。
 
-![HTTP专栏知识地图](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/HTTP专栏知识地图.png)
+![HTTP专栏知识地图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/HTTP专栏知识地图.png)
 
 **思考题**
 
@@ -185,7 +185,7 @@ HTML 是超文本的载体，是一种标记语言，使用各种标签描述文
 
 上一讲的末尾，我画了一张图，里面是与 HTTP 关联的各种技术和知识点，因为上篇那张图比较大，所以我会把左右两部分拆开来分别讲，今天先讲右边的部分，也就是与 HTTP 相关的各种应用，着重介绍互联网、浏览器、Web 服务器等常见且重要的概念。
 
-![HTTP相关应用](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/HTTP相关应用.png)
+![HTTP相关应用](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/HTTP相关应用.png)
 
 **网络世界**
 
@@ -195,7 +195,7 @@ HTML 是超文本的载体，是一种标记语言，使用各种标签描述文
 
 **浏览器**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/浏览器.png" alt="浏览器"  />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/浏览器.png" alt="浏览器"  />
 
 浏览器，顾名思义，就是检索、查看互联网上网页资源的应用程序。浏览器本质上是一个 HTTP 协议中的请求方，使用 HTTP 协议获取网络上的各种资源。在 HTTP 协议里，浏览器的角色被称为“User Agent”即“用户代理”，意思是作为访问者的“代理”来发起 HTTP 请求。不过在不引起混淆的情况下，我们通常都简单地称之为“客户端”。
 
@@ -285,7 +285,7 @@ TLS（Transport Layer Security）是 SSL 在3.0 时被改名的协议。
 
 **TCP/IP 网络分层模型**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201030112325.png" alt="image-20201030112325179" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201030112325.png" alt="image-20201030112325179" style="zoom: 67%;" />
 
 第一层叫链接层（link layer），负责在以太网、WiFi 这样的底层网络上发送原始数据包，工作在网卡这个层次，使用 MAC 地址来标记网络上的设备，所以有时候也叫 MAC 层。
 
@@ -302,7 +302,7 @@ MAC 层的传输单位是帧（frame），IP 层的传输单位是包（packet�
 
 **OSI 网络分层模型**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201030113431.png" alt="image-20201030113431801" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201030113431.png" alt="image-20201030113431801" style="zoom:67%;" />
 
 第一层：物理层，网络的物理形式，例如电缆、光纤、网卡、集线器等等；
 
@@ -320,7 +320,7 @@ MAC 层的传输单位是帧（frame），IP 层的传输单位是包（packet�
 
 **两个分层模型的映射关系**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201030113852.png" alt="image-20201030113852106" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201030113852.png" alt="image-20201030113852106" style="zoom:67%;" />
 
 第一层：物理层，TCP/IP 里无对应；
 
@@ -342,7 +342,7 @@ MAC 层的传输单位是帧（frame），IP 层的传输单位是包（packet�
 
 从卡车上卸货放进三轮车（IP、MAC层拆包）--> 快递员送到家门口撕掉标签（去除TCP层的头）--> 朋友拆掉塑料袋包装（去除HTTP头）--> 拿到玩具（真正的HTML页面）
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201030115917.png" alt="image-20201030115917509" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201030115917.png" alt="image-20201030115917509" style="zoom:67%;" />
 
 **思考**
 
@@ -364,7 +364,7 @@ DNS 的核心系统是一个三层的树状、分布式服务，基本对应域�
 2. 顶级域名服务器（Top-level DNS Server）：管理各自域名下的权威域名服务器，比如 com 顶级域名服务器可以返回 apple.com 域名服务器的 IP 地址；
 3. 权威域名服务器（Authoritative DNS Server）：管理自己域名下主机的 IP 地址，比如 apple.com 权威域名服务器可以返回 www.apple.com 的 IP 地址。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201030221031.png" alt="image-20201030221031727" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201030221031.png" alt="image-20201030221031727" style="zoom:67%;" />
 
 例如，你要访问“www.apple.com”，就要进行下面的三次查询：
 

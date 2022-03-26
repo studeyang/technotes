@@ -11,11 +11,11 @@ Redis 的坑，总结来说集中在四个方面：
 
 很多技术人都有一个误区，那就是，只关注零散的技术点，没有建立起一套完整的知识框架，缺乏系统观，但是，系统观其实是至关重要的。
 
-![image-20220212221818462](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220212221818.png)
+![image-20220212221818462](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220212221818.png)
 
 我梳理了一下这些年遇到的、看到的 Redis 各大典型问题，同时结合相关的技术点，手绘了一张 Redis 的问题画像图。
 
-![image-20220212222044247](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220212222044.png)
+![image-20220212222044247](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220212222044.png)
 
 无论你遇见什么问题，都可以拿出来这张图。举个例子，如果你遇到了 Redis 的响应变慢问题，对照着这张图，你就可以发现，这个问题和 Redis 的性能主线相关，而性能主线又和数据结构、异步机制、RDB、AOF 重写相关。找到了影响的因素，解决起来也就很容易了。
 
@@ -38,7 +38,7 @@ Redis 的坑，总结来说集中在四个方面：
 
 大体来说，一个键值数据库包括了访问框架、索引模块、操作模块和存储模块四部分。接下来，我们就从这四个部分入手，继续构建我们的 SimpleKV。
 
-![image-20220214212224815](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220214212224.png)
+![image-20220214212224815](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220214212224.png)
 
 **访问框架：采用什么访问模式？**
 
@@ -83,13 +83,13 @@ SimpleKV 的索引模块负责根据 key 找到相应的 value 的存储位置�
 
 SimpleKV 包含了一个键值数据库的基本组件，为了支持更加丰富的业务场景，Redis 对这些组件或者功能进行了扩展，或者说是进行了精细优化，从而满足了功能和性能等方面的要求。
 
-![image-20220214214942389](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220214214942.png)
+![image-20220214214942389](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220214214942.png)
 
 # 02 | 数据结构：快速的Redis有哪些慢操作？
 
 Redis 底层数据结构一共有 6 种，分别是简单动态字符串、双向链表、压缩列表、哈希表、跳表和整数数组。它们和数据类型的对应关系如下图所示：
 
-![image-20220217220143729](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220217220143.png)
+![image-20220217220143729](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220217220143.png)
 
 可以看到，String 类型的底层实现只有一种数据结构，也就是简单动态字符串。而 List、Hash、Set 和 Sorted Set 这四种数据类型，都有两种底层实现结构。通常情况下，我们会把这四种类型称为集合类型。
 
@@ -99,7 +99,7 @@ Redis 底层数据结构一共有 6 种，分别是简单动态字符串、双�
 
 在下图中可以看到，哈希桶中的 entry 元素中保存了 \*key 和 \*value 指针，分别指向了实际的键和值。
 
-![image-20220217221113257](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220217221113.png)
+![image-20220217221113257](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220217221113.png)
 
 我们只需要计算键的哈希值，就可以知道它所对应的哈希桶位置，然后就可以访问相应的 entry 元素。但是，当你往 Redis 中写入大量数据后，就可能发现操作有时候会突然变慢了。这其实是因为你忽略了一个潜在的风险点，那就是哈希表的冲突问题和 rehash 可能带来的操作阻塞。
 
@@ -107,7 +107,7 @@ Redis 底层数据结构一共有 6 种，分别是简单动态字符串、双�
 
 当你往哈希表中写入更多数据时，哈希冲突是不可避免的问题。Redis 解决哈希冲突的方式，就是链式哈希。
 
-![image-20220217214511310](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220217214511.png)
+![image-20220217214511310](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220217214511.png)
 
 但如果哈希表里写入的数据越来越多，哈希冲突可能也会越来越多，这就会导致某些哈希冲突链过长，进而导致这个链上的元素查找耗时长，效率降低。
 
@@ -127,7 +127,7 @@ Redis 底层数据结构一共有 6 种，分别是简单动态字符串、双�
 
 简单来说就是在第二步拷贝数据时，Redis 仍然正常处理客户端请求，每处理一个请求时，从哈希表 1 中的第一个索引位置开始，顺带着将这个索引位置上的所有 entries 拷贝到哈希表 2 中；等处理下一个请求时，再顺带拷贝哈希表 1 中的下一个索引位置的 entries。如下图所示：
 
-![image-20220217214803853](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220217214803.png)
+![image-20220217214803853](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220217214803.png)
 
 这样就巧妙地把一次性大量拷贝的开销，分摊到了多次处理请求的过程中，避免了耗时操作，保证了数据的快速访问。
 
@@ -139,7 +139,7 @@ Redis 底层数据结构一共有 6 种，分别是简单动态字符串、双�
 
 压缩列表实际上类似于一个数组，数组中的每一个元素都对应保存一个数据。和数组不同的是，压缩列表在表头有三个字段 zlbytes、zltail 和 zllen，分别表示列表长度、列表尾的偏移量和列表中的 entry 个数；压缩列表在表尾还有一个 zlend，表示列表结束。
 
-![image-20220221211852113](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220221211852.png)
+![image-20220221211852113](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220221211852.png)
 
 在压缩列表中，如果我们要查找定位第一个元素和最后一个元素，可以通过表头三个字段的长度直接定位，复杂度是 O(1)。而查找其他元素时，就没有这么高效了，只能逐个查找，此时的复杂度就是 O(N) 了。
 
@@ -147,13 +147,13 @@ Redis 底层数据结构一共有 6 种，分别是简单动态字符串、双�
 
 跳表在链表的基础上，增加了多级索引，通过索引位置的几个跳转，实现数据的快速定位，如下图所示：
 
-![image-20220221210646026](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220221210646.png)
+![image-20220221210646026](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220221210646.png)
 
 当数据量很大时，跳表的查找复杂度就是 O(logN)。
 
 我们现在可以按照查找的时间复杂度给这些数据结构分下类了：
 
-![image-20220221212135368](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220221212135.png)
+![image-20220221212135368](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220221212135.png)
 
 **不同操作的复杂度**
 
@@ -187,7 +187,7 @@ Redis 底层数据结构一共有 6 种，分别是简单动态字符串、双�
 
 对于一个多线程的系统来说，在有合理的资源分配的情况下，可以增加系统中处理请求操作的资源实体，进而提升系统能够同时处理的请求数，即吞吐率。如下左图。
 
-![image-20220223214337835](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220223214337.png)
+![image-20220223214337835](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220223214337.png)
 
 但是如果没有良好的系统设计，实际得到的结果，其实是右图所展示的那样。
 
@@ -207,7 +207,7 @@ Redis 底层数据结构一共有 6 种，分别是简单动态字符串、双�
 
 下图显示了这一过程，其中，bind/listen、accept、recv、parse 和 send 属于网络 IO 处理，而 get 属于键值数据操作。既然 Redis 是单线程，那么，最基本的一种实现是在一个线程中依次执行上面说的这些操作。
 
-![image-20220223215110127](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220223215110.png)
+![image-20220223215110127](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220223215110.png)
 
 但是，在这里的网络 IO 操作中，有潜在的阻塞点，分别是 accept() 和 recv()。当 Redis 监听到一个客户端有连接请求，但一直未能成功建立起连接时，会阻塞在 accept() 函数这里，导致其他客户端无法和 Redis 建立连接。类似的，当 Redis 通过 recv() 从一个客户端读取数据时，如果数据一直没有到达，Redis 也会一直阻塞在 recv()。
 
@@ -219,7 +219,7 @@ Socket 网络模型的非阻塞模式设置，主要体现在三个关键的函�
 
 在 socket 模型中，不同操作调用后会返回不同的套接字类型。socket() 方法会返回主动套接字，然后调用 listen() 方法，将主动套接字转化为监听套接字，此时，可以监听来自客户端的连接请求。最后，调用 accept() 方法接收到达的客户端连接，并返回已连接套接字。
 
-![image-20220223220624366](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220223220624.png)
+![image-20220223220624366](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220223220624.png)
 
 针对监听套接字，我们可以设置非阻塞模式：当 Redis 调用 accept() 但一直未有连接请求到达时，Redis 线程可以返回处理其他操作，而不用一直等待。但是，你要注意的是，调用 accept() 时，已经存在监听套接字了。虽然 Redis 线程可以不用继续等待，但是总得有机制继续在监听套接字上等待后续连接请求，并在有请求时通知 Redis。
 
@@ -233,7 +233,7 @@ Linux 中的 IO 多路复用机制是指一个线程处理多个 IO 流，就是
 
 下图就是基于多路复用的 Redis IO 模型。Redis 网络框架调用 epoll 机制，让内核监听这些套接字。
 
-![image-20220223221150517](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220223221150.png)
+![image-20220223221150517](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220223221150.png)
 
 为了在请求到达时能通知到 Redis 线程，select/epoll 提供了基于事件的回调机制，即针对不同事件的发生，调用相应的处理函数。这些事件会被放进一个事件队列，Redis 单线程对该事件队列不断进行处理。
 
@@ -245,13 +245,13 @@ Linux 中的 IO 多路复用机制是指一个线程处理多个 IO 流，就是
 
 AOF 是在 Redis 执行命令后，把数据写入内存，然后才记录日志，如下图所示：
 
-![image-20220224215502105](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220224215502.png)
+![image-20220224215502105](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220224215502.png)
 
 那 AOF 为什么要先执行命令再记日志呢？
 
 我们以 Redis 收到“set testkey testvalue”命令后记录的日志为例，看看 AOF 日志的内容。其中，“*3”表示当前命令有三个部分，每部分都是由“$+数字”开头，后面紧跟着具体的命令、键或值。这里，“数字”表示这部分中的命令、键或值一共有多少字节。例如，“$3 set”表示这部分有 3 个字节，也就是“set”命令。
 
-![image-20220224220015556](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220224220015.png)
+![image-20220224220015556](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220224220015.png)
 
 但是，为了避免额外的检查开销，Redis 在向 AOF 里面记录日志的时候，并不会先去对这些命令进行语法检查。所以，如果先记日志再执行命令的话，日志中就有可能记录了错误的命令，Redis 在使用日志恢复数据时，就可能会出错。
 
@@ -273,7 +273,7 @@ AOF 是在 Redis 执行命令后，把数据写入内存，然后才记录日志
 
 这三种策略的写回时机，以及优缺点汇总如下。
 
-![image-20220224221132202](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220224221132.png)
+![image-20220224221132202](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220224221132.png)
 
 到这里，我们就可以根据系统对高性能和高可靠性的要求，来选择使用哪种写回策略了。
 
@@ -283,7 +283,7 @@ Redis 会根据数据库的现状创建一个新的 AOF 文件，也就是说，
 
 下面这张图就是一个例子：
 
-![image-20220224222109883](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220224222109.png)
+![image-20220224222109883](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220224222109.png)
 
 当我们对一个列表先后做了 6 次修改操作后，列表的最后状态是[“D”, “C”, “N”]，此时，只用 LPUSH u:list “N”, “C”, "D"这一条命令就能实现该数据的恢复，这就节省了五条命令的空间。对于被修改过成百上千次的键值对来说，重写能节省的空间当然就更大了。
 
@@ -301,7 +301,7 @@ Redis 会根据数据库的现状创建一个新的 AOF 文件，也就是说，
 
 而第二处日志，就是指新的 AOF 重写日志。这个操作也会被写到重写日志的缓冲区。这样，重写日志也不会丢失最新的操作。等到拷贝数据重写完成后，AOF 重写缓冲数据也会写入新的 AOF 文件。此时，我们就可以用新的 AOF 文件替代旧文件了。
 
-![image-20220224224457364](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220224224457.png)
+![image-20220224224457364](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220224224457.png)
 
 总结来说，每次 AOF 重写时，Redis 会先执行一个内存拷贝，用于重写；然后，使用两个日志保证在重写过程中，新写入的数据不会丢失。而且，因为 Redis 采用额外的线程进行数据重写，所以，这个过程并不会阻塞主线程。
 
@@ -342,7 +342,7 @@ Redis 借助了操作系统提供的写时复制技术（Copy-On-Write, COW）�
 以下图为例。如果主线程读取键值对 A，那么，主线程和
 bgsave 子进程相互不影响（bgsave 子进程是由主线程 fork 生成的，可以共享主线程的所有内存数据）。但是，如果主线程要修改键值对 C，这块数据就会被复制一份，生成该数据的副本。然后，bgsave 子进程会把这个副本数据写入 RDB 文件，而在这个过程中，主线程仍然可以直接修改原来的数据。
 
-![image-20220228221059592](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220228221059.png)
+![image-20220228221059592](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220228221059.png)
 
 我们在拍照的时候，还有项技术叫“连拍”，可以记录人或物连续多个瞬间的状态。那么，快照也适合“连拍”吗？
 
@@ -360,7 +360,7 @@ Redis 4.0 中提出了一个混合使用 AOF 日志和内存快照的方法。�
 
 这样一来，快照不用很频繁地执行，这就避免了频繁 fork 对主线程的影响。而且，AOF 日志也只用记录两次快照间的操作，也就是说，不需要记录所有操作了，因此，就不会出现文件过大的情况了，也可以避免重写开销。
 
-![image-20220228223144576](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220228223144.png)
+![image-20220228223144576](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220228223144.png)
 
 这个方法既能享受到 RDB 文件快速恢复的好处，又能享受到 AOF 只记录操作命令的简单优势，颇有点“鱼和熊掌可以兼得”的感觉。
 
@@ -374,7 +374,7 @@ Redis 提供了主从库模式，以保证数据副本的一致，主从库之�
 >
 > 写操作：首先到主库执行，然后，主库将写操作同步给从库。
 
-![image-20220308215130544](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220308215130.png)
+![image-20220308215130544](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220308215130.png)
 
 那么，主从库同步是如何完成的呢？主库数据是一次性传给从库，还是分批同步？要是主从库间的网络断连了，数据还能保持一致吗？
 
@@ -390,7 +390,7 @@ Redis 提供了主从库模式，以保证数据副本的一致，主从库之�
 
 之后会按照三个阶段完成数据的第一次同步。
 
-![image-20220308215335769](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220308215335.png)
+![image-20220308215335769](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220308215335.png)
 
 - 第一阶段：建立连接
 
@@ -440,7 +440,7 @@ replicaof 从库Plus的IP 6379
 
 这样一来，这些从库就会知道，在进行同步时，不用再和主库进行交互了，只要和级联的从库进行写操作同步就行了，这就可以减轻主库上的压力，如下图所示：
 
-![image-20220308215733201](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220308215733.png)
+![image-20220308215733201](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220308215733.png)
 
 一旦主从库完成了全量复制，它们之间就会一直维护一个网络连接，主库会通过这个连接将后续陆续收到的命令操作再同步给从库，这个过程也称为基于长连接的命令传播，可以避免频繁建立连接的开销。
 
@@ -454,7 +454,7 @@ replicaof 从库Plus的IP 6379
 
 同样，从库在复制完写操作命令后，它在缓冲区中的读位置也开始逐步偏移刚才的起始位置，此时，从库已复制的偏移量 slave_repl_offset 也在不断增加。正常情况下，这两个偏移量基本相等。
 
-![image-20220308223354529](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220308223354.png)
+![image-20220308223354529](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220308223354.png)
 
 主从库的连接恢复之后，从库首先会给主库发送 psync 命令，并把自己当前的 slave_repl_offset 发给主库，主库会判断自己的 master_repl_offset 和 slave_repl_offset之间的差距。在网络断连阶段，主库可能会收到新的写操作命令，所以，一般来说，master_repl_offset 会大于 slave_repl_offset。此时，主库只用把 master_repl_offset 和 slave_repl_offset 之间的命令操作同步给从库就行。
 
@@ -462,7 +462,7 @@ replicaof 从库Plus的IP 6379
 
 说到这里，我们再借助一张图，回顾下增量复制的流程。
 
-![image-20220308224217156](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220308224217.png)
+![image-20220308224217156](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220308224217.png)
 
 不过，有一个地方我要强调一下，因为 repl_backlog_buffer 是一个环形缓冲区，所以在缓冲区写满后，主库会继续写入，此时，就会覆盖掉之前写入的操作。如果从库的读取速度比较慢，就有可能导致从库还未读取的操作被主库新写的操作覆盖了，这会导致主从库间的数据不一致。
 

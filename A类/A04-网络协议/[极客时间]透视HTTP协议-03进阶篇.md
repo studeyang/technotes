@@ -31,7 +31,7 @@ HTTP 在传输时为了节约带宽，有时候还会压缩数据，有一个“
 
 HTTP 协议为此定义了两个 Accept 请求头字段和两个 Content 实体头字段，用于客户端和服务器进行内容协商。也就是说，客户端用 Accept 头告诉服务器希望接收什么样的数据，而服务器用 Content 头告诉客户端实际发送了什么样的数据。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201031230440.png" alt="image-20201031230439956" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201031230440.png" alt="image-20201031230439956" style="zoom: 67%;" />
 
 **语言类型与编码**
 
@@ -98,7 +98,7 @@ Vary 字段可以认为是响应报文的一个特殊的“版本标记”。每
 
 **小结**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201023172238292.png" alt="image-20201023172238292" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201023172238292.png" alt="image-20201023172238292" style="zoom: 67%;" />
 
 **课下作业**
 

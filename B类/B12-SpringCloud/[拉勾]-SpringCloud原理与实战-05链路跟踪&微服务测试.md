@@ -16,7 +16,7 @@ SpanId 一般被称为跨度 Id。服务 A 位于服务 B 的上游，所以访�
 
 关于 Span，业界一般使用四种关键事件记录每个服务的客户端请求和服务器响应过程。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210322214404.png" alt="image-20210322214404008" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210322214404.png" alt="image-20210322214404008" style="zoom:50%;" />
 
 在上图中，cs 表示 Client Send，代表了一个 Span 的开始。sr 代表 Server Receive，表示服务端接收客户端的请求。ss 代表 Server Send，表示服务器返回结果给客户端。cr 表示 Client Receive，表示客户端接收到了服务器端返回的结果，代表着一个 Span 的完成。
 
@@ -57,7 +57,7 @@ SpanId 一般被称为跨度 Id。服务 A 位于服务 B 的上游，所以访�
 
 Zipkin 是一个开源的分布式跟踪系统，每个服务向 Zipkin 报告运行时数据，Zipkin 会根据调用关系通过 Zipkin UI 对整个调用链路中的数据实现可视化。在结构上 Zipkin 包含几个核心的组件，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210322232931.png" alt="image-20210322232931040" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210322232931.png" alt="image-20210322232931040" style="zoom:50%;" />
 
 日志的收集组件 Collector，接收来自外部传输（Transport）的数据，将这些数据转换为 Zikpin 内部处理的 Span 格式。这些收集的数据通过存储组件 Storage 进行存储，当前支持 Cassandra、Redis、HBase、MySQL、PostgreSQL、SQLite 等工具，默认存储在内存中。
 
@@ -99,7 +99,7 @@ Zipkin 可视化服务调用链路的构建包含三大维度：可视化服务�
 
 2. 可视化服务调用时序
 
-![image-20210323210917238](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210323210917.png)
+![image-20210323210917238](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210323210917.png)
 
 当发起这个 HTTP 请求时，该请求会先到达 Zuul 网关，然后再通过路由转发到 userservice。
 
@@ -109,7 +109,7 @@ Zipkin 可视化服务调用链路的构建包含三大维度：可视化服务�
 
 点击“get /users/username/{username}”这个 Span，Zipkin 会跳转到一个新的页面并显示如下图所示的数据：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210323211743.png" alt="image-20210323211743527" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210323211743.png" alt="image-20210323211743527" style="zoom:50%;" />
 
 # 31 | 监控扩展：使用 Tracer 在访问链路中创建自定义的 Span
 
@@ -190,7 +190,7 @@ void myMethod(@SpanTag("mykey") String param);
 
 那么就可以通过添加一系列的自定义 Span 的方式对长时间的服务调用进行拆分，把该请求中所涉及的多种操作分别创建 Span，然后找到最影响性能的 Span 并进行优化，这也是服务监控系统实现过程中的一项最佳实践，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210323234740.png" alt="image-20210323234740589" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210323234740.png" alt="image-20210323234740589" style="zoom:50%;" />
 
 
 
@@ -455,13 +455,13 @@ MockMvc 类中的一组 get/post/put/delete 方法用来初始化一个 HTTP 请
 
 基于 Stub 的测试场景，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210329231504.png" alt="image-20210329231504391" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210329231504.png" alt="image-20210329231504391" style="zoom:50%;" />
 
 这里的 user-service 和 device-service 就需要提供对应的 Stub 供 intervention-service 进行使用。
 
 这个流程如下所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210329231922.png" alt="image-20210329231922678" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210329231922.png" alt="image-20210329231922678" style="zoom:50%;" />
 
 服务提供者需要编写契约文件，然后基于 Spring Cloud Contract 内置的 Stub 处理机制，自动生成一个 Stub 文件。
 

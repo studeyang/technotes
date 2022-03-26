@@ -53,7 +53,7 @@ POST /products/_search
 
 例如查 “Matrix reloaded”，会查到包括 Matrix 或者 reload的所有结果。
 
-![image-20220117225232717](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220117225238.png)
+![image-20220117225232717](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220117225238.png)
 
 整个 Match Query 的查询过程如下：
 
@@ -146,19 +146,19 @@ DF：检索词在所有文档中出现的频率。IDF= log(全部⽂档数/检�
 
 TF-IDF 被公认为是信息检索领域最重要的发明，Lucene 中的 TF-IDF 评分公式如下：
 
-![image-20220118222933895](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220118222934.png)
+![image-20220118222933895](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220118222934.png)
 
 再来看 BM 25。和经典的TF-IDF相比，当 TF 无限增加时，BM 25算分会趋于⼀个数值。
 
-![image-20220118223145299](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220118223145.png)
+![image-20220118223145299](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220118223145.png)
 
 我们可以通过 explain 查看 TF-IDF的值。
 
-![image-20220118224352821](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220118224352.png)
+![image-20220118224352821](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220118224352.png)
 
 也可以对算分的规则进行自定义。
 
-![image-20220118224435909](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220118224435.png)
+![image-20220118224435909](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220118224435.png)
 
 **多字符串多字段查询**
 
@@ -168,7 +168,7 @@ TF-IDF 被公认为是信息检索领域最重要的发明，Lucene 中的 TF-ID
 
 这时就需要用到多字段查询了，即 bool 查询。
 
-![image-20220118230218718](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220118230218.png)
+![image-20220118230218718](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220118230218.png)
 
 在 Elasticsearch 中，有Query 和 Filter 两种不同的 Contex。Query Context 表示进行相关性算分；Filter Context 表示不需要算分（ Yes or No），可以利⽤ Cache， 获得更好的性能。
 
@@ -188,9 +188,9 @@ POST /products/_bulk
 { "price" : 30,"avaliable":false, "productID" : "QQPX-R-3956-#aD8" }
 ```
 
-![image-20220118230332261](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220118230332.png)
+![image-20220118230332261](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220118230332.png)
 
-![image-20220118230345412](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220118230345.png)
+![image-20220118230345412](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220118230345.png)
 
 **单字符串多字段查询**
 
@@ -212,7 +212,7 @@ PUT /blogs/_doc/2
 }
 ```
 
-![image-20220120221441851](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220120221441.png)
+![image-20220120221441851](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220120221441.png)
 
 
 

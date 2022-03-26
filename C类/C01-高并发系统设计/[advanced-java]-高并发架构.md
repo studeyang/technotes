@@ -12,7 +12,7 @@
 
 如果使用 MQ，A 系统产生一条数据，发送到 MQ 里面去，哪个系统需要数据自己去 MQ 里面消费。如果新系统需要数据，直接从 MQ 里消费即可；如果某个系统不需要这条数据了，就取消对 MQ 消息的消费即可。这样下来，A 系统压根儿不需要去考虑要给谁发送数据，不需要维护这个代码，也不需要考虑人家是否调用成功、失败超时等情况。
 
-![image-20200930151355915](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930151355915.png)
+![image-20200930151355915](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930151355915.png)
 
 **异步**
 
@@ -20,7 +20,7 @@ A 系统接收一个请求，需要在自己本地写库，还需要在 BCD 三�
 
 如果**使用 MQ**，那么 A 系统连续发送 3 条消息到 MQ 队列中，假如耗时 5ms，A 系统从接受一个请求到返回响应给用户，总时长是 3 + 5 = 8ms，对于用户而言，其实感觉上就是点个按钮，8ms 以后就直接返回了，爽！网站做得真好，真快！
 
-![image-20200930152149345](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930152149345.png)
+![image-20200930152149345](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930152149345.png)
 
 **削峰**
 
@@ -30,7 +30,7 @@ A 系统接收一个请求，需要在自己本地写库，还需要在 BCD 三�
 
 但是高峰期一过，到了下午的时候，就成了低峰期，可能也就 1w 的用户同时在网站上操作，每秒中的请求数量可能也就 50 个请求，对整个系统几乎没有任何的压力。
 
-![image-20200930152250992](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930152250992.png)
+![image-20200930152250992](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930152250992.png)
 
 如果使用 MQ，每秒 5k 个请求写入 MQ，A 系统每秒钟最多处理 2k 个请求，因为 MySQL 每秒钟最多处理 2k 个。A 系统从 MQ 中慢慢拉取请求，每秒钟就拉取 2k 个请求，不要超过自己每秒能处理的最大请求数量就 ok，这样下来，哪怕是高峰期的时候，A 系统也绝对不会挂掉。而 MQ 每秒钟 5k 个请求进来，就 2k 个请求出去，结果就导致在中午高峰期（1 个小时），可能有几十万甚至几百万的请求积压在 MQ 中。
 
@@ -79,7 +79,7 @@ RabbitMQ 有三种模式：单机模式、普通集群模式、镜像集群模�
 
   普通集群模式，意思就是在多台机器上启动多个 RabbitMQ 实例，每个机器启动一个。你**创建的 queue，只会放在一个 RabbitMQ 实例上**，但是每个实例都同步 queue 的元数据（元数据可以认为是 queue 的一些配置信息，通过元数据，可以找到 queue 所在实例）。你消费的时候，实际上如果连接到了另外一个实例，那么那个实例会从 queue 所在实例上拉取数据过来。
 
-  ![image-20200930152640300](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930152640300.png)
+  ![image-20200930152640300](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930152640300.png)
 
   这种方式确实很麻烦，也不怎么好，**没做到所谓的分布式**，就是个普通集群。因为这导致你要么消费者每次随机连接一个实例然后拉取数据，要么固定连接那个 queue 所在实例消费数据，前者有**数据拉取的开销**，后者导致**单实例性能瓶颈**。
 
@@ -91,7 +91,7 @@ RabbitMQ 有三种模式：单机模式、普通集群模式、镜像集群模�
 
   这种模式，才是所谓的 RabbitMQ 的高可用模式。跟普通集群模式不一样的是，在镜像集群模式下，你创建的 queue，无论元数据还是 queue 里的消息都会**存在于多个实例上**，就是说，每个 RabbitMQ 节点都有这个 queue 的一个**完整镜像**，包含 queue 的全部数据的意思。然后每次你写消息到 queue 的时候，都会自动把**消息同步**到多个实例的 queue 上。
 
-  ![image-20200930152721204](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930152721204.png)
+  ![image-20200930152721204](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930152721204.png)
 
   那么**如何开启这个镜像集群模式**呢？其实很简单，RabbitMQ 有很好的管理控制台，就是在后台新增一个策略，这个策略是**镜像集群模式的策略**，指定的时候是可以要求数据同步到所有节点的，也可以要求同步到指定数量的节点，再次创建 queue 的时候，应用这个策略，就会自动将数据同步到其他的节点上去了。
 
@@ -109,11 +109,11 @@ Kafka 0.8 以前，是没有 HA 机制的，就是任何一个 broker 宕机了�
 
 比如说，我们假设创建了一个 topic，指定其 partition 数量是 3 个，分别在三台机器上。但是，如果第二台机器宕机了，会导致这个 topic 的 1/3 的数据就丢了，因此这个是做不到高可用的。
 
-![image-20200930152754605](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930152754605.png)
+![image-20200930152754605](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930152754605.png)
 
 Kafka 0.8 以后，提供了 HA 机制，就是 replica（复制品） 副本机制。每个 partition 的数据都会同步到其它机器上，形成自己的多个 replica 副本。所有 replica 会选举一个 leader 出来，那么生产和消费都跟这个 leader 打交道，然后其他 replica 就是 follower。写的时候，leader 会负责把数据同步到所有 follower 上去，读的时候就直接读 leader 上的数据即可。只能读写 leader？很简单，**要是你可以随意读写每个 follower，那么就要 care 数据一致性的问题**，系统复杂度太高，很容易出问题。Kafka 会均匀地将一个 partition 的所有 replica 分布在不同的机器上，这样才可以提高容错性。
 
-![image-20200930152809703](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930152809703.png)
+![image-20200930152809703](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930152809703.png)
 
 这么搞，就有所谓的**高可用性**了，因为如果某个 broker 宕机了，没事儿，那个 broker 上面的 partition 在其他机器上都有副本的。如果这个宕机的 broker 上面有某个 partition 的 leader，那么此时会从 follower 中**重新选举**一个新的 leader 出来，大家继续读写那个新的 leader 即可。这就有所谓的高可用性了。
 
@@ -135,7 +135,7 @@ Kafka 实际上有个 offset 的概念，就是每个消息写进去，都有一
 
 有这么个场景。数据 1/2/3 依次进入 kafka，kafka 会给这三条数据每条分配一个 offset，代表这条数据的序号，我们就假设分配的 offset 依次是 152/153/154。消费者从 kafka 去消费的时候，也是按照这个顺序去消费。假如当消费者消费了 `offset=153` 的这条数据，刚准备去提交 offset 到 zookeeper，此时消费者进程被重启了。那么此时消费过的数据 1/2 的 offset 并没有提交，kafka 也就不知道你已经消费了 `offset=153` 这条数据。那么重启之后，消费者会找 kafka 说，嘿，哥儿们，你给我接着把上次我消费到的那个地方后面的数据继续给我传递过来。由于之前的 offset 没有提交成功，那么数据 1/2 会再次传过来，如果此时消费者没有去重的话，那么就会导致重复消费。
 
-![image-20200930152909220](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930152909220.png)
+![image-20200930152909220](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930152909220.png)
 
 如果消费者干的事儿是拿一条数据就往数据库里写一条，会导致说，你可能就把数据 1/2 在数据库里插入了 2 次，那么数据就错啦。
 
@@ -156,7 +156,7 @@ Kafka 实际上有个 offset 的概念，就是每个消息写进去，都有一
 - 比如你不是上面两个场景，那做的稍微复杂一点，你需要让生产者发送每条数据的时候，里面加一个全局唯一的 id，类似订单 id 之类的东西，然后你这里消费到了之后，先根据这个 id 去比如 Redis 里查一下，之前消费过吗？如果没有消费过，你就处理，然后这个 id 写 Redis。如果消费过了，那你就别处理了，保证别重复处理相同的消息即可。
 - 比如基于数据库的唯一键来保证重复数据不会重复插入多条。因为有唯一键约束了，重复数据插入只会报错，不会导致数据库中出现脏数据。
 
-![image-20200930152925315](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930152925315.png)
+![image-20200930152925315](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930152925315.png)
 
 当然，如何保证 MQ 的消费是幂等性的，需要结合具体的业务来看。
 
@@ -166,7 +166,7 @@ Kafka 实际上有个 offset 的概念，就是每个消息写进去，都有一
 
 **RabbitMQ**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200928234014138.png" alt="image-20200928234014138" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200928234014138.png" alt="image-20200928234014138" style="zoom: 67%;" />
 
 通常消息丢失有3种情况。
 
@@ -223,7 +223,7 @@ Kafka 实际上有个 offset 的概念，就是每个消息写进去，都有一
 
 总结来说，RabbitMQ 消息丢失及对应解决方案如下图。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200928235113870.png" alt="image-20200928235113870" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200928235113870.png" alt="image-20200928235113870" style="zoom:67%;" />
 
 **Kafka**
 
@@ -260,7 +260,7 @@ Kafka 实际上有个 offset 的概念，就是每个消息写进去，都有一
 
 **消息发送过程**
 
-![image-20201008085543046](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201008085543046.png)
+![image-20201008085543046](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201008085543046.png)
 
 我们将消息流程分为如下三大部分，每一部分都有可能会丢失数据。
 
@@ -482,12 +482,12 @@ Broker肯定是先把消息放到内存的，然后根据刷盘策略持久化�
 
 - **RabbitMQ**：一个 queue，多个 consumer。比如，生产者向 RabbitMQ 里发送了三条数据，顺序依次是 data1/data2/data3，压入的是 RabbitMQ 的一个内存队列。有三个消费者分别从 MQ 中消费这三条数据中的一条，结果消费者 2 先执行完操作，把 data2 存入数据库，然后是 data1/data3。这不明显乱了。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200928235715992.png" alt="image-20200928235715992" style="zoom:50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200928235715992.png" alt="image-20200928235715992" style="zoom:50%;" />
 
 - **Kafka**：比如说我们建了一个 topic，有三个 partition。生产者在写的时候，其实可以指定一个 key，比如说我们指定了某个订单 id 作为 key，那么这个订单相关的数据，一定会被分发到同一个 partition 中去，而且这个 partition 中的数据一定是有顺序的。
   消费者从 partition 中取出来数据的时候，也一定是有顺序的。到这里，顺序还是 ok 的，没有错乱。接着，我们在消费者里可能会搞**多个线程来并发处理消息**。因为如果消费者是单线程消费处理，而处理比较耗时的话，比如处理一条消息耗时几十 ms，那么 1 秒钟只能处理几十条消息，这吞吐量太低了。而多个线程并发跑的话，顺序可能就乱掉了。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200928235823524.png" alt="image-20200928235823524" style="zoom: 50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200928235823524.png" alt="image-20200928235823524" style="zoom: 50%;" />
 
 **解决方案**
 
@@ -495,7 +495,7 @@ Broker肯定是先把消息放到内存的，然后根据刷盘策略持久化�
 
   拆分多个 queue，每个 queue 一个 consumer，就是多一些 queue 而已，确实是麻烦点；或者就一个 queue 但是对应一个 consumer，然后这个 consumer 内部用内存队列做排队，然后分发给底层不同的 worker 来处理。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200929000021836.png" alt="image-20200929000021836" style="zoom: 67%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200929000021836.png" alt="image-20200929000021836" style="zoom: 67%;" />
 
   > RocketMQ 也是类似，那如何把消息发送到指定的 Queue 呢？消息者又如何消费指定 Queue 中的消息呢？
   >
@@ -507,7 +507,7 @@ Broker肯定是先把消息放到内存的，然后根据刷盘策略持久化�
 
   写 N 个内存 queue，具有相同 key 的数据都到同一个内存 queue；然后对于 N 个线程，每个线程分别消费一个内存 queue 即可，这样就能保证顺序性。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200929000222927.png" alt="image-20200929000222927" style="zoom: 67%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200929000222927.png" alt="image-20200929000222927" style="zoom: 67%;" />
 
 ## 问题6：如何解决消息队列的延时以及过期失效问题？
 
@@ -568,13 +568,13 @@ index 相当于 mysql 里的一张表。而 type 没法跟 mysql 里去对比，
 
 很多情况下，一个 index 里可能就一个 type，但是确实如果说是一个 index 里有多个 type 的情况（**注意**， `mapping types` 这个概念在 ElasticSearch 7. X 已被完全移除，详细说明可以参考[官方文档](https://github.com/elastic/elasticsearch/blob/6.5/docs/reference/mapping/removal_of_types.asciidoc)），你可以认为 index 是一个类别的表，具体的每个 type 代表了 mysql 中的一个表。每个 type 有一个 mapping，如果你认为一个 type 是具体的一个表，index 就代表多个 type 同属于的一个类型，而 mapping 就是这个 type 的**表结构定义**，你在 mysql 中创建一个表，肯定是要定义表结构的，里面有哪些字段，每个字段是什么类型。实际上你往 index 里的一个 type 里面写的一条数据，叫做一条 document，一条 document 就代表了 mysql 中某个表里的一行，每个 document 有多个 field，每个 field 就代表了这个 document 中的一个字段的值。
 
-![image-20200929113958466](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200929113958466.png)
+![image-20200929113958466](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200929113958466.png)
 
 你搞一个索引，这个索引可以拆分成多个`shard`，每个`shard`存储部分数据。拆分多个 shard 是有好处的，一是**支持横向扩展**，比如你数据量是 3T，3 个 shard，每个 shard 就 1T 的数据，若现在数据量增加到 4T，怎么扩展，很简单，重新建一个有 4 个 shard 的索引，将数据导进去；二是**提高性能**，数据分布在多个 shard，即多台服务器上，所有的操作，都会在多台机器上并行分布式执行，提高了吞吐量和性能。
 
 接着就是这个 shard 的数据实际是有多个备份，就是说每个 shard 都有一个 `primary shard` ，负责写入数据，但是还有几个 `replica shard` 。 `primary shard` 写入数据之后，会将数据同步到其他几个 `replica shard` 上去。
 
-![image-20200929114013035](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200929114013035.png)
+![image-20200929114013035](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200929114013035.png)
 
 通过这个 replica 的方案，每个 shard 的数据都有多个备份，如果某个机器宕机了，没关系啊，还有别的数据副本在别的机器上呢。高可用了吧。
 
@@ -595,7 +595,7 @@ ES 集群多个节点，会自动选举一个节点为 master 节点，这个 ma
 - 实际的 node 上的 `primary shard` 处理请求，然后将数据同步到 `replica node` 。
 - `coordinating node` 如果发现 `primary node` 和所有 `replica node` 都搞定之后，就返回响应结果给客户端。
 
-![image-20200929214946865](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200929214946865.png)
+![image-20200929214946865](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200929214946865.png)
 
 **es 读数据过程**
 
@@ -626,7 +626,7 @@ ES 集群多个节点，会自动选举一个节点为 master 节点，这个 ma
 
 但是如果 buffer 里面此时没有数据，那当然不会执行 refresh 操作，如果 buffer 里面有数据，默认 1 秒钟执行一次 refresh 操作，刷入一个新的 segment file 中。
 
-![image-20200929221937686](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200929221937686.png)
+![image-20200929221937686](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200929221937686.png)
 
 操作系统里面，磁盘文件其实都有一个东西，叫做 `os cache` ，即操作系统缓存，就是说数据写入磁盘文件之前，会先进入 `os cache` ，先进入操作系统级别的一个内存缓存中去。只要 `buffer` 中的数据被 refresh 操作刷入 `os cache` 中，这个数据就可以被搜索到了。
 
@@ -713,7 +713,7 @@ buffer 每 refresh 一次，就会产生一个 `segment file` ，所以默认情
 
 你往 es 里写的数据，实际上都写到磁盘文件里去了，**查询的时候**，操作系统会将磁盘文件里的数据自动缓存到 `filesystem cache` 里面去。
 
-![image-20200929223716861](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200929223716861.png)
+![image-20200929223716861](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200929223716861.png)
 
 es 的搜索引擎严重依赖于底层的 `filesystem cache` ，你如果给 `filesystem cache` 更多的内存，尽量让内存可以容纳所有的 `idx segment file ` 索引数据文件，那么你搜索的时候就基本都是走内存的，性能会非常高。
 
@@ -858,7 +858,7 @@ Redis 内部使用文件事件处理器 `file event handler` ，这个文件事�
 
 来看客户端与 Redis 的一次通信过程：
 
-![image-20200930112704485](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200930112704485.png)
+![image-20200930112704485](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200930112704485.png)
 
 首先，Redis 服务端进程初始化的时候，会将 server socket 的 `AE_READABLE` 事件与连接应答处理器关联。
 
@@ -1083,7 +1083,7 @@ redis 高可用，如果是做主从架构部署，那么加上哨兵就可以�
 
 单机的 Redis，能够承载的 QPS 大概就在上万到几万不等。对于缓存来说，一般都是用来支撑**读高并发**的。因此架构做成主从(master-slave)架构，一主多从，主负责写，并且将数据复制到其它的 slave 节点，从节点负责读。所有的**读请求全部走从节点**。这样也可以很轻松实现水平扩容，**支撑读高并发**。
 
-![image-20201002072543327](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201002072543327.png)
+![image-20201002072543327](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201002072543327.png)
 
 **Redis replication 的核心机制**
 
@@ -1109,7 +1109,7 @@ redis 高可用，如果是做主从架构部署，那么加上哨兵就可以�
 
 接着 master 会将内存中缓存的写命令发送到 slave，slave 也会同步这些数据。slave node 如果跟 master node 有网络故障，断开了连接，会自动重连，连接之后 master node 仅会复制给 slave 部分缺少的数据。
 
-![image-20201002074612863](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201002074612863.png)
+![image-20201002074612863](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201002074612863.png)
 
 - 主从复制的断点续传
 
@@ -1137,7 +1137,7 @@ slave node 启动时，会在自己本地保存 master node 的信息，包括 m
 
 slave node 内部有个定时任务，每秒检查是否有新的 master node 要连接和复制，如果发现，就跟 master node 建立 socket 网络连接。然后 slave node 发送 `ping` 命令给 master node。如果 master 设置了 requirepass，那么 slave node 必须发送 masterauth 的口令过去进行认证。master node **第一次执行全量复制**，将所有数据发给 slave node。而在后续，master node 持续将写命令，异步复制给 slave node。
 
-![image-20201002081510103](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201002081510103.png)
+![image-20201002081510103](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201002081510103.png)
 
 - 全量复制
 
@@ -1297,7 +1297,7 @@ sentinel，中文名是哨兵。哨兵是 Redis 集群架构中非常重要的�
 
   因为 master->slave 的复制是异步的，所以可能有部分数据还没复制到 slave，master 就宕机了，此时这部分数据就丢失了。
 
-  ![image-20201002182639310](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201002182639310.png)
+  ![image-20201002182639310](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201002182639310.png)
 
 - 脑裂导致的数据丢失
 
@@ -1305,7 +1305,7 @@ sentinel，中文名是哨兵。哨兵是 Redis 集群架构中非常重要的�
 
   此时虽然某个 slave 被切换成了 master，但是可能 client 还没来得及切换到新的 master，还继续向旧 master 写数据。因此旧 master 再次恢复的时候，会被作为一个 slave 挂到新的 master 上去，自己的数据会清空，重新从新的 master 复制数据。而新的 master 并没有后来 client 写入的数据，因此，这部分数据也就丢失了。
 
-  ![image-20201002182707040](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201002182707040.png)
+  ![image-20201002182707040](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201002182707040.png)
 
 **数据丢失问题的解决方案**
 
@@ -1417,7 +1417,7 @@ sdown 达成的条件很简单，如果一个哨兵 ping 一个 master，超过�
 
   集中式是将集群元数据（节点信息、故障等等）存储在某个节点上。
 
-  ![image-20201004222053815](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201004222053815.png)
+  ![image-20201004222053815](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201004222053815.png)
 
   **集中式**的**好处**在于，元数据的读取和更新，时效性非常好，一旦元数据出现了变更，就立即更新到集中式的存储中，其它节点读取的时候就可以感知到；**不好**在于，所有的元数据的更新压力全部集中在一个地方，可能会导致元数据的存储有压力。
 
@@ -1425,7 +1425,7 @@ sdown 达成的条件很简单，如果一个哨兵 ping 一个 master，超过�
 
   所有节点都持有一份元数据，不同的节点如果出现了元数据的变更，就不断将元数据发送给其它的节点，让其它节点也进行元数据的变更。
 
-  ![image-20201004222021519](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201004222021519.png)
+  ![image-20201004222021519](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201004222021519.png)
 
   gossip 好处在于，元数据的更新比较分散，不是集中在一个地方，更新请求会陆陆续续打到所有节点上去更新，降低了压力；不好在于，元数据的更新有延时，可能导致集群中的一些操作会有一些滞后。
 
@@ -1475,7 +1475,7 @@ gossip 协议包含多种消息，包含 `ping` , `pong` , `meet` , `fail` 等�
 
   燃鹅，一致性哈希算法在节点太少时，容易因为节点分布不均匀而造成**缓存热点**的问题。为了解决这种热点问题，一致性 hash 算法引入了虚拟节点机制，即对每一个节点计算多个 hash，每个计算结果位置都放置一个虚拟节点。这样就实现了数据的均匀分布，负载均衡。
 
-  ![image-20201004223902832](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201004223902832.png)
+  ![image-20201004223902832](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201004223902832.png)
 
 - Redis cluster 的 hash slot 算法
 
@@ -1485,7 +1485,7 @@ gossip 协议包含多种消息，包含 `ping` , `pong` , `meet` , `fail` 等�
 
   任何一台机器宕机，另外两个节点，不影响的。因为 key 找的是 hash slot，不是机器。
 
-  ![image-20201004224217743](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201004224217743.png)
+  ![image-20201004224217743](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201004224217743.png)
 
 **Redis cluster 的高可用与主备切换原理**
 
@@ -1519,7 +1519,7 @@ Redis cluster 的高可用的原理，几乎跟哨兵是类似的。
 
 这就是缓存雪崩。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201005230611016.png" alt="image-20201005230611016" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201005230611016.png" alt="image-20201005230611016" style="zoom: 67%;" />
 
 大约在 3 年前，国内比较知名的一个互联网公司，曾因为缓存事故，导致雪崩，后台系统全部崩溃，事故从当天下午持续到晚上凌晨 3~4 点，公司损失了几千万。
 
@@ -1529,7 +1529,7 @@ Redis cluster 的高可用的原理，几乎跟哨兵是类似的。
 - 事中：本地 ehcache 缓存 + hystrix 限流&降级，避免 MySQL 被打死。
 - 事后：Redis 持久化，一旦重启，自动从磁盘上加载数据，快速恢复缓存数据。
 
-![image-20201005230914621](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201005230914621.png)
+![image-20201005230914621](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201005230914621.png)
 
 用户发送一个请求，系统 A 收到请求后，先查本地 ehcache 缓存，如果没查到再查 Redis。如果 ehcache 和 Redis 都没有，再查数据库，将数据库中的结果，写入 ehcache 和 Redis 中。
 
@@ -1549,7 +1549,7 @@ Redis cluster 的高可用的原理，几乎跟哨兵是类似的。
 
 举个栗子。数据库 id 是从 1 开始的，结果黑客发过来的请求 id 全部都是负数。这样的话，缓存中不会有，请求每次都“**视缓存于无物**”，直接查询数据库。这种恶意攻击场景的缓存穿透就会直接把数据库给打死。
 
-![image-20201005231319003](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201005231319003.png)
+![image-20201005231319003](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201005231319003.png)
 
 解决方式很简单，每次系统 A 从数据库中只要没查到，就写一个空值到缓存里去，比如 `set -999 UNKNOWN` 。然后设置一个过期时间，这样的话，下次有相同的 key 来访问的时候，在缓存失效之前，都可以直接从缓存中取数据。
 
@@ -1571,7 +1571,7 @@ Redis cluster 的高可用的原理，几乎跟哨兵是类似的。
 
 某个时刻，多个系统实例都去更新某个 key。可以基于 zookeeper 实现分布式锁。每个系统通过 zookeeper 获取分布式锁，确保同一时间，只能有一个系统实例在操作某个 key，别人都不允许读和写。
 
-![image-20201006210139385](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201006210139385.png)
+![image-20201006210139385](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201006210139385.png)
 
 你要写入缓存的数据，都是从 mysql 里查出来的，都得写入 mysql 中，写入 mysql 中的时候必须保存一个时间戳，从 mysql 查出来的时候，时间戳也查出来。
 
@@ -1664,7 +1664,7 @@ Mycat 这种 proxy 层方案的**缺点在于需要部署**，自己运维一套
 
 验证一下，ok 了，完美，大家伸个懒腰，看看看凌晨 4 点钟的北京夜景，打个滴滴回家吧。
 
-![image-20201007210650154](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201007210650154.png)
+![image-20201007210650154](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201007210650154.png)
 
 **双写迁移方案**
 
@@ -1678,7 +1678,7 @@ Mycat 这种 proxy 层方案的**缺点在于需要部署**，自己运维一套
 
 接着当数据完全一致了，就 ok 了，基于仅仅使用分库分表的最新代码，重新部署一次，不就仅仅基于分库分表在操作了么，还没有几个小时的停机时间，很稳。所以现在基本玩儿数据迁移之类的，都是这么干的。
 
-![image-20201007210926022](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201007210926022.png)
+![image-20201007210926022](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201007210926022.png)
 
 ## 问题3：如何设计一个动态扩缩容的分库分表方案？
 
@@ -1777,7 +1777,7 @@ snowflake 算法是 twitter 开源的分布式 id 生成算法，采用 Scala �
 
 主库将变更写入 binlog 日志，然后从库连接到主库之后，从库有一个 IO 线程，将主库的 binlog 日志拷贝到自己本地，写入一个 relay 中继日志中。接着从库中有一个 SQL 线程会从中继日志读取 binlog，然后执行 binlog 日志中的内容，也就是在自己本地再次执行一遍 SQL，这样就可以保证自己跟主库的数据是一样的。
 
-![image-20201012150436451](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201012150436451.png)
+![image-20201012150436451](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201012150436451.png)
 
 这里有一个非常重要的一点，就是从库同步主库数据的过程是串行化的，也就是说主库上并行的操作，在从库上会串行执行。所以这就是一个非常重要的点了，由于从库从主库拷贝日志以及串行执行 SQL 的特点，在高并发场景下，从库的数据一定会比主库慢一些，是**有延时**的。所以经常出现，刚写入主库的数据可能是读不到的，要过几十毫秒，甚至几百毫秒才能读取到。
 
@@ -1827,7 +1827,7 @@ show status
 - 读写分离
 - ElasticSearch
 
-![image-20201012151811597](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201012151811597.png)
+![image-20201012151811597](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201012151811597.png)
 
 **系统拆分**
 

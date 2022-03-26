@@ -46,7 +46,7 @@ kubectl get pods -l 'environment in (production),tier in (frontend)'
 
 通过 Deployment，我们就不需要再关心和操作 ReplicaSet 了。
 
-<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220321213117.png" alt="image (3).png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220321213117.png" alt="image (3).png" style="zoom:50%;" />
 
 Deployment、ReplicaSet 和 Pod 这三者之间的关系见上图。我们来看一个定义 Deployment 的例子：
 
@@ -228,7 +228,7 @@ StatefulSet 通过 PersistentVolumeClaim（PVC）可以保证 Pod 的存储卷�
 
 首先我们来讲一下 ConfigMap 这个对象，它主要用来保存一些非敏感数据，可以用作环境变量、命令行参数或者挂载到存储卷中。
 
-<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220323215028.png" alt="image-20220323215028302" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220323215028.png" alt="image-20220323215028302" style="zoom:50%;" />
 
 ConfigMap 通过键值对来存储信息，是个 namespace 级别的资源。在 kubectl 使用时，我们可以简写成 cm。
 

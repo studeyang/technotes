@@ -245,7 +245,7 @@ https://github.com/longjoy/micro-go-course
 
 # 12 | 服务注册与发现如何满足服务治理？
 
-![image-20210512221432993](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210512221603.png)
+![image-20210512221432993](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210512221603.png)
 
 # 13 | 案例：如何基于 Consul 给微服务添加服务注册与发现？
 

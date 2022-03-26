@@ -2,7 +2,7 @@
 
 Spring Boot自动配置功能核心运行原理图。
 
-![image-20220303214852180](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220303214852.png)
+![image-20220303214852180](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220303214852.png)
 
 **AutoConfigurationImportSelector源码解析**
 
@@ -10,7 +10,7 @@ AutoConfigurationImportSelector 并没有直接实现ImportSelector接口，而�
 
 AutoConfigurationImportSelector核心功能及流程图。
 
-![image-20220303222452216](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220303222452.png)
+![image-20220303222452216](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220303222452.png)
 
 
 

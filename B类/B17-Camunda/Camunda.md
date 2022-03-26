@@ -10,7 +10,7 @@ Camunda 平台既可以作为一个独立的流程引擎服务器使用，也可
 
 ## 1.2 流程引擎架构
 
-![image-20211124140120326](https://gitee.com/yanglu_u/ImgRepository/raw/master/image-20211124140120326.png)
+![image-20211124140120326](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/image-20211124140120326.png)
 
 - 流程引擎公共 API：面向服务的 API 允许 Java 应用程序与流程引擎交互。
 - BPMN 2.0 核心引擎：这是流程引擎的核心。它有一个轻量级的图结构执行引擎（PVM - Process Virtual Machine），一个将 BPMN 2.0 XML 文件转化为 Java 对象的 BPMN 2.0 解析器，以及一套 BPMN 行为实现（为 BPMN 2.0 结构提供实现，如网关或服务任务）。
@@ -23,19 +23,19 @@ Camunda 平台是一个灵活的框架，可以部署在不同的场景中。本
 
 ### 嵌入式流程引擎
 
-![image-20211124140837289](https://gitee.com/yanglu_u/ImgRepository/raw/master/image-20211124140837289.png)
+![image-20211124140837289](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/image-20211124140837289.png)
 
 在这种情况下，流程引擎被作为一个库添加到一个自定义的应用程序中。这样，流程引擎可以很容易地随着应用程序的生命周期启动和停止。也可以在一个共享数据库之上运行多个嵌入式流程引擎。
 
 ### 分布式的、由容器管理的流程引擎
 
-![image-20211124140943451](https://gitee.com/yanglu_u/ImgRepository/raw/master/image-20211124140943451.png)
+![image-20211124140943451](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/image-20211124140943451.png)
 
 在这种情况下，流程引擎在运行时容器（Servlet 容器、应用服务器…）内启动。流程引擎作为容器服务提供的，可以被部署在容器内的所有应用程序共享。这个概念就像 JMS 消息队列，它由运行时提供，可以被所有应用程序使用。流程部署和应用程序之间有一对一的映射：流程引擎跟踪应用程序部署的流程定义，并将执行委托给相对应的应用程序。
 
 ### 独立运行的（远程）流程引擎服务
 
-![image-20211124141414276](https://gitee.com/yanglu_u/ImgRepository/raw/master/image-20211124141414276.png)
+![image-20211124141414276](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/image-20211124141414276.png)
 
 在这种情况下，流程引擎被作为一个网络服务提供。在网络上运行的不同应用程序可以通过一个远程通信与流程引擎进行交互。使流程引擎可以远程访问的最简单方法是使用内置的 REST API。不同的通信渠道，如 SOAP Webservices 或 JMS 也是可以的，但需要由用户自行实现。
 
@@ -43,7 +43,7 @@ Camunda 平台是一个灵活的框架，可以部署在不同的场景中。本
 
 为了提供扩展或故障转移能力，流程引擎可以发布到集群中的不同节点。然后每个流程引擎实例必须连接到同一个共享数据库。
 
-![image-20211124141731611](https://gitee.com/yanglu_u/ImgRepository/raw/master/image-20211124141731611.png)
+![image-20211124141731611](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/image-20211124141731611.png)
 
 各个流程引擎实例不会在事务中维护会话状态。每当流程引擎运行一个事务时，完整的状态被储存到共享数据库。这使得在同一实例中工作的后续请求路由到不同的集群节点成为可能。这个处理方式非常简单，容易理解，在部署集群安装时，它的限制也很有限。就流程引擎而言，用于扩展的设置和用于故障转移的设置之间没有区别（因为流程引擎在事务之中不保留会话状态）。
 
@@ -162,13 +162,13 @@ ProcessEngine processEngine = ProcessEngineConfiguration.createStandaloneInMemPr
 > - 包含性网关（Inclusive Gateway）
 > - 排他性网关（Exclusive Gateway）
 
-![img](https://gitee.com/yanglu_u/ImgRepository/raw/master/error-result-xor.png)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/error-result-xor.png)
 
 我们触发了“检查数据完整性”任务。 Java 服务可能会抛出“DataIncompleteException”。 但是，如果我们检查完整性，不完整的数据不是异常，而是预期的结果，因此我们更喜欢在评估流程变量的流程中使用 异或网关，例如，“#{dataComplete==false}” 。
 
 ### 定义错误事件
 
-![img](https://gitee.com/yanglu_u/ImgRepository/raw/master/bpmn.boundary.error.event.png)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/bpmn.boundary.error.event.png)
 
 可以明确地对错误进行建模，从而解决业务错误的用例。
 
@@ -178,7 +178,7 @@ ProcessEngine processEngine = ProcessEngineConfiguration.createStandaloneInMemPr
 
 可以在定义流程时，设置某段流程的超时时间。
 
-![image-20211207113925292](https://gitee.com/yanglu_u/ImgRepository/raw/master/image-20211207113925292.png)
+![image-20211207113925292](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/image-20211207113925292.png)
 
 
 

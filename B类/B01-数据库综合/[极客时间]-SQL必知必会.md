@@ -96,7 +96,7 @@ Redis 的查询效率非常高，根据官方提供的数据，Redis 每秒最�
 > ZADD heroScore 8341 zhangfei 7107 guanyu 6900 liubei 7516 dianwei 7344 lvbu
 ```
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225302.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225302.png)
 
 如果我们想要获取某个元素的分数：
 
@@ -118,7 +118,7 @@ Redis 的查询效率非常高，根据官方提供的数据，Redis 每秒最�
 
 WITHSCORES 是个可选项，如果使用 WITHSCORES 会将分数一同显示出来。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225309.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225309.png" style="zoom:50%;" />
 
 # 39丨如何使用Redis来实现多用户抢票问题
 
@@ -159,21 +159,21 @@ Redis 是单线程程序，在事务执行时不会中断事务，其他客户�
 
 比如我们使用事务的方式存储 5 名玩家所选英雄的信息：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225315.png" style="zoom: 33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225315.png" style="zoom: 33%;" />
 
 你能看到在 MULTI 和 EXEC 之间的 COMMAND 命令都会被放到 COMMAND 队列中，并返回排队的状态，只有当 EXEC 调用时才会一次性全部执行。
 
 我们经常使用 Redis 的 WATCH 和 MULTI 命令来处理共享资源的并发操作，比如秒杀，抢票等。实际上 WATCH+MULTI 实现的是乐观锁。下面我们用两个 Redis 客户端来模拟下抢票的流程。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225320.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225320.png" style="zoom:50%;" />
 
 我们启动 Redis 客户端 1，执行上面的语句，然后在执行 EXEC 前，等待客户端 2 先完成上面的执行，客户端 2 的结果如下：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225329.png" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225329.png" style="zoom: 50%;" />
 
 然后客户端 1 执行 EXEC，结果如下：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225334.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225334.png" style="zoom:50%;" />
 
 你能看到实际上最后一张票被客户端 2 抢到了，这是因为客户端 1WATCH 的票的变量在 EXEC 之前发生了变化，整个事务就被打断，返回空回复（nil）。
 
@@ -257,7 +257,7 @@ Redis 既然是单线程程序，在执行事务过程中按照顺序执行，�
 
 上面例子中，将客户端 2 的 SET ticket 设置为 1，请问此时客户端 1 和客户端 2 的执行结果是怎样的？
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225346.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225346.png" style="zoom:50%;" />
 
 答：客户端2 即使SET ticket的数值没有变化，也是对ticket进行了“修改”，也就是数据的版本发生了变化，因此和文章中的例子一样，客户端2会返回OK，客户端1是 nil。
 

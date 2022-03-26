@@ -76,7 +76,7 @@ Java 作为一门高级程序语言，它的语法非常复杂，抽象程度也
 
 Java 虚拟机会将栈细分为面向 Java 方法的 Java 方法栈，面向本地方法（用 C++ 写的 native 方法）的本地方法栈，以及存放各个线程执行位置的 PC 寄存器。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/ab5c3523af08e0bf2f689c1d6033ef77.png" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/ab5c3523af08e0bf2f689c1d6033ef77.png" style="zoom: 50%;" />
 
 在运行过程中，每当调用进入一个 Java 方法，Java 虚拟机会在当前线程的 Java 方法栈中生成一个栈帧，用以存放局部变量以及字节码的操作数。这个栈帧的大小是提前计算好的，而且 Java 虚拟机不要求栈帧在内存空间里连续分布。
 
@@ -84,7 +84,7 @@ Java 虚拟机会将栈细分为面向 Java 方法的 Java 方法栈，面向本
 
 从硬件视角来看，Java 字节码无法直接执行。因此，Java 虚拟机需要将字节码翻译成机器码。在 HotSpot 里面，上述翻译过程有两种形式：第一种是解释执行，即逐条将字节码翻译成机器码并执行；第二种是即时编译（Just-In-Time compilation，JIT），即将一个方法中包含的所有字节码编译成机器码后再执行。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/5ee351091464de78eed75438b6f9183b.png" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/5ee351091464de78eed75438b6f9183b.png" style="zoom: 50%;" />
 
 前者的优势在于无需等待编译，而后者的优势在于实际运行速度更快。HotSpot 默认采用混合模式，综合了解释执行和即时编译两者的优点。它会先解释执行字节码，而后将其中反复执行的热点代码，以方法为单位进行即时编译。
 
@@ -175,7 +175,7 @@ Hello, Java!
 
 除了上面提到的 boolean 类型外，Java 的基本类型还包括整数类型 byte、short、char、int 和 long，以及浮点类型 float 和 double。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/77dfb788a8ad5877e77fc28ed2d51745.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/77dfb788a8ad5877e77fc28ed2d51745.png)
 
 Java 的基本类型都有对应的值域和默认值。可以看到，byte、short、int、long、float 以及 double 的值域依次扩大，而且前面的值域被后面的值域所包含。因此，从前面的基本类型转换至后面的基本类型，无需强制转换。另外一点值得注意的是，尽管他们的默认值看起来不一样，但在内存中都是 0。
 
@@ -448,7 +448,7 @@ Java 虚拟机中采取了一种用空间换取时间的策略来实现动态绑
 
 在执行过程中，Java 虚拟机将获取调用者的实际类型，并在该实际类型的虚方法表中，根据索引值获得目标方法。这个过程便是动态绑定。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/750d25f38ac620448634b310e65fea3d.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/750d25f38ac620448634b310e65fea3d.jpg)
 
 在我们的例子中，“乘客”类的方法表包括两个方法：“toString”以及“出境”，分别对应 0 号和 1 号。
 
@@ -543,7 +543,7 @@ cost time : 7557
 
 在 Java 语言规范中，所有异常都是 Throwable 类或者其子类的实例。Throwable 有两大直接子类。第一个是 Error，涵盖程序不应捕获的异常。当程序触发 Error 时，它的执行状态已经无法恢复，需要中止线程甚至是中止虚拟机。第二子类则是 Exception，涵盖程序可能需要捕获并且处理的异常。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/47c8429fc30aec201286b47f3c1a5993.png" style="zoom: 33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/47c8429fc30aec201286b47f3c1a5993.png" style="zoom: 33%;" />
 
 Exception 有一个特殊的子类 RuntimeException，用来表示“程序虽然无法继续执行，但是还能抢救一下”的情况。前边提到的数组索引越界便是其中的一种。
 
@@ -587,7 +587,7 @@ public static void main(java.lang.String[]);
 
 finally 代码块的编译比较复杂。当前版本 Java 编译器的做法，是复制 finally 代码块的内容，分别放在 try-catch 代码块所有正常执行路径以及异常执行路径的出口中。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/17e2a3053b06b0a4383884f106e31c06.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/17e2a3053b06b0a4383884f106e31c06.png)
 
 ```
 public class Foo {
@@ -809,7 +809,7 @@ $ java -jar /path/to/jol-cli-0.9-full.jar estimates java.util.HashMap
 
 ASM[8] 是一个字节码分析及修改框架。它被广泛应用于许多项目之中，例如 Groovy、Kotlin 的编译器，代码覆盖测试工具 Cobertura、JaCoCo，以及各式各样通过字节码注入实现的程序行为监控工具。甚至是 Java 8 中 Lambda 表达式的适配器类，也是借助 ASM 来动态生成的。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/2a5d6813e32b8f88abae2b9f7b151fce.png" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/2a5d6813e32b8f88abae2b9f7b151fce.png" style="zoom: 50%;" />
 
 # 07 | JVM是如何实现反射的？
 
@@ -1095,7 +1095,7 @@ public class Test {
 
 首先，在这个例子中，之所以反射调用能够变得这么快，主要是因为即时编译器中的方法内联。在关闭了 Inflation 的情况下，内联的瓶颈在于 Method.invoke 方法中对 MethodAccessor.invoke 方法的调用。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/93dec45b7af7951a2b6daeb01941b9b5.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/93dec45b7af7951a2b6daeb01941b9b5.png" style="zoom:50%;" />
 
 我会在后面的文章中介绍方法内联的具体实现，这里先说个结论：在生产环境中，我们往往拥有多个不同的反射调用，对应多个 GeneratedMethodAccessor，也就是动态实现。
 
@@ -1169,7 +1169,7 @@ public class Test {
 
 目前 Java 虚拟机的主流垃圾回收器采取的是可达性分析算法。这个算法的实质在于将一系列 GC Roots 作为初始的存活对象合集（live set），然后从该合集出发，探索所有能够被该集合引用到的对象，并将其加入到该集合中，这个过程我们也称之为标记（mark）。最终，未被探索到的对象便是死亡的，是可以回收的。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/8546a9b3c6660a31ae24bef0ef0a35b9.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/8546a9b3c6660a31ae24bef0ef0a35b9.png" style="zoom:50%;" />
 
 那么什么是 GC Roots 呢？我们可以暂时理解为由堆外指向堆内的引用，一般而言，GC Roots 包括（但不限于）如下几种：
 
@@ -1235,7 +1235,7 @@ Java 虚拟机中的 Stop-the-world 是通过安全点（safepoint）机制来�
 
 即把死亡对象所占据的内存标记为空闲内存，并记录在一个空闲列表（free list）之中。当需要新建对象时，内存管理模块便会从该空闲列表中寻找空闲内存，并划分给新建的对象。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/f225126be24826658ca5a899fcff5003.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/f225126be24826658ca5a899fcff5003.png" style="zoom:50%;" />
 
 清除这种回收方式的原理及其简单，但是有两个缺点。一是会造成内存碎片。由于 Java 虚拟机的堆中对象必须是连续分布的，因此可能出现总空闲内存足够，但是无法分配的极端情况。
 
@@ -1245,13 +1245,13 @@ Java 虚拟机中的 Stop-the-world 是通过安全点（safepoint）机制来�
 
 即把存活的对象聚集到内存区域的起始位置，从而留下一段连续的内存空间。这种做法能够解决内存碎片化的问题，但代价是压缩算法的性能开销。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/415ee8e4aef12ff076b42e41660dad39.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/415ee8e4aef12ff076b42e41660dad39.png" style="zoom:50%;" />
 
 - 第三种则是复制（copy）
 
 即把内存区域分为两等分，分别用两个指针 from 和 to 来维护，并且只是用 from 指针指向的内存区域来分配内存。当发生垃圾回收时，便把存活的对象复制到 to 指针指向的内存区域中，并且交换 from 指针和 to 指针的内容。复制这种回收方式同样能够解决内存碎片化的问题，但是它的缺点也极其明显，即堆空间的使用效率极其低下。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/4749cad235deb1542d4ca3b232ebf261.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/4749cad235deb1542d4ca3b232ebf261.png" style="zoom:50%;" />
 
 当然，现代的垃圾回收器往往会综合上述几种回收方式，综合它们优点的同时规避它们的缺点。在下一篇中我们会详细介绍 Java 虚拟机中垃圾回收算法的具体实现。
 
@@ -1302,7 +1302,7 @@ Java 虚拟机将堆划分为新生代和老年代。其中，新生代又被划
 
 当然，你也可以通过参数 -XX:SurvivorRatio 来固定这个比例。但是需要注意的是，其中一个 Survivor 区会一直为空，因此比例越低浪费的堆空间将越高。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/2cc29b8de676d3747416416a3523e4e5.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/2cc29b8de676d3747416416a3523e4e5.png" style="zoom:50%;" />
 
 通常来说，当我们调用 new 指令时，它会在 Eden 区中划出一块作为存储对象的内存。由于堆空间是线程共享的，因此直接在这里边划空间是需要进行同步的。否则，将有可能出现两个对象共用一段内存的事故。
 

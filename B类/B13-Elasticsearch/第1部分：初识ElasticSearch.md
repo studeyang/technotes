@@ -18,7 +18,7 @@
 
 **ElasticStack家族成员及应用场景**
 
-![image-20220108214815331](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png)
+![image-20220108214815331](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231745.png)
 
 # 第2章：安装上手
 
@@ -76,35 +76,35 @@
 
 > 索引、文档和 REST API
 
-![image-20220108224010136](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png)
+![image-20220108224010136](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231745.png)
 
 **文档（Document）**
 
 文档是所有可搜索数据的最小单元，相当于 MySQL 表中的一条记录；
 
-<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png" alt="image-20220108224441455" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231745.png" alt="image-20220108224441455" style="zoom:50%;" />
 
 文档的元数据：用于标注文档的相关信息。
 
 _index, _type, _id, _source, _all, _version, _score
 
-<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231745.png" alt="image-20220108224556296" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231745.png" alt="image-20220108224556296" style="zoom:50%;" />
 
 **索引（Index）**
 
 索引是文档的容器，是一类文档的结合，相当于 MySQL 表；
 
-<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108224911.png" alt="image-20220108224911111" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220108224911.png" alt="image-20220108224911111" style="zoom:50%;" />
 
 Type：7.0 开始，一个 Index 只能创建一个 Types；
 
 概念类比：
 
-<img src="https://gitee.com/yanglu_u/img2022/raw/master/learn/20220108225259.png" alt="image-20220108225259906" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220108225259.png" alt="image-20220108225259906" style="zoom:50%;" />
 
 **REST API**
 
-![image-20200917235323174](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231746.png)
+![image-20200917235323174](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231746.png)
 
 Index 相关 API
 
@@ -173,7 +173,7 @@ Tribe Node：连接到不同的 Elasticsearch 集群，支持将这些集群当�
 
 开发环境中一个节点可以承担多种角色；生产环境中，应该设置单一角色的节点。
 
-![image-20220108230212143](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231746.png)
+![image-20220108230212143](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231746.png)
 
 **分片**
 
@@ -183,7 +183,7 @@ Tribe Node：连接到不同的 Elasticsearch 集群，支持将这些集群当�
 
 一个三节点的集群中，blogs 索引的分片分布情况如下。
 
-![image-20200918001419658](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231746.png)
+![image-20200918001419658](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231746.png)
 
 # 第5章：文档的操作
 
@@ -293,13 +293,13 @@ POST kibana_sample_data_ecommerce/_msearch
 
 类似于书的目录页，是文档 Id 到文档内容的关联。
 
-![image-20200918234732001](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20200918234732001.png)
+![image-20200918234732001](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20200918234732001.png)
 
 **倒排索引**
 
 类似于书的索引页，是单词到文档 Id 的关系。
 
-![image-20200918234824217](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231747.png)
+![image-20200918234824217](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231747.png)
 
 **倒排索引的核心组成**
 
@@ -312,7 +312,7 @@ POST kibana_sample_data_ecommerce/_msearch
 
 记录了单词对应的文档集合，由倒排索引项组成。倒排索引项分为：文档 ID、词频 TF、位置（Position）、偏移（Offset）。
 
-![image-20200918235940141](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231747.png)
+![image-20200918235940141](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231747.png)
 
 **通过 Analyzer 进行分词**
 
@@ -324,7 +324,7 @@ Analysis：把全文本转换一系列单词的过程，也叫分词。Analysis 
 
 Analyzer 由三部分组成：
 
-![image-20220111224009552](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111224015.png)
+![image-20220111224009552](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111224015.png)
 
 1. Character Filters（针对原始文本处理，例如去除 html）
 2. Tokenizer（按照规则切分为单词）
@@ -428,17 +428,17 @@ Search API 可以分为两大类：
 
 使用"q"，指定查询字符串；使用"query string syntax"，指定KV键值对。 
 
-![image-20220111224824359](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111224824.png)
+![image-20220111224824359](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111224824.png)
 
 上面例子是搜索名叫 Eddie 的客户。
 
 **Request Body**
 
-![image-20220111224839411](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231748.png)
+![image-20220111224839411](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231748.png)
 
 **搜索 Response**
 
-![image-20220111224915804](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231748.png)
+![image-20220111224915804](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231748.png)
 
 # 第8章：URI Search 详解
 
@@ -446,7 +446,7 @@ Search API 可以分为两大类：
 
 通过 URI query 实现搜索。
 
-![image-20220111225126976](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231749.png)
+![image-20220111225126976](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231749.png)
 
 q: 指定查询语句，使用Query String Syntax
 
@@ -521,21 +521,21 @@ title:"Lord Rings"~2
 
 分页
 
-![image-20220111225948695](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231749.png)
+![image-20220111225948695](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231749.png)
 
 排序
 
-![image-20220111230018031](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111230018.png)
+![image-20220111230018031](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111230018.png)
 
 _source filtering
 
-![image-20220111230116033](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111231750.png)
+![image-20220111230116033](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231750.png)
 
 **脚本字段**
 
 可对字段使用脚本进行计算。
 
-![image-20220111230214685](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220111230214.png)
+![image-20220111230214685](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111230214.png)
 
 **使用查询表达式 - Match**
 

@@ -8,7 +8,7 @@
 
 领域事件的执行需要一系列的组件和技术来支撑。我们来看一下这个领域事件总体技术架构图（技术架构只作参考）。
 
-![image-20220126223620367](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220126223620.png)
+![image-20220126223620367](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220126223620.png)
 
 主要技术包括：
 
@@ -22,7 +22,7 @@
 
 以保险承保业务过程为例，当前发生的领域事件是：缴费通知单已生成。下一步的业务操作是：缴费。
 
-![image-20220126221726276](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220126221726.png)
+![image-20220126221726276](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220126221726.png)
 
 1. 投保微服务生成缴费通知单，发布第一个事件：缴费通知单已生成。
 2. 收款微服务缴费完成后，发布第二个领域事件：缴费已完成。
@@ -37,13 +37,13 @@
 
 DDD 的分层架构在不断发展。最早是传统的四层架构；后来四层架构有了进一步的优化，实现了各层对基础层的解耦；
 
-![image-20220127215044480](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220127215044.png)
+![image-20220127215044480](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220127215044.png)
 
 在最早的传统四层架构中，基础层是被其它层依赖的，它位于最核心的位置。但实际上领域层才是软件的核心，后来采用依赖倒置的设计原则，优化了传统的四层架构。
 
 优化后的四层架构从上到下依次是：用户接口层、应用层、领域层和基础层。
 
-![image-20220127211912926](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220127211913.png)
+![image-20220127211912926](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220127211913.png)
 
 1. 用户接口层。
 2. 应用层：应用层是很薄的一层，完成微服务之间的服务组合和编排。
@@ -54,7 +54,7 @@ DDD 的分层架构在不断发展。最早是传统的四层架构；后来四�
 
 DDD 分层架构中的要素其实和三层架构类似，只是在 DDD 分层架构中，这些要素被重新归类，重新划分了层，确定了层与层之间的交互规则和职责边界。
 
-![image-20220127221640974](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220127221641.png)
+![image-20220127221640974](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220127221641.png)
 
 三层架构向 DDD 分层架构演进，主要发生在业务逻辑层和数据访问层。
 
@@ -72,7 +72,7 @@ DDD 分层架构中的要素其实和三层架构类似，只是在 DDD 分层�
 
 整洁架构又名“洋葱架构”。整洁架构最主要的原则是依赖原则，它定义了各层的依赖关系，越往里依赖越低，代码级别越高，越是核心能力。外圆代码依赖只能指向内圆，内圆不需要知道外圆的任何情况。
 
-![image-20220128225631920](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220128225632.png)
+![image-20220128225631920](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220128225632.png)
 
 1. 领域模型实现领域内核心业务逻辑，它封装了企业级的业务规则；
 2. 领域服务实现涉及多个实体的复杂业务逻辑；
@@ -83,7 +83,7 @@ DDD 分层架构中的要素其实和三层架构类似，只是在 DDD 分层�
 
 六边形架构又名“端口适配器架构”。六边形架构的核心理念是：应用是通过端口与外部进行交互的。
 
-![image-20220128225754377](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220128225754.png)
+![image-20220128225754377](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220128225754.png)
 
 在六边形架构中，红圈内的核心业务逻辑与外部资源完全隔离，仅通过适配器进行交互。它解决了业务逻辑与用户界面的代码交错问题，很好地实现了前后端分离。
 
@@ -109,7 +109,7 @@ DDD 分层架构中的要素其实和三层架构类似，只是在 DDD 分层�
 
 **数字化转型中台应该共享什么？**
 
-![image-20220208222904148](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220208222904.png)
+![image-20220208222904148](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220208222904.png)
 
 传统企业不仅要将通用能力中台化，还需要将核心能力中台化。这里的通用能力对应 DDD 的通用域或支撑域；核心能力对应 DDD 的核心域。
 
@@ -125,7 +125,7 @@ DDD 分层架构中的要素其实和三层架构类似，只是在 DDD 分层�
 
 **DDD、中台和微服务的协作模式**
 
-![image-20220209215032513](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220209215032.png)
+![image-20220209215032513](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220209215032.png)
 
 如果将企业内整个业务域作为一个问题域的话，企业内的所有业务就是一个领域。
 

@@ -38,7 +38,7 @@ Spring 框架所倡导的基于 POJO（Plain Old Java Object，简单 Java 对�
 
 Spring 框架 POJO 提供的各种服务共同组成了 Spring 的生命之树，如图 1-1 所示。 
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Spring框架总体结构.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Spring框架总体结构.png)
 
 **1.3 Spring 大观园**
 
@@ -112,7 +112,7 @@ public FXNewsProvider() {
 
 其实 IoC 就这么简单！原来是需要什么东西自己去拿，现在是需要什么东西就让别人送过来。 
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/使用IoC前后的差别.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/使用IoC前后的差别.png)
 
 **2.2 手语，呼喊，还是心有灵犀**
 
@@ -168,7 +168,7 @@ setter 方法注入虽不像构造方法注入那样，让对象构造完成后�
 
 FXNewsProvider 为了让 IoC Service Provider 为其注入所依赖的IFXNewsListener，首先需要实现 FXNewsListenerCallable 接口，这个接口会声明一个 injectNewsListener 方法（方法名随意），该方法的参数，就是所依赖对象的类型。这样，InjectionServiceContainer 对象，即对应的 IoC Service Provider 就可以通过这个接口方法将依赖对象注入到被注入对象 FXNewsProvider 当中。 
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/使用接口注入的FXNewsProvider.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/使用接口注入的FXNewsProvider.png)
 
 接口注入方式最早并且使用最多的是在一个叫做 Avalon 的项目中，相对于前两种依赖注入方式，接口注入比较死板和烦琐。如果需要注入依赖对象，被注入对象就必须声明和实现另外的接口。这就好像你同样在酒吧点啤酒，为了让服务生理解你的意思，你就必须戴上一顶啤酒杯式的帽子，看起来有点多此一举。
 
@@ -274,14 +274,14 @@ IoC Service Provider 的职责相对来说比较简单，主要有两个：业�
 
 Spring 的 IoC 容器是一个提供 IoC 支持的轻量级容器，除了基本的 IoC 支持，它作为轻量级容器还提供了 IoC 之外的支持。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Spring的IoC容器和IoC Service Provider之间的关系.jpg" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Spring的IoC容器和IoC Service Provider之间的关系.jpg" style="zoom:80%;" />
 
 Spring 提供了两种容器类型：BeanFactory 和 ApplicationContext。
 
 - BeanFactory。基础类型 IoC 容器，提供完整的 IoC 服务支持。如果没有特殊指定，默认采用延迟初始化策略（lazy-load）。
 - ApplicationContext。ApplicationContext 在 BeanFactory 的基础上构建，是相对比较高级的容器实现，除了拥有 BeanFactory 的所有支持，ApplicationContext 还提供了其他高级特性，比如事件发布、国际化信息支持等。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/BeanFactory和ApplicationContext继承关系.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/BeanFactory和ApplicationContext继承关系.png)
 
 **4.1 拥有 BeanFactory 之后的生活**
 
@@ -409,7 +409,7 @@ newsProvider.getAndPersistNews();
 
   Spring 的 IoC 容器实现以上功能的过程，基本上可以按照类似的流程划分为两个阶段，即容器启动阶段和 Bean 实例化阶段。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/容器功能实现的各个阶段.jpg)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/容器功能实现的各个阶段.jpg)
 
   容器启动伊始，容器需要依赖某些工具类 BeanDefinitionReader 对加载的 Configuration MetaData 进行解析和分析，并将分析后的信息编组为相应的 BeanDefinition，最后注册到相应的 BeanDefinitionRegistry，这样容器启动工作就完成了。
 
@@ -427,7 +427,7 @@ newsProvider.getAndPersistNews();
 
   类 org.springframework.context.support.AbstractApplicationContext 的 refresh() 方法里描述了 bean 的一生。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Bean的实例化过程.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Bean的实例化过程.png)
 
   a. Bean 的实例化与 BeanWrapper。采用策略模式来决定采用何种方式初始化 bean 实例；
 
@@ -462,7 +462,7 @@ ApplicationContext 除了拥有 BeanFactory 支持的所有功能之外，还进
 
 - 5.1.2 ResourceLoader，“更广义的 URL”
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Resource和ResourceLoader类层次图.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Resource和ResourceLoader类层次图.png)
 
   可用的 ResourceLoader 有 DefaultResourceLoader, FileSystemResourceLoader；
 
@@ -470,7 +470,7 @@ ApplicationContext 除了拥有 BeanFactory 支持的所有功能之外，还进
 
 - 5.1.3 ApplicationContext 与 ResourceLoader
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/AbstractApplicationContext作为ResourceLoader和ResourcePatternResolver.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/AbstractApplicationContext作为ResourceLoader和ResourcePatternResolver.png)
   
   扮演 ResourceLoader 的角色：可以来加载 Resource；
   
@@ -499,7 +499,7 @@ ApplicationContext 除了拥有 BeanFactory 支持的所有功能之外，还进
 
 - 5.3.2 Spring 的容器内事件发布类结构分析
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Spring容器内事件发布实现类图.jpg)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Spring容器内事件发布实现类图.jpg)
 
 # 第6章 Spring IoC 容器之扩展篇
 

@@ -8,7 +8,7 @@ Redis 是 Remote dictionary server 即远程字典服务的缩写，是一款基
 
 **Redis 特性**
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090939.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090939.png)
 
 - 数据类型
 
@@ -46,7 +46,7 @@ Redis 一般被看作单进程/单线程组件，Redis 基于 Epoll 事件模型
 
 主进程中，除了主线程处理网络 IO 和命令操作外，还有 3 个辅助 BIO 线程。这 3 个 BIO 线程分别负责处理文件关闭、AOF 缓冲数据刷新到磁盘，以及清理对象这三个任务队列。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090945.png" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090945.png" style="zoom:80%;" />
 
 Redis 在启动时，会同时启动这三个 BIO 线程，然后 BIO 线程休眠等待任务。当需要执行相关类型的后台任务时，就会构建一个 bio_job 结构，记录任务参数，然后将 bio_job 追加到任务队列尾部。然后唤醒 BIO 线程，即可进行任务执行。
 

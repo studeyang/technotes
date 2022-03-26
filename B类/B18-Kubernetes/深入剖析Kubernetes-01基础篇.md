@@ -97,7 +97,7 @@ int pid = clone(main_function, stack_size, CLONE_NEWPID | SIGCHLD, NULL);
 
 而相比之下，容器化后的用户应用，却依然还是一个宿主机上的普通进程，这就意味着这些因为虚拟化而带来的性能损耗都是不存在的；而另一方面，使用 Namespace 作为隔离手段的容器并不需要单独的 Guest OS，这就使得容器额外的资源占用几乎可以忽略不计。
 
-![image-20220311215134311](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220311215134.png)
+![image-20220311215134311](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220311215134.png)
 
 这幅图的右边，则用一个名为 Docker Engine 的软件替换了 Hypervisor。跟真实存在的虚拟机不同，在使用 Docker 的时候，并没有一个真正的“Docker 容器”运行在宿主机里面。Docker 项目帮助用户启动的，还是原来的应用进程，只不过在创建这些进程时，Docker 为它们加上了各种各样的 Namespace 参数。
 
@@ -219,7 +219,7 @@ $ cat /sys/fs/cgroup/cpu/docker/5d5c9f67d/cpu.cfs_quota_us
 
 Borg 系统，一直以来都被誉为 Google 公司内部最强大的“秘密武器”。相比于 Spanner、BigTable 等相对上层的项目，Borg 要承担的责任，是承载 Google 公司整个基础设施的核心依赖。在 Google 公司已经公开发表的基础设施体系论文中，Borg 项目当仁不让地位居整个基础设施技术栈的最底层。
 
-![image-20220314214528787](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220314214528.png)
+![image-20220314214528787](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220314214528.png)
 
 上面这幅图，来自于 Google Omega 论文的第一作者的博士毕业论文。它描绘了当时 Google 已经公开发表的整个基础设施栈。在这个图里，你既可以找到 MapReduce、BigTable 等知名项目，也能看到 Borg 和它的继任者 Omega 位于整个技术栈的最底层。
 
@@ -229,7 +229,7 @@ Kubernetes 项目就是 Borg 项目的开源版本？那么 Kubernetes 项目要
 
 编排？调度？容器云？还是集群管理？实际上，这个问题到目前为止都没有固定的答案。因为在不同的发展阶段，Kubernetes 需要着重解决的问题是不同的。在定义核心功能的过程中，Kubernetes 项目正是依托着 Borg 项目的理论优势，才在短短几个月内迅速站稳了脚跟，进而确定了一个如下图所示的全局架构：
 
-![image-20220314214808889](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220314214808.png)
+![image-20220314214808889](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220314214808.png)
 
 Kubernetes 项目的架构由 Master 和 Node 两种节点组成，而这两种角色分别对应着控制节点和计算节点。
 
@@ -243,7 +243,7 @@ Master 节点，由三个紧密协作的独立组件组合而成，它们分别�
 
 对于一个容器来说，如果想要它的 IP 地址等信息固定不变，Kubernetes 项目的做法是给 Pod 绑定一个 Service 服务，而 Service 服务声明的 IP 地址等信息是“终生不变”的。这个 Service 服务的主要作用，就是作为 Pod 的代理入口（Portal），从而代替 Pod 对外暴露一个固定的网络地址。
 
-![image-20220314215816789](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220314215816.png)
+![image-20220314215816789](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220314215816.png)
 
 我们从容器这个最基础的概念出发，首先遇到了容器间“紧密协作”关系的难题，于是就扩展到了 Pod；有了 Pod 之后，我们希望能一次启动多个应用的实例，这样就需要 Deployment 这个 Pod 的多实例管理器；而有了这样一组相同的 Pod 后，我们又需要通过一个固定的 IP 地址和端口以负载均衡的方式访问它，于是就有了 Service。
 

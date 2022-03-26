@@ -20,7 +20,7 @@ select * from T where ID=10;
 
 下面是 MySQL 的基本架构示意：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/MySQL 的逻辑架构图.png" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/MySQL 的逻辑架构图.png" style="zoom: 67%;" />
 
 大体来说，MySQL可以分为Server层和存储引擎层两部分：
 
@@ -43,7 +43,7 @@ mysql -h $ip -P $port -u $user -p
 
 连接完成后，如果你没有后续的动作，这个连接就处于空闲状态，你可以在 show processlist 命令中看到它。其中的 Command 列显示为 "Sleep" 的这一行，就表示现在系统里面有一个空闲连接。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/QQ截图20190904235545.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/QQ截图20190904235545.png)
 
 客户端如果太长时间没动静，连接器就会自动将它断开。这个时间是由参数 wait_timeout 控制的，默认值是 8 小时。
 
@@ -197,7 +197,7 @@ update T set c=c+1 where ID=2;
 
 与此类似，InnoDB 的 redo log 是固定大小的，比如可以配置为一组 4 个文件，每个文件的大小是 1GB，那么这块“粉板”总共就可以记录 4GB 的操作。从头开始写，写到末尾就又回到开头循环写，如下面所示。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/QQ截图20190905233945.png"  />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/QQ截图20190905233945.png"  />
 
 write pos 是当前记录的位置，一边写一边后移，写到第 3 号文件末尾后就回到 0 号文件开头。checkpoint 是当前要擦除的位置，也是往后推移并且循环的，擦除记录前要把记录更新到数据文件。write pos 和 checkpoint 之间的是“粉板”上还空着的部分，可以用来记录新的操作。如果 write pos 追上 checkpoint，表示“粉板”满了，这时候不能再执行新的更新，得停下来先擦掉一些记录，把 checkpoint 推进一下。
 
@@ -232,7 +232,7 @@ write pos 是当前记录的位置，一边写一边后移，写到第 3 号文�
 
 这里我给出这个 update 语句的执行流程图，图中浅色框表示是在 InnoDB 内部执行的，深色框表示是在执行器中执行的。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/QQ截图20190905235726.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/QQ截图20190905235726.png)
 
 你可能注意到了，最后三步看上去有点“绕”，将 redo log 的写入拆成了两个步骤：<br>prepare 和 commit，这就是"两阶段提交"，
 
@@ -324,7 +324,7 @@ create table T(c int) engine=InnoDB;
 insert into T(c) values(1);
 ```
 
-![事务的隔离级别](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/事务的隔离级别.png)
+![事务的隔离级别](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/事务的隔离级别.png)
 
 我们来看看在不同的隔离级别下，事务 A 会有哪些不同的返回结果，也就是图里面 V1、V2、V3 的返回值分别是什么。 
 
@@ -342,7 +342,7 @@ insert into T(c) values(1);
 >
 > 配置的方式是，将启动参数 transaction-isolation 的值设置成 READ-COMMITTED。你可以用 show variables 来查看当前的值。 
 >
-> ![查看当前的隔离级别](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/查看当前的隔离级别.png)
+> ![查看当前的隔离级别](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/查看当前的隔离级别.png)
 >
 
 总结来说，存在即合理，哪个隔离级别都有它自己的使用场景，你要根据自己的业务情况来定。我想你可能会问那什么时候需要可重复读的场景呢？我们来看一个数据校对逻辑的案例。 
@@ -359,7 +359,7 @@ insert into T(c) values(1);
 
 假设一个值从 1 被按顺序改成了 2、3、4，在回滚日志里面就会有类似下面的记录 :
 
-![事务隔离的实现](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/事务隔离的实现.png)
+![事务隔离的实现](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/事务隔离的实现.png)
 
 当前值是 4，但是在查询这条记录的时候，不同时刻启动的事务会有不同的 read-view。如图中看到的，在视图 A、B、C 里面，这一个记录的值分别是 1、2、4，同一条记录在系统中可以存在多个版本，就是数据库的多版本并发控制（MVCC）。对于 read-view A，要得到 1，就必须将当前值依次执行图中所有的回滚操作得到。 
 
@@ -422,7 +422,7 @@ select * from information_schema.innodb_trx where TIME_TO_SEC(timediff(now(),trx
 
   假设，你现在维护着一个身份证信息和姓名的表，需要根据身份证号查找对应的名字，这时对应的哈希索引的示意图如下所示：
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/哈希表示意图.png" style="zoom:50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/哈希表示意图.png" style="zoom:50%;" />
 
   图中，User2 和 User4 根据身份证号算出来的值都是 N，但没关系，后面还跟了一个链表。假设，这时候你要查 ID_card_n2 对应的名字是什么，处理步骤就是：首先，将 ID_card_n2 通过哈希函数算出 N；然后，按顺序遍历，找到 User2。
 
@@ -436,7 +436,7 @@ select * from information_schema.innodb_trx where TIME_TO_SEC(timediff(now(),trx
 
   而**有序数组在等值查询和范围查询场景中的性能就都非常优秀**。还是上面这个根据身份证号查名字的例子，如果我们使用有序数组来实现的话，示意图如下所示：
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/有序数组示意图.png" style="zoom:80%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/有序数组示意图.png" style="zoom:80%;" />
 
   这里我们假设身份证号没有重复，这个数组就是按照身份证号递增的顺序保存的。这时候如果你要查 ID_card_n2 对应的名字，用二分法就可以快速得到，这个时间复杂度是 O(log(N))。
 
@@ -450,7 +450,7 @@ select * from information_schema.innodb_trx where TIME_TO_SEC(timediff(now(),trx
 
   二叉搜索树也是课本里的经典数据结构了。还是上面根据身份证号查名字的例子，如果我们用二叉搜索树来实现的话，示意图如下所示：
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/二叉搜索树示意图.png" style="zoom:50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/二叉搜索树示意图.png" style="zoom:50%;" />
 
   二叉搜索树的特点是：每个节点的左儿子小于父节点，父节点又小于右儿子。这样如果你要查 ID_card_n2 的话，按照图中的搜索顺序就是按照 UserA -> UserC -> UserF -> User2 这个路径得到。这个时间复杂度是 O(log(N))。
 
@@ -499,7 +499,7 @@ mysql> create table T(
 
 表中 R1~R5 的 (ID,k) 值分别为 (100,1)、(200,2)、(300,3)、(500,5) 和 (600,6)，两棵树的示例示意图如下。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/InnoDB 的索引组织结构.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/InnoDB 的索引组织结构.png)
 
 从图中不难看出，根据叶子节点的内容，索引类型分为主键索引和非主键索引。
 
@@ -571,17 +571,17 @@ B+ 树为了维护索引有序性，在插入新值的时候需要做必要的�
 
 > 值得提醒注意的是，在Java中，叶子结点是为null的结点。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201021095001279.png" alt="image-20201021095001279" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201021095001279.png" alt="image-20201021095001279" style="zoom: 67%;" />
 
 下图为一颗红黑树：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201021095241249.png" alt="image-20201021095241249" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201021095241249.png" alt="image-20201021095241249" style="zoom:67%;" />
 
 > 图片来源：https://zhuanlan.zhihu.com/p/60478979
 
 [**B树：**](https://mp.weixin.qq.com/s?__biz=MzIxMjE5MTE1Nw==&mid=2653190965&idx=1&sn=53f78fa037386f85531832cd5322d2a0&chksm=8c9909efbbee80f90512f0c36356c31cc74c388c46388dc2317d43c8f8597298f233ca9c29e9&scene=21#wechat_redirect)
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/B树.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/B树.jpg)
 
 下面来具体介绍一下 B-树（Balance Tree），一个 m 阶的 B 树具有如下几个特征：
 
@@ -589,7 +589,7 @@ B+ 树为了维护索引有序性，在插入新值的时候需要做必要的�
 
 [**B+树：**](https://mp.weixin.qq.com/s/jRZMMONW3QP43dsDKIV9VQ)
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/B+树.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/B+树.jpg)
 
 B+树的特点：
 
@@ -621,7 +621,7 @@ mysql> create table T (
 insert into T values (100,1,'aa'),(200,2,'bb'),(300,3,'cc'),(500,5,'ee'),(600,6,'ff'),(700,7,'gg');
 ```
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/InnoDB 的索引组织结构.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/InnoDB 的索引组织结构.png)
 
 现在，我们一起来看看这条 SQL 查询语句的执行流程：
 
@@ -666,7 +666,7 @@ B+ 树这种索引结构，可以利用索引的“最左前缀”，来定位�
 
 为了直观地说明这个概念，我们用（name，age）这个联合索引来分析。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/(name, age)索引示意图.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/(name, age)索引示意图.png)
 
 当你的逻辑需求是查到所有名字是“张三”的人时，可以快速定位到 ID4，然后向后遍历得到所有需要的结果。如果你要查的是所有名字第一个字是“张”的人，你的 SQL 语句的条件是"where name like ‘张 %’"。这时，你也能够用上这个索引，查找到第一个符合条件的记录是 ID3，然后向后遍历，直到不满足条件为止。
 
@@ -684,11 +684,11 @@ MySQL 5.6 引入的索引下推优化（index condition pushdown)， 可以在�
 
 无索引下推执行流程：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/无索引下推执行流程.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/无索引下推执行流程.png)
 
 索引下推执行流程：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/索引下推执行流程.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/索引下推执行流程.png)
 
 在图 3 和 4 这两个图里面，每一个虚线箭头表示回表一次。
 
@@ -822,7 +822,7 @@ MySQL 里面表级别的锁有两种：一种是表锁，一种是元数据锁�
 
 > 备注：这里的实验环境是 MySQL 5.6。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/小表添加字段问题.jpg" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/小表添加字段问题.jpg" style="zoom:67%;" />
 
 我们可以看到 session A 先启动，这时候会对表 t 加一个 MDL 读锁。由于 session B 需要的也是 MDL 读锁，因此可以正常执行。
 
@@ -889,7 +889,7 @@ MySQL 的行锁是在引擎层由各个引擎自己实现的。但并不是所�
 
 举个例子。在下面的操作序列中，事务 B 的 update 语句执行时会是什么现象呢？假设字段 id 是表 t 的主键。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/更新同一行时行锁示例图.jpg" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/更新同一行时行锁示例图.jpg" style="zoom: 67%;" />
 
 事务 B 的 update 语句会被阻塞，直到事务 A 执行 commit 之后，事务 B 才能继续执行。
 
@@ -901,7 +901,7 @@ MySQL 的行锁是在引擎层由各个引擎自己实现的。但并不是所�
 
 当并发系统中不同线程出现循环资源依赖，涉及的线程都在等待别的线程释放资源时，就会导致这几个线程都进入无限等待的状态，称为死锁。这里我用数据库中的行锁举个例子。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/使用行锁出现死锁的情况.jpg" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/使用行锁出现死锁的情况.jpg" style="zoom:67%;" />
 
 这时候，事务 A 在等待事务 B 释放 id=2 的行锁，而事务 B 在等待事务 A 释放 id=1 的行锁。 事务 A 和事务 B 在互相等待对方的资源释放，就是进入了死锁状态。当出现死锁以后，有两种策略：
 
@@ -972,7 +972,7 @@ InnoDB 里面每个事务有一个唯一的事务 ID，叫作 transaction id。�
 
 如下图所示，就是一个记录被多个事务连续更新后的状态。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/行状态变更图.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/行状态变更图.png)
 
 图中的三个虚线箭头，就是 undo log；图中虚线框里是同一行数据的 4 个版本，当前最新版本是 V4，k 的值是 22，它是被 transaction id 为 25 的事务更新的，因此它的 row trx_id 也是 25。
 
@@ -994,7 +994,7 @@ InnoDB 里面每个事务有一个唯一的事务 ID，叫作 transaction id。�
 
 这个视图数组把所有的 row trx_id 分成了几种不同的情况。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/数据版本可见性规则.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/数据版本可见性规则.png)
 
 这样，对于当前事务的启动瞬间来说，一个数据版本的 row trx_id，有以下几种可能：
 
@@ -1023,7 +1023,7 @@ mysql> CREATE TABLE `t` (
 insert into t(id, k) values(1,1),(2,2);
 ```
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/事务ABC的执行流程.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/事务ABC的执行流程.png)
 
 这里，我们需要注意的是事务的启动时机。begin/start transaction 命令并不是一个事务的起点，在执行到它们之后的第一个操作 InnoDB 表的语句，事务才真正启动。如果你想要马上启动一个事务，可以使用 start transaction with consistent snapshot 这个命令。
 
@@ -1041,7 +1041,7 @@ insert into t(id, k) values(1,1),(2,2);
 
 为了简化分析，我先把其他干扰语句去掉，只画出跟事务 A 查询逻辑有关的操作：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/事务 A 查询数据逻辑图.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/事务 A 查询数据逻辑图.png)
 
 从图中可以看到，第一个有效更新是事务 C，把数据从 (1,1) 改成了 (1,2)。这时候，这个数据的最新版本的 row trx_id 是 102，而 90 这个版本已经成为了历史版本。
 
@@ -1077,7 +1077,7 @@ insert into t(id, k) values(1,1),(2,2);
 
 事务 B 的视图数组是先生成的，之后事务 C 才提交，不是应该看不见 (1,2) 吗，怎么能算出 (1,3) 来？
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/事务 B 更新逻辑图.png" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/事务 B 更新逻辑图.png" style="zoom:67%;" />
 
 是的，如果事务 B 在更新之前查询一次数据，这个查询返回的 k 的值确实是 1。但是，当它要去更新数据的时候，就有这样一条规则：更新数据都是先读后写的，而这个读，只能读当前的值，称为“当前读”（current read）。
 
@@ -1092,13 +1092,13 @@ mysql> select k from t where id=1 for update;
 
 假设事务 C 不是马上提交的，而是变成了下面的事务 C’，会怎么样呢？
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/事务 A、B、C'的执行流程.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/事务 A、B、C'的执行流程.png)
 
 虽然事务 C’还没提交，但是 (1,2) 这个版本也已经生成了，并且是当前的最新版本。那么，事务 B 的更新语句会怎么处理呢？
 
 根据上篇的“两阶段锁协议”知识，可以知道，事务 C’没提交，也就是说 (1,2) 这个版本上的写锁还没释放。而事务 B 是当前读，必须要读最新版本，而且必须加锁，因此就被锁住了，必须等到事务 C’释放这个锁，才能继续它的当前读。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/事务 B 更新逻辑图（配合事务 C'）.png" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/事务 B 更新逻辑图（配合事务 C'）.png" style="zoom:67%;" />
 
 到这里，我们把一致性读、当前读和行锁就串起来了。
 
@@ -1117,7 +1117,7 @@ mysql> select k from t where id=1 for update;
 
 下面是读提交时的状态图，可以看到这两个查询语句的创建视图数组的时机发生了变化，就是图中的 read view 框。（注意：这里，我们用的还是事务 C 的逻辑直接提交，而不是事务 C’）
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/读提交隔离级别下的事务状态图.jpg" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/读提交隔离级别下的事务状态图.jpg" style="zoom:67%;" />
 
 这时，事务 A 的查询语句的视图数组是在执行这个语句的时候创建的，时序上 (1,2)、(1,3) 的生成时间都在创建这个视图数组的时刻之前。但是，在这个时刻：
 
@@ -1145,6 +1145,6 @@ mysql> CREATE TABLE `t` (
 insert into t(id, c) values(1,1),(2,2),(3,3),(4,4);
 ```
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images//改不掉的诡异情况.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images//改不掉的诡异情况.png)
 
 复现出来以后，请你再思考一下，在实际的业务开发中有没有可能碰到这种情况？你的应用代码会不会掉进这个“坑”里，你又是怎么解决的呢？

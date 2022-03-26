@@ -1,6 +1,6 @@
  
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092625.jpeg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092625.jpeg)
 
  
 
@@ -30,7 +30,7 @@ ZooKeeper 是一个典型的分布式数据一致性解决方案，分布式应�
 
 ZooKeeper 一个最常用的使用场景就是用于担任服务生产者和服务消费者的注册中心（提供发布订阅服务）。服务生产者将自己提供的服务注册到 ZooKeeper 中心，服务的消费者在进行服务调用的时候先到 ZooKeeper 中查找服务，获取到服务生产者的详细信息之后，再去调用服务生产者的内容与数据。如下图所示，在 Dubbo 架构中 ZooKeeper 就担任了注册中心这一角色。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092640.jpeg"  />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092640.jpeg"  />
 
 **ZooKeeper 特点**
 
@@ -53,7 +53,7 @@ ZooKeeper 一个最常用的使用场景就是用于担任服务生产者和服�
 
 ZooKeeper 允许分布式进程通过共享的层次结构命名空间进行相互协调，这与标准文件系统类似。 名称空间由 ZooKeeper 中的数据寄存器组成 - 称为 ZNode，这些类似于文件和目录。 与为存储设计的典型文件系统不同，ZooKeeper 数据保存在内存中，这意味着 ZooKeeper 可以实现高吞吐量和低延迟。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092645.jpeg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092645.jpeg)
 
 **可构建集群**
 
@@ -65,7 +65,7 @@ ZooKeeper 允许分布式进程通过共享的层次结构命名空间进行相�
 
 以下是ZooKeeper 官方提供的架构图。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092650.jpeg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092650.jpeg)
 
 上图中每一个 Server 代表一个安装 ZooKeeper 服务的服务器。组成 ZooKeeper 服务的服务器都会在内存中维护当前的服务器状态，并且每台服务器之间都互相保持着通信。集群间通过 ZAB 协议（ZooKeeper Atomic Broadcast）来保持数据的一致性。
 
@@ -215,11 +215,11 @@ ZooKeeper 内置了一些权限控制方案，可以用以下方案为每个节�
 
 但是，在 ZooKeeper 中没有选择传统的 Master/Slave 概念，而是引入了 Leader、Follower 和 Observer 三种角色。如下图所示
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092703.jpeg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092703.jpeg)
 
 ZooKeeper 集群中的所有机器通过一个 Leader 选举过程来选定一台称为 “Leader” 的机器，Leader 既可以为客户端提供写服务又能提供读服务。除了 Leader 外，Follower 和 Observer 都只能提供读服务。Follower 和 Observer 唯一的区别在于 Observer 机器不参与 Leader 的选举过程，也不参与写操作的“过半写成功”策略，因此 Observer 机器可以在不影响写性能的情况下提升集群的读性能。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092707.jpeg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092707.jpeg)
 
 **选举过程**
 
@@ -236,7 +236,7 @@ ZooKeeper 集群中的所有机器通过一个 Leader 选举过程来选定一�
 
 **数据发布/订阅**
 
-![image-20201120162105017](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201120162105017.png)
+![image-20201120162105017](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201120162105017.png)
 
  
 
@@ -244,7 +244,7 @@ ZooKeeper 集群中的所有机器通过一个 Leader 选举过程来选定一�
 
 把 ZooKeeper 作为一个服务的注册中心，在其中登记每个服务，每台服务器知道自己是属于哪个服务，在服务器启动时，自己向所属服务进行登记，这样，一个树形的服务结构就呈现出来了。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092712.jpeg" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092712.jpeg" style="zoom:80%;" />
 
 服务的调用者到注册中心里面查找：能提供所需服务的服务器列表，然后自己根据负载均衡算法，从中选取一台服务器进行连接。
 
@@ -285,13 +285,13 @@ ZooKeeper 集群中的所有机器通过一个 Leader 选举过程来选定一�
 
  入队：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/089fe791aa7.jpeg" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/089fe791aa7.jpeg" style="zoom: 67%;" />
 
  
 
 出队： 
 
-![image-20201120162144471](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/image-20201120162144471.png)
+![image-20201120162144471](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/image-20201120162144471.png)
 
  
 
@@ -515,7 +515,7 @@ CREATE(c) 可以创建子节点 READ(r) 可以读取节点数据及显示子节�
 
 在zkServer.sh脚本里查找到start关键字，在如下图所示的地方增加上面的代码，如何重启Zookeeper即可。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/07-726473363.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/07-726473363.png)
 
 # **参考资料**
 

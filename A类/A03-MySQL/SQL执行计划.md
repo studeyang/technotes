@@ -1,6 +1,6 @@
 # 01 | SQL语句执行顺序
 
-![image-20211207155619563](https://gitee.com/yanglu_u/ImgRepository/raw/master/image-20211207155619563.png)
+![image-20211207155619563](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/image-20211207155619563.png)
 
 1. FORM: 对FROM的左边的表和右边的表计算笛卡尔积。产生虚表VT1
 2. ON: 对虚表VT1进行ON筛选，只有那些符合`<join-condition>`的行才会被记录在虚表VT2中。
@@ -16,7 +16,7 @@
 
 # 02 | 看懂执行计划
 
-![image-20211207155807199](https://gitee.com/yanglu_u/ImgRepository/raw/master/image-20211207155807199.png)
+![image-20211207155807199](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/image-20211207155807199.png)
 
 1. id： id是一组数字，表示查询中执行select子句或操作表的顺序，如果id相同，则执行顺序从上至下，如果是子查询， id的序号会递增， id越大则优先级越高，越先会被执行。
 2. select_type：查询类型，有simple、 primary、 subquery、 dependent subquery、 derived、 union、 dependent union、 union result等

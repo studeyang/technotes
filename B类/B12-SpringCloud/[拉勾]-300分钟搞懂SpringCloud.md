@@ -4,7 +4,7 @@
 
 如何才能快速掌握 Spring Cloud 呢？
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120093130.png"  />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120093130.png"  />
 
 包括：
 
@@ -89,7 +89,7 @@ Eureka 的架构主要分为 Eureka Server 和 Eureka Client 两部分。
 
 Eureka Client 又分为 Applicaton Service（服务提供者）和 Application Client（服务消费者）。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120093137.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120093137.png)
 
 **Eureka 部署**
 
@@ -153,7 +153,7 @@ Eureka 核心操作主要有注册、续约、下线、移除，接口是 com.ne
 
 **Eureka 集群各节点的数据同步**
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120093141.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120093141.png)
 
 通过 peerEurekaNodes.getPeerEurekaNodes() 得到 Eureka Server 的所有节点信息，在当前节点中循环进行复制操作，需要排除自己，不需要将信息同步给自己。
 
@@ -161,7 +161,7 @@ Eureka 核心操作主要有注册、续约、下线、移除，接口是 com.ne
 
 当网络故障后，所有的服务与 Eureka Server 之间无法进行正常通信，一定时间后，Eureka Server 没有收到续约的信息，将会移除没有续约的实例，这个时候正常的服务也会被移除掉，所以需要引入自我保护机制来解决这种问题。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120093145.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120093145.png)
 
 已开启自我保护，当服务提供者 A 出现网络故障，无法与 Eureka Server 进行续约时，虽然 Eureka Server 开启了自我保护模式，但没有将该实例移除，服务消费者还是可以正常拉取服务提供者的信息，正常发起调用。
 
@@ -175,7 +175,7 @@ Eureka 核心操作主要有注册、续约、下线、移除，接口是 com.ne
 
 Eureka Client 会定时发送心跳给 Eureka Server 来证明自己处于健康的状态，如下图所示。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120093148.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120093148.png)
 
 # 第06讲：API网关服务-Zuul
 
@@ -221,7 +221,7 @@ Eureka Client 会定时发送心跳给 Eureka Server 来证明自己处于健康
 
   当一个请求进来时，会先进入 pre 过滤器，在 pre 过滤器执行完后，接着就到了 routing 过滤器中，开始路由到具体的服务中，路由完成后，接着就到了 post 过滤器中，然后将请求结果返回给客户端。如果在这个过程中出现异常，则会进入 error 过滤器中，这就是请求在整个 Zuul 中的生命周期。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120093154.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120093154.png)
 
 # 第07讲：分布式配置中心-Apollo
 

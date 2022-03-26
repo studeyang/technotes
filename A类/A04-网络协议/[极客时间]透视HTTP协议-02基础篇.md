@@ -4,15 +4,15 @@
 
 下图是一次在 Chrome 浏览器的地址栏里输入“http://127.0.0.1/”，再按下回车键，等欢迎页面显示出来后 Wireshark 里捕获的数据包。
 
-![image-20201101223615503](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201101223615.png)
+![image-20201101223615503](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201101223615.png)
 
 **抓包分析**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201101224832.png" alt="image-20201101224832375" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201101224832.png" alt="image-20201101224832375" style="zoom:50%;" />
 
 1. 浏览器要用 HTTP 协议收发数据，首先要做的就是建立 TCP 连接。使用“三次握手”建立与 Web 服务器的连接。（No 1-3）
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201101224900.png" alt="image-20201101224900308" style="zoom:50%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201101224900.png" alt="image-20201101224900308" style="zoom:50%;" />
 
 2. 浏览器按照 HTTP 协议规定的格式，通过 TCP 发送了一个“GET / HTTP/1.1”请求报文（No 7）
 
@@ -22,17 +22,17 @@
 
 5. 浏览器也要给服务器回复一个 TCP 的 ACK 确认，“你的响应报文收到了，多谢。”（No 10）
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201101225051.png" style="zoom:50%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201101225051.png" style="zoom:50%;" />
 
 6. 这时浏览器就收到了响应数据，但里面是什么呢？所以也要解析报文。一看，服务器给我的是个 HTML 文件，好，那我就调用排版引擎、JavaScript 引擎等等处理一下，然后在浏览器窗口里展现出了欢迎页面。
 
    > 这之后还有两个来回，共四个包，重复了相同的步骤。这是浏览器自动请求了作为网站图标的“favicon.ico”文件，与我们输入的网址无关。但因为我们的实验环境没有这个文件，所以服务器在硬盘上找不到，返回了一个“404 Not Found”。
    >
-   > <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201101225125.png" alt="image-20201101225125358" style="zoom:50%;" />
+   > <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201101225125.png" alt="image-20201101225125358" style="zoom:50%;" />
 
 至此，“键入网址再按下回车”的全过程就结束了。TCP 执行四次挥手。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201101225158.png" alt="image-20201101225157975" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201101225158.png" alt="image-20201101225157975" style="zoom:50%;" />
 
 **使用域名访问 Web 服务器**
 
@@ -62,7 +62,7 @@ HTTP 协议的核心部分就是它传输的报文内容。
 
 > TCP 报文在实际要传输的数据之前附加了一个 20 字节的头部数据，存储 TCP 协议必须的额外信息，例如发送方的端口号、接收方的端口号、包序号、标志位等。
 >
-> <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201102222121.png" alt="image-20201102222121278" style="zoom:50%;" />
+> <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201102222121.png" alt="image-20201102222121278" style="zoom:50%;" />
 
 HTTP 协议的请求报文和响应报文的结构基本相同，由三大部分组成：
 
@@ -70,7 +70,7 @@ HTTP 协议的请求报文和响应报文的结构基本相同，由三大部分
 2. 头部字段集合（header）：使用 key-value 形式更详细地说明报文；
 3. 消息正文（entity）：实际传输的数据，它不一定是纯文本，可以是图片、视频等二进制数据。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201102222451.png" alt="image-20201102222451597" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201102222451.png" alt="image-20201102222451597" style="zoom:50%;" />
 
 报文的最后是一个空白行结束，没有 body。
 
@@ -86,7 +86,7 @@ HTTP 协议的请求报文和响应报文的结构基本相同，由三大部分
 
 这三个部分通常使用空格（space）来分隔，最后要用 CRLF 换行表示结束。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201102222849.png" alt="image-20201102222849101" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201102222849.png" alt="image-20201102222849101" style="zoom:50%;" />
 
 例如：
 
@@ -104,7 +104,7 @@ GET / HTTP/1.1
 2. 状态码：一个三位数，用代码的形式表示处理的结果，比如 200 是成功，500 是服务器错误；
 3. 原因：作为数字状态码补充，是更详细的解释文字，帮助人理解原因。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201102223141.png" alt="image-20201102223141078" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201102223141.png" alt="image-20201102223141078" style="zoom:50%;" />
 
 例如：
 
@@ -163,7 +163,7 @@ HTTP 协议的头部字段，基本上可以分为四大类：
 
   例如：
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201102224351.png" alt="image-20201102224351640" style="zoom:50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201102224351.png" alt="image-20201102224351640" style="zoom:50%;" />
 
   它的 Server 字段里就看不出是使用了 Apache 还是 Nginx，只是显示为“GitHub.com”。
 
@@ -249,7 +249,7 @@ URI，也就是统一资源标识符（Uniform Resource Identifier），用来�
 
 URI 最常用的形式，由 scheme、host:port、path 和 query 四个部分组成。
 
-![image-20210801214959073](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210801214959.png)
+![image-20210801214959073](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210801214959.png)
 
 - scheme
 
@@ -281,7 +281,7 @@ URI 最常用的形式，由 scheme、host:port、path 和 query 四个部分组
 
 URI 还有一个“真正”的完整形态，如下图所示。
 
-![image-20210801215935846](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210801215935.png)
+![image-20210801215935846](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210801215935.png)
 
 - 身份信息
 

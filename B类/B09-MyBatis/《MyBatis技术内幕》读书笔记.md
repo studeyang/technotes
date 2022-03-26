@@ -2,11 +2,11 @@
 
 整体架构
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091440.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091440.png)
 
 一条SQL语句的大致过程
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091445.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091445.png)
 
 # 第2章 基础支持层
 
@@ -22,7 +22,7 @@ MyBatis在进行参数处理、结果映射等操作时，会涉及大量的反�
 
 **2.3 类型转换**
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091454.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091454.png)
 
 **2.4 日志模块**
 
