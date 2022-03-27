@@ -681,13 +681,114 @@ Kubernetes 中 Volume 的生命周期是直接和 Pod 挂钩的。在 Pod 被删
 
 上述介绍的这几款插件，目前依然能够照常使用，也是社区自身稳定支持的插件。但是对于一些云厂商和第三方的插件，社区已经不推荐继续使用内置的方式了，而是推荐你通过 CSI（Container Storage Interface，容器存储接口）来使用这些插件。
 
-# 10 | 存储管理：怎样对业务数据进行持久化存储？
-
-
-
-
-
 # 11 | K8s Service：轻松搞定服务发现和负载均衡
+
+当我们把服务部署在 pod 后，如果有别的应用来访问我们的服务的话，该怎么办呢？直接访问后端的 Pod IP 吗？不，这里我们还需要做服务发现（Service Discovery）。
+
+今天我们就来聊聊 Kubernetes 中的服务发现 —— Service。
+
+**Kubernetes 中的 Service**
+
+Kubernetes 中 Service 一共有四种类型，ClusterIP、NodePort、LoadBalancer 和 ExternalName。
+
+- ClusterIP
+
+  我们来看看这样的一个 Service 是如何定义的：
+
+  ```yaml
+  $ cat nginx-svc.yaml
+  apiVersion: v1
+  kind: Service
+  metadata:  
+    name: nginx-prod-svc-demo
+    namespace: demo # service 是 namespace 级别的对象
+  spec:
+    selector:       # Pod选择器
+      app: nginx
+      env: prod
+    type: ClusterIP # service 的类型
+    ports:  
+    - name: http 
+      port: 80       # service 的端口号
+      targetPort: 80 # 对应到 Pod 上的端口号
+      protocol: TCP  # 还支持 udp，http 等
+  ```
+
+  我们再来创建下上面定义的 Service：
+
+  ```shell
+  $ kubectl create -f nginx-svc.yaml
+  service/nginx-prod-svc-demo created
+  $ kubectl get svc -n demo
+  NAME                  TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)   AGE
+  nginx-prod-svc-demo   ClusterIP   10.111.193.186   <none>        80/TCP    6s
+  ```
+
+  可以看到，这个 Service 分配到了一个地址为 10.111.193.186 的 Cluster IP，这是一个虚拟 IP（VIP）地址，集群内所有的 Pod 和 Node 都可以通过这个虚拟 IP 地址加端口的方式来访问该 Service。这个 Service 会根据标签选择器，把匹配到的 Pod 的 IP 地址都挂载到后端。我们使用`kubectl describe`来看看这个。
+
+  ```shell
+  $ kubectl describe svc -n demo nginx-prod-svc-demo
+  Name:              nginx-prod-svc-demo
+  Namespace:         demo
+  Labels:            <none>
+  Annotations:       <none>
+  Selector:          app=nginx,env=prod
+  Type:              ClusterIP
+  IP:                10.111.193.186
+  Port:              http  80/TCP
+  TargetPort:        80/TCP
+  Endpoints:         10.1.0.29:80,10.1.0.30:80,10.1.0.31:80
+  Session Affinity:  None
+  Events:            <none>
+  ```
+
+  可以看到，这时候 Service 关联的 Endpoints 里面有三个 IP 地址，这三个 IP 就是对应的 Pod IP。
+
+- LoadBalancer
+
+  LoadBalancer主要用于做外部的服务发现，即暴露给集群外部的访问。具体可以查看[这个文档](https://kubernetes.io/zh/docs/concepts/services-networking/service/#loadbalancer)。
+
+- ExternalName
+
+  比如在云上或者内部已经运行着一个应用服务，但是暂时没有运行在 Kubernetes 中，如果想让在 Kubernetes 集群中的 Pod 访问该服务，这时可以通过 ExternalName 类型的 Service 来解决。
+
+  具体可以查看[这个文档](https://kubernetes.io/zh/docs/concepts/services-networking/service/#externalname)。
+
+- NodePort
+
+  ```yaml
+  apiVersion: v1
+  kind: Service
+  metadata:  
+    name: my-nodeport-service
+    namespace: demo
+  spec:
+    selector:    
+      app: my-app
+    type: NodePort # 这里设置类型为 NodePort
+    ports:  
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30000
+      protocol: TCP
+  ```
+
+  顾名思义，这种类型的 Service 通过任一 Node 节点的 IP 地址，再加上端口号就可以访问 Service 后端负载了。我们看下面这个流量图，方便理解。
+  
+  ![image (5).png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202203272312215.png)
+  
+  NodePort 类型的 Service 创建好了以后，Kubernetes 会在每个 Node 节点上开个端口，比如这里的 30000 端口。这个时候我们可以访问任何一个 Node 的 IP 地址，通过 30000 端口即可访问该服务。
+
+那么如果在集群内部，该如何访问这些 Service 呢？
+
+
+**集群内如何访问 Service？**
+
+一般来说，在 Kubernetes 集群内，我们有两种方式可以访问到一个 Service。
+
+1. 使用 Service 的 ClusterIP。比如我们上面创建的 nginx-prod-svc-demo 这个 Service，我们通过 http(s)://10.111.193.186:80 就可以访问到该服务。
+2. 使用该 Service 的域名。还是以上面的例子做说明，同 namespace 下的 Pod 可以直接通过 nginx-prod-svc-demo 这个 Service 名去访问。如果是不同 namespace 下的 Pod 则需要加上该 Service 所在的 namespace 名，即 nginx-prod-svc-demo.demo 去访问。
 
 # 12 | Helm Charts：如何在生产环境中释放部署生产力？
 
