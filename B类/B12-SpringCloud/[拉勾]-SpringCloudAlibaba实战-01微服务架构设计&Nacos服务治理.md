@@ -14,7 +14,7 @@
 
 Spring Cloud Alibaba 就是在这种背景下诞生的，Spring Cloud Alibaba 是国产的微服务开发一站式解决方案，与原有 Spring Cloud 兼容的同时对微服务生态进行扩展，通过添加少量的配置注解，便可实现更符合国情的微服务架构。
 
-![image-20210803232355361](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210803232355.png)
+![image-20210803232355361](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210803232355.png)
 
 **课程设计**
 
@@ -60,7 +60,7 @@ Spring Cloud Alibaba 就是在这种背景下诞生的，Spring Cloud Alibaba �
 
 要弄清楚微服务架构，首先我们要看以往的分布式架构到底有哪些问题。下面是一个借款服务项目。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210803232843.png" alt="image-20210803232843136" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210803232843.png" alt="image-20210803232843136" style="zoom:50%;" />
 
 具体的业务流程是：
 
@@ -75,19 +75,19 @@ Spring Cloud Alibaba 就是在这种背景下诞生的，Spring Cloud Alibaba �
 
 WebService 跨进程调用时，需要双方持有相同的传输对象才可以完成数据的交互。但如果服务的提供者，他将接口以及传输对象进行升级后，而客户端没有及时更新的话，此时便会因为对象的状态不一致导致传输失败的情况。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210803234627.png" alt="image-20210803234627878" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210803234627.png" alt="image-20210803234627878" style="zoom:50%;" />
 
 - 问题二：缺少动态发现机制
 
 贷后系统为了高可用的要求，提供了 IP 为 10 和 11 的两个节点。但随着业务的发展，贷后系统加入了额外的两个节点，它们分别是 12 和 13。我们必须手动添加信审系统的 IP 列表，以及重启应用才可以做到。增加了两个系统之间的耦合，提高了项目维护的难度。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210803235043.png" alt="image-20210803235043421" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210803235043.png" alt="image-20210803235043421" style="zoom:50%;" />
 
 - 问题三：系统间的调用关系复杂
 
 难以梳理的调用关系：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210803235211.png" alt="image-20210803235211465" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210803235211.png" alt="image-20210803235211465" style="zoom:50%;" />
 
 - 问题四：过度的重复建设
 
@@ -95,25 +95,25 @@ WebService 跨进程调用时，需要双方持有相同的传输对象才可以
 
 **微服务架构又是如何解决这些问题的**
 
-![image-20210803233427544](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210803233427.png)
+![image-20210803233427544](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210803233427.png)
 
 - 问题一：系统间通信困难
 
 微服务使用 RESTful 通信，RESTful 是基于 HTTP 协议的轻量级通信方式。通信时是并不强制要求调用端必须对代码进行升级，服务端与调用端是彼此兼容的。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804215334.png" alt="image-20210804215334194" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804215334.png" alt="image-20210804215334194" style="zoom: 67%;" />
 
 - 问题二：缺少动态发现机制
 
 微服务架构有一个关键组件名为注册中心，所有的 IP 地址以及节点的状态都是由注册中心来维护的。
 
-![image-20210804215459904](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804215459.png)
+![image-20210804215459904](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804215459.png)
 
 - 问题三：系统间的调用关系复杂
 
 微服务内建链路跟踪体系，通过可视化的形式，可以直观了解服务间的通信过程以及通信的状态。
 
-![image-20210804215615229](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804215615.png)
+![image-20210804215615229](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804215615.png)
 
 - 问题四：过度的重复建设
 
@@ -129,7 +129,7 @@ WebService 跨进程调用时，需要双方持有相同的传输对象才可以
 
 架构师在设计时必须考虑上下游系统因为网络因素无法通信的情况，要假设网络是不可靠的，并设计微服务在网络异常时也能进行符合预期的异常处理。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804221641.png" alt="image-20210804221641239" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804221641.png" alt="image-20210804221641239" style="zoom: 67%;" />
 
 - 第二点，较高的响应延迟
 
@@ -143,7 +143,7 @@ WebService 跨进程调用时，需要双方持有相同的传输对象才可以
 
 在微服务的实施过程中，是以业务模块进行团队划分，每一个团队是内聚的，要求可以独立完成从调研到发版的全流程，尽量减少对外界的依赖。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804222009.png" alt="image-20210804222008988" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804222009.png" alt="image-20210804222008988" style="zoom: 50%;" />
 
 - 第五点，服务间的集成测试举步维艰
 
@@ -187,7 +187,7 @@ XX 微服务用来
 
 为每一个微服务提供符合自身业务特性的数据库。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804222615.png" alt="image-20210804222615688" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804222615.png" alt="image-20210804222615688" style="zoom: 50%;" />
 
 - 第四点，服务间通信优先采用聚合器模式
 
@@ -195,13 +195,13 @@ XX 微服务用来
 
 下图所展示的是链式模式，请求按业务流程在各个服务间流转，最终处理完成返回客户端。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804222725.png" alt="image-20210804222725637" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804222725.png" alt="image-20210804222725637" style="zoom:50%;" />
 
 链式模式调用的整体成功率等于单个服务成功率的乘积，假设每个服务可靠性为 90%，一个业务在 4 个服务执行后的最终成功率只有 90%\*90%\*90%\*90%≈66%，有将近一半的请求会处理失败，这是无法接受的。
 
 聚合器模式则是通过服务作为入口，组装其他服务的调用。以“订单流程服务”为例，将“订单”“支付”“库存”服务进行聚合，一个服务实现了下单、支付、减库存的完整流程。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804223030.png" alt="image-20210804223030574" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804223030.png" alt="image-20210804223030574" style="zoom:50%;" />
 
 采用聚合器模式后，业务流程与编排集中在“订单流程服务”中，可对整体业务进行有效编排，支付与扣库存可以并行调用，可以有效提高系统的性能。
 
@@ -239,19 +239,19 @@ Java 领域微服务是如何实现的？
 
 **通用的微服务架构应包含哪些组件？**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804224347.png" alt="image-20210804224347031" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804224347.png" alt="image-20210804224347031" style="zoom: 50%;" />
 
 - 组件1：注册中心（Service Registry）
 
 如何发现新服务节点以及检查服务节点的状态？微服务节点在启动时会将自身的服务名称、IP、端口等信息在注册中心中进行登记，注册中心会定时检查该节点的运行状态。注册中心通常会采用心跳机制最大程度保证其持有的服务节点列表都是可用的。
 
-![image-20210804225444075](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804225444.png)
+![image-20210804225444075](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804225444.png)
 
 - 组件2：负载均衡（Load Balance）
 
 如何发现服务及负载均衡如何实现？微服务彼此调用首先通过服务名在注册中心查询该服务拥有哪些可用节点，通过负载均衡策略选择适合的节点发起实质的通信请求。
 
-![image-20210804225659184](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804225659.png)
+![image-20210804225659184](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804225659.png)
 
 - 组件3：服务通信（Communication）
 
@@ -265,19 +265,19 @@ Java 领域微服务是如何实现的？
 
 如何集中管理众多服务节点的配置文件？通过部署配置中心服务器，将原本分散的配置文件从应用中剥离，集中转存到配置中心。
 
-![image-20210804230129721](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804230129.png)
+![image-20210804230129721](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804230129.png)
 
 - 组件6：集中式日志管理（Centralized Logging）
 
 如何收集服务节点的日志并统一管理？业内常见的方案有 ELK、EFK，通过搭建独立的日志收集系统，定时抓取增量日志形成有效的统计报表，为决策提供数据支撑。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804230310.png" alt="image-20210804230310522" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804230310.png" alt="image-20210804230310522" style="zoom:50%;" />
 
 - 组件7：分布式链路追踪（Distributed Tracing）
 
 如何实现服务间调用链路追踪？Zipkin 可以记录一个完整业务逻辑涉及的每一个微服务的运行状态，再通过可视化链路图展现。
 
-![image-20210804230416461](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804230416.png)
+![image-20210804230416461](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804230416.png)
 
 - 组件8：服务保护（Service Protection）
 
@@ -285,13 +285,13 @@ Java 领域微服务是如何实现的？
 
 **Spring Cloud 是如何支撑微服务架构的？**
 
-![image-20210804230610887](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804230610.png)
+![image-20210804230610887](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804230610.png)
 
 **Spring Cloud Alibaba**
 
 Spring Cloud Alibaba 是直接隶属于 Spring Cloud 的子项目。是国产的微服务开发一站式解决方案，与原有 Spring Cloud 兼容的同时对微服务生态进行扩展，通过添加少量的配置注解，便可实现更符合国情的微服务架构。
 
-![image-20210804231050448](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210804231050.png)
+![image-20210804231050448](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804231050.png)
 
 相比 Spring Cloud，Spring Cloud Alibaba 对服务注册、配置中心与负载均衡功能都整合进 Nacos，这样简化了微服务架构的复杂度，出问题的概率也会降低。
 
@@ -366,13 +366,13 @@ server.port=9000
 
 启动服务后，打开：http://192.168.31.102:8848/nacos。
 
-![image-20210805232918709](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210805232918.png)
+![image-20210805232918709](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210805232918.png)
 
 **Nacos 注册中心的心跳机制**
 
 下图阐述了微服务与 Nacos 服务器之间的通信过程。在微服务启动后每过5秒，会由微服务内置的 Nacos 客户端主动向 Nacos 服务器发起心跳包（HeartBeat）。
 
-![image-20210805233326517](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210805233326.png)
+![image-20210805233326517](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210805233326.png)
 
 心跳包会包含当前服务实例的名称、IP、端口、集群名、权重等信息。
 
@@ -386,7 +386,7 @@ Nacos Server 每过 20 秒对“实例 Map”中的所有“非健康”实例�
 
 **如何在生产环境部署 Nacos 集群**
 
-![image-20210806230205479](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210806230210.png)
+![image-20210806230205479](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210806230210.png)
 
 Nacos 集群架构的设计要点：
 
@@ -443,7 +443,7 @@ server.port=9000
 
 **Nacos 节点间的数据同步过程**
 
-![image-20210807221034759](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210807221040.png)
+![image-20210807221034759](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210807221040.png)
 
 在 Raft 算法中，只有 Leader 才拥有数据处理与信息分发的权利。因此当微服务启动时，假如注册中心指定为 Follower 节点，则步骤如下：
 

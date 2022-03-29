@@ -6,11 +6,11 @@ Netflix 于 2012 年初开源，2014 年被 Pivotal 集成入 Spring Cloud 体�
 
 亮点：可动态发布的过滤器机制。
 
-![image-20210730231828599](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210730231828.png)
+![image-20210730231828599](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210730231828.png)
 
 **网关基本功能**
 
-![image-20210730231326839](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210730231327.png)
+![image-20210730231326839](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210730231327.png)
 
 **Netflix 使用情况（2017）**
 
@@ -36,19 +36,19 @@ Netflix 于 2012 年初开源，2014 年被 Pivotal 集成入 Spring Cloud 体�
 
 **红绿部署**
 
-![image-20210730233035233](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210730233035.png)
+![image-20210730233035233](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210730233035.png)
 
 **开发者测试分支**
 
-![image-20210730233150596](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210730233150.png)
+![image-20210730233150596](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210730233150.png)
 
 **埋点测试**
 
-![image-20210730233220214](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210730233220.png)
+![image-20210730233220214](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210730233220.png)
 
 **跨区域高可用（异地多活）**
 
-![image-20210730233947685](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210730233947.png)
+![image-20210730233947685](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210730233947.png)
 
 # 52 | Zuul架构剖析
 
@@ -60,11 +60,11 @@ Netflix 于 2012 年初开源，2014 年被 Pivotal 集成入 Spring Cloud 体�
 
 模块三：网关过滤器核心运行时模块；
 
-![image-20210730234216913](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210730234216.png)
+![image-20210730234216913](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210730234216.png)
 
 **请求处理生命周期**
 
-![image-20210730234621463](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210730234621.png)
+![image-20210730234621463](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210730234621.png)
 
 **过滤器关键概念**
 

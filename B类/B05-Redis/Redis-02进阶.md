@@ -22,7 +22,7 @@ Redis 中 key 的淘汰方式有两种，分别是同步删除淘汰和异步删
 
 Redis 引入基于样本的 eviction(驱逐; 驱赶) pool，来提升剔除的准确性。当 Redis 内存占用超过阀值后，按策略从主 dict 或者带过期时间的 expire dict 中随机选择 N 个 key（N 默认是 5），计算每个 key 的 idle 值，按 idle 值从小到大的顺序插入 evictionPool 中，然后选择 idle 最大的那个 key，进行淘汰。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091023.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091023.png)
 
 Redis 提供了 8 种 maxmemory_policy 淘汰策略来应对内存超过阀值的情况。
 
@@ -32,7 +32,7 @@ Redis 提供了 8 种 maxmemory_policy 淘汰策略来应对内存超过阀值�
 
 第三种策略是 volatile-lfu，它对带过期时间的 key 采用最近最不经常使用的算法来淘汰。使用这种策略时，Redis 会从 redisDb 中的 expire dict 过期字典中，首先随机选择 N 个 key，然后根据其 value 的 lru 值，计算 key 在一段时间内的使用频率相对值。对于 lfu，要选择使用频率最小的 key，为了沿用 evictionPool 的 idle 概念，Redis 在计算 lfu 的 Idle 时，采用 255 减去使用频率相对值，从而确保 Idle 最大的 key 是使用次数最小的 key，计算 N 个 key 的 Idle 值后，插入 evictionPool，最后选择 Idle 最大，即使用频率最小的 key，进行淘汰。这种策略也适合大多数 key 带过期时间且有冷热区分的业务场景。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091030.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091030.png)
 
 第四种策略是 volatile-ttl，它是对带过期时间的 key 中选择最早要过期的 key 进行淘汰。使用这种策略时，Redis 也会从 redisDb 的 expire dict 过期字典中，首先随机选择 N 个 key，然后用最大无符号 long 值减去 key 的过期时间来作为 Idle 值，计算 N 个 key 的 Idle 值后，插入evictionPool，最后选择 Idle 最大，即最快就要过期的 key，进行淘汰。这种策略适合，需要淘汰的key带过期时间，且有按时间冷热区分的业务场景。           
 
@@ -40,7 +40,7 @@ Redis 提供了 8 种 maxmemory_policy 淘汰策略来应对内存超过阀值�
 
 第六种策略是 allkey-lru，它是对所有 key，而非仅仅带过期时间的 key，采用最近最久没有使用的算法来淘汰。这种策略与 volatile-lru 类似，都是从随机选择的 key 中，选择最长时间没有被访问的 key 进行淘汰。区别在于，volatile-lru 是从 redisDb 中的 expire dict 过期字典中选择 key，而 allkey-lru 是从所有的 key 中选择 key。这种策略适合，需要对所有 key 进行淘汰，且数据有冷热读写区分的业务场景。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091038.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091038.png)
 
 第七种策略是 allkeys-lfu，它也是针对所有 key 采用最近最不经常使用的算法来淘汰。这种策略与 volatile-lfu 类似，都是在随机选择的 key 中，选择访问频率最小的 key 进行淘汰。区别在于，volatile-flu从expire dict 过期字典中选择 key，而 allkeys-lfu 是从主 dict 中选择 key。这种策略适合的场景是，需要从所有的 key 中进行淘汰，但数据有冷热区分，且越热的数据访问频率越高。
 

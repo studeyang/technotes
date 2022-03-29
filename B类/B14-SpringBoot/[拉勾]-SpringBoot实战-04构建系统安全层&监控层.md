@@ -6,11 +6,11 @@
 
 Spring Security 中采用的是管道-过滤器（Pipe-Filter）架构模式，这些过滤器链，构成了 Spring Security 的核心。如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210416230843.png" alt="image-20210416230843195" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210416230843.png" alt="image-20210416230843195" style="zoom:50%;" />
 
 项目一旦启动，过滤器链将会实现自动配置，如下图所示：
 
-![image-20210416231208007](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210416231208.png)
+![image-20210416231208007](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210416231208.png)
 
 UsernamePasswordAuthenticationFilter 用来检查输入的用户名和密码，代码如下：
 
@@ -56,7 +56,7 @@ FilterSecurityInterceptor 用来判定该请求是否能够访问目标 HTTP 端
 
 **Spring Security 中的核心类**
 
-![image-20210416230408984](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210416230409.png)
+![image-20210416230408984](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210416230409.png)
 
 SecurityContextHolder 存储了应用的安全上下文对象 SecurityContext，包含系统请求中最近使用的认证信息。
 
@@ -81,7 +81,7 @@ AuthenticationManager 是一个接口，其实现类 ProviderManager 会进一�
 
 在引入 spring-boot-starter-security 依赖之后，Spring Security 会默认创建一个用户名为“user”的账号。当我们访问 AccountController 的 “accounts/{accountId}” 端点时，弹出如下界面：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210418223041.png" alt="image-20210418223041403" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210418223041.png" alt="image-20210418223041403" style="zoom: 50%;" />
 
 同时，控制台日志打印如下：
 
@@ -91,7 +91,7 @@ Using generated security password: 17bbf7c4-456a-48f5-a12e-a680066c8f80
 
 因此，访问该接口需要设置如下信息：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210418223233.png" alt="image-20210418223233304" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210418223233.png" alt="image-20210418223233304" style="zoom:50%;" />
 
 每次启动应用时，通过 Spring Security 自动生成的密码都会有所变化。如果我们想设置登录账号和密码，可以在 application.yml 中配置如下：
 
@@ -442,7 +442,7 @@ management:
 
 常见端点梳理如下：
 
-![image-20210419231958588](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210419231958.png)
+![image-20210419231958588](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210419231958.png)
 
 通过访问上表中的各个端点，我们就可以获取自己感兴趣的监控信息了。
 
@@ -848,7 +848,7 @@ Spring Boot Admin 是一个用于监控 Spring Boot 的应用程序，它的基�
 
 Spring Boot Admin 的整体架构中存在两大角色，服务器端组件 Admin Server 和客户端组件 Admin Client。Admin Client 实际上是一个普通的 Spring Boot 应用程序，而 Admin Server 则是一个独立服务，需要进行专门构建。如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210421231437.png" alt="image-20210421231437846" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210421231437.png" alt="image-20210421231437846" style="zoom:50%;" />
 
 构建 Admin Server 的两种实现方式：一种是简单的基于独立的 Admin 服务；另一种需要依赖服务注册中心的服务注册和发现机制。
 
@@ -904,13 +904,13 @@ spring:
 
 启动应用程序和 Admin Server 后，可以看到如下效果：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210421233714.png" alt="image-20210421233714305"  />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210421233714.png" alt="image-20210421233714305"  />
 
 **基于注册中心构建 Admin Server**
 
 基于注册中心，Admin Server 与各个 Admin Client 之间的交互方式如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210421232903.png" alt="image-20210421232903258" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210421232903.png" alt="image-20210421232903258" style="zoom:50%;" />
 
 引入注册中心的目的是降低 Admin Client 与 Admin Server 之间的耦合度。
 
@@ -959,5 +959,5 @@ spring:
 
 重启 Admin Server 后，再次访问 Web 界面时，就需要我们输入用户名和密码了，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210421234950.png" alt="image-20210421234949967" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210421234950.png" alt="image-20210421234949967" style="zoom:50%;" />
 

@@ -22,7 +22,7 @@ JVM 不仅承担了 Java 字节码的分析（JIT compiler）和执行（Runtime
 
 JVM 内存模型主要分为堆、程序计数器、方法区、虚拟机栈和本地方法栈。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092340.jpg" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092340.jpg" style="zoom:50%;" />
 
 1. 堆（Heap）
 
@@ -32,7 +32,7 @@ JVM 内存模型主要分为堆、程序计数器、方法区、虚拟机栈和�
 
    而到了 Java 8，永久代被元空间取代了。 结构如下图所示：
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092344.png"  />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092344.png"  />
 
    Java 8 为什么使用元空间替代永久代，这样做有什么好处呢？
 
@@ -105,17 +105,17 @@ class Student{
 
 2. class 文件加载、验证、准备以及解析。其中准备阶段会为类的静态变量分配内存，初始化为系统的初始值；
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092352.jpg" style="zoom:50%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092352.jpg" style="zoom:50%;" />
 
 3. 进行最后一个初始化阶段。所有类的初始化代码，包括静态变量赋值语句、静态代码块、静态方法，收集在一起成为` <clinit>()`方法并执行。
 
 4. 启动 main 线程，执行 main 方法。此时堆内存中会创建一个 student 对象，对象引用 student 就存放在栈中。
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092357.jpg" style="zoom: 50%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092357.jpg" style="zoom: 50%;" />
 
 5. 此时再次创建一个 JVMCase 对象，调用 sayHello 非静态方法。
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092401.jpg" style="zoom:50%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092401.jpg" style="zoom:50%;" />
 
 **思考题**
 
@@ -131,13 +131,13 @@ class Student{
 
 Java 从编译到运行的整个过程如下图所示：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092406.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092406.jpg)
 
 1. 类编译
 
    我们通过 javap 反编译来看看一个 class 文件结构中主要包含了哪些信息：
 
-   ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092410.png)
+   ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092410.png)
 
    只要从上图中知道，编译后的字节码文件主要包括常量池和方法表集合这两部分。
 
@@ -189,7 +189,7 @@ Java7 引入了分层编译，这种方式综合了 C1 的启动性能优势和 
 
 通过 java -version 命令行可以直接查看到当前系统使用的编译模式。如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092425.jpg"  />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092425.jpg"  />
 
 **热点探测**
 
@@ -261,7 +261,7 @@ JIT 编译运用了一些经典的编译优化技术来实现代码的优化，�
 
    我们可以看到运行结果中，显示了方法内联的日志：
 
-   ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092436.jpg)
+   ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092436.jpg)
 
    热点方法的优化可以有效提高系统性能，一般我们可以通过以下几种方式来提高方法内联：
 
@@ -293,11 +293,11 @@ JVM 内存分配不合理最直接的表现就是频繁的 GC，这会导致上�
 
 - java -XX:+PrintFlagsFinal -version | grep HeapSize
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092441.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092441.png)
 
 - jmap -heap 17284
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092445.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092445.png)
 
 通过命令，我们可以获得在这台机器上启动的 JVM 默认最大堆内存为 1953MB，初始化大小为 124MB。
 
@@ -329,7 +329,7 @@ public String test1(HttpServletRequest request) {
 
 分别对应用服务进行压力测试，以下是请求接口的吞吐量和响应时间在不同并发用户数下的变化情况：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092450.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092450.jpg)
 
 可以看到，当并发数量到了一定值时，吞吐量就上不去了，响应时间也迅速增加。那么，在 JVM 内部运行又是怎样的呢？
 
@@ -349,7 +349,7 @@ public String test1(HttpServletRequest request) {
 
 收集到 GC 日志后，使用 GCViewer 工具打开它，进而查看到具体的 GC 日志如下：
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092455.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092455.jpg)
 
 主页面显示 FullGC 发生了 13 次，右下角显示年轻代和老年代的内存使用率几乎达到了 100%。而 FullGC 会导致 stop-the-world 的发生，从而严重影响到应用服务的性能。此时，我们需要调整堆内存的大小来减少 FullGC 的发生。
 
@@ -390,11 +390,11 @@ public String test1(HttpServletRequest request) {
 
   调大堆内存之后，我们再来测试下性能情况，发现吞吐量提高了 40% 左右，响应时间也降低了将近 50%。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092500.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092500.png)
 
   再查看 GC 日志，发现 FullGC 频率降低了，老年代的使用率只有 16% 了。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092504.jpg)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092504.jpg)
 
 - 调整年轻代减少 MinorGC
 
@@ -406,11 +406,11 @@ public String test1(HttpServletRequest request) {
 
   再进行 AB 压测，发现吞吐量上去了。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092509.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092509.png)
 
   再查看 GC 日志，发现 MinorGC 也明显降低了，GC 花费的总时间也减少了。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092513.jpg)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092513.jpg)
 
 - **设置 Eden、Survivor 区比例**
 
@@ -420,9 +420,9 @@ public String test1(HttpServletRequest request) {
 
   再进行 AB 性能测试，我们可以看到吞吐量提升了，响应时间降低了。
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092517.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092517.png)
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120092521.jpg)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120092521.jpg)
 
 **总结**
 

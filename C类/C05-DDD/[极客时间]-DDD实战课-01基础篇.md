@@ -19,7 +19,7 @@ DDD 是一种设计思想，它可以同时指导中台业务建模和微服务�
 
 主要讲解 DDD 的核心知识体系，具体包括：领域、子域、核心域、通用域、支撑域、限界上下文、实体、值对象、聚合和聚合根等概念。
 
-![image-20211109221143097](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211109221143.png)
+![image-20211109221143097](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211109221143.png)
 
 **进阶篇**
 
@@ -60,7 +60,7 @@ DDD 是一种处理高度复杂领域的设计思想，包括战略设计和战�
 
 我们不妨来看看 DDD 是如何进行战略设计的。
 
-![image-20211109222811532](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211109222811.png)
+![image-20211109222811532](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211109222811.png)
 
 第一步：在事件风暴中梳理出领域实体等领域对象。
 
@@ -96,7 +96,7 @@ DDD 主要关注：从业务领域视角划分领域边界，建立领域模型�
 
 DDD 的研究方法与自然科学的研究方法类似。当人们在自然科学研究中遇到复杂问题时，通常的做法就是将问题一步一步地细分，再针对细分出来的问题域，逐个深入研究，探索和建立所有子域的知识体系。当所有问题子域完成研究时，我们就建立了全部领域的完整知识体系了。
 
-![image-20211110223702072](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211110223702.png)
+![image-20211110223702072](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211110223702.png)
 
 上面这张图是在讲如何给桃树建立一个完整的生物学知识体系。初中生物课其实早就告诉我们研究方法了。它的研究过程是这样的。
 
@@ -136,7 +136,7 @@ DDD 的研究方法与自然科学的研究方法类似。当人们在自然科�
 
 下面是一个微服务设计实例的部分数据，表格中的这些名词术语就是项目团队在事件风暴过程中达成一致、可用于团队内部交流的通用语言。
 
-![image-20220123210103685](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220123210103.png)
+![image-20220123210103685](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220123210103.png)
 
 **什么是限界上下文？**
 
@@ -154,7 +154,7 @@ DDD 的研究方法与自然科学的研究方法类似。当人们在自然科�
 
 车险承保的流程包含了投保、缴费、出单等几个主要流程。如果出险了还会有报案、查勘、定损、理算等理赔流程。
 
-![image-20220123220849741](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220123220849.png)
+![image-20220123220849741](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220123220849.png)
 
 子域可能会包含多个限界上下文，如理赔子域就包括报案、查勘和定损等多个限界上下文。也有可能子域本身的边界就是限界上下文边界，如投保子域。
 
@@ -175,7 +175,7 @@ DDD 的研究方法与自然科学的研究方法类似。当人们在自然科�
 
 值对象是 DDD 领域模型中的一个基础对象，它跟实体一样，都包含了若干个属性，它与实体一起构成聚合。
 
-![image-20220124224428629](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220124224428.png)
+![image-20220124224428629](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220124224428.png)
 
 如上图所示。我们可以将“省、市、县和街道等属性”拿出来构成一个“地址属性集合”，这个集合就是值对象。
 
@@ -187,7 +187,7 @@ DDD 的研究方法与自然科学的研究方法类似。当人们在自然科�
 
 我们看一下下面这段代码，person 这个实体有若干个单一属性的值对象，比如 Id、name 等属性；同时它也包含多个属性的值对象，比如地址 address。
 
-![image-20220124224851540](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220124224851.png)
+![image-20220124224851540](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220124224851.png)
 
 3. 值对象的运行形态。
 
@@ -195,9 +195,9 @@ DDD 的研究方法与自然科学的研究方法类似。当人们在自然科�
 
 值对象嵌入到实体的话，有这样两种不同的数据格式，也可以说是两种方式，分别是属性嵌入的方式和序列化大对象的方式。
 
-![image-20220124225147082](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220124225147.png)
+![image-20220124225147082](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220124225147.png)
 
-![image-20220124225205733](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220124225205.png)
+![image-20220124225205733](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220124225205.png)
 
 4. 值对象的数据库形态。
 
@@ -233,7 +233,7 @@ DDD 提倡从领域模型设计出发，而不是先设计数据模型。
 
 以保险的投保业务场景为例。
 
-![image-20220125223730684](https://gitee.com/yanglu_u/img2022/raw/master/learn/20220125223730.png)
+![image-20220125223730684](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220125223730.png)
 
 第 1 步：采用事件风暴，梳理出在投保过程中发生这些行为的所有的实体和值对象，比如投保单、标的、客户、被保人等等。
 

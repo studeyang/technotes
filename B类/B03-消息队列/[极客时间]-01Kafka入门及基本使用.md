@@ -18,7 +18,7 @@
 
 **专栏的组成**
 
-![image-20210423230528744](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210423230528.png)
+![image-20210423230528744](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210423230528.png)
 
 第一部分：消息引擎这类系统原理和用途；
 
@@ -123,7 +123,7 @@ Kafka 将数据分割成多份保存在不同的 Broker 上，这种机制就是
 
 上面内容可以用一张图来展示。
 
-![image-20201122001949780](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201122001949.png)
+![image-20201122001949780](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201122001949.png)
 
 # 03 | Kafka 只是消息引擎系统吗？
 
@@ -179,7 +179,7 @@ Kafka 作者之一 Jay Kreps 曾经专门写过一篇文章阐述为什么能把
 
 整个 Kafka 生态圈如下图所示。
 
-![image-20210424231049846](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210424231050.png)
+![image-20210424231049846](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210424231050.png)
 
 Kafka Connect 通过一个个具体的连接器（Connector），串联起上下游的外部系统。
 

@@ -10,7 +10,7 @@
 
 线程的不断创建是需要消耗系统资源的，一旦系统资源被耗尽，服务 B 本身也将变得不可用，这就是事故的第二个阶段：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210309225911.png" alt="image-20210309225911832" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210309225911.png" alt="image-20210309225911832" style="zoom:50%;" />
 
 类似的，如果系统中存在服务 C 等其他服务依赖服务 B......以此类推，最终在以服务 A 为起点的整个调用链路上的所有服务都会变得不可用。这种扩散效应就是所谓的服务雪崩效应。
 
@@ -40,7 +40,7 @@
 
 从设计理念上讲，服务熔断也是快速失败的一种具体表现。服务熔断器的基本结构，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210309225026.png" alt="image-20210309225020619" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210309225026.png" alt="image-20210309225020619" style="zoom:50%;" />
 
 4. 服务回退
 
@@ -582,7 +582,7 @@ public interface HystrixCircuitBreaker {
 
 在 Hystrix 中，采用滑动窗口来采集的系统运行时健康数据包括成功请求数量、失败请求数、超时请求数、被拒绝的请求数等。然后每次取最近 10 秒的数据来进行计算，如果这 10 秒中请求的失败率计算下来超过了 50%，就会触发熔断器的熔断机制。这里的 10 秒就是一个滑动窗口，参考其官网的一幅图：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315221231.png" alt="image-20210315221231343" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210315221231.png" alt="image-20210315221231343" style="zoom:50%;" />
 
 那么如何来实现这个滑动窗口呢？
 
@@ -594,25 +594,25 @@ public interface HystrixCircuitBreaker {
 
   window 操作符用于开窗操作，也就是把当前流中的元素采集并合并到另外的流中，该操作符示意图如下图所示：
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315221604.png" alt="image-20210315221604543" style="zoom:50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210315221604.png" alt="image-20210315221604543" style="zoom:50%;" />
 
 - flatMap 操作符。
 
   flatMap 操作符把输入流中的每个元素转换成另一个流，再把这些转换之后得到的流元素进行合并。flapMap 操作符示意图如下图所示：
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315221825.png" alt="image-20210315221825625" style="zoom:50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210315221825.png" alt="image-20210315221825625" style="zoom:50%;" />
 
 - reduce 操作符。
 
   reduce 操作符对流中包含的所有元素进行累积计算，该操作符示意图见下图所示：
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315221922.png" alt="image-20210315221922324" style="zoom:50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210315221922.png" alt="image-20210315221922324" style="zoom:50%;" />
 
 3. HealthCountsStream
 
 HealthCountsStream 类的类层结构，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315222144.png" alt="image-20210315222144458" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210315222144.png" alt="image-20210315222144458" style="zoom: 50%;" />
 
 ****
 
@@ -626,7 +626,7 @@ HealthCountsStream 类的类层结构，如下图所示：
 
 那么如何保证多个环境中这些配置信息都能在各个服务实例中进行实时的同步更新呢？这就需要引入集中式配置管理的设计思想，如下图所示：
 
-![image-20210315223004012](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210315223004.png)
+![image-20210315223004012](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210315223004.png)
 
 **Spring Boot 中的配置体系**
 

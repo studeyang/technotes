@@ -14,7 +14,7 @@
 
 **Java 虚拟机规范和 Java 语言规范的关系**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/CgpOIF4UXzOAbzFUAAAhKnX7ea0980.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/CgpOIF4UXzOAbzFUAAAhKnX7ea0980.png" style="zoom:50%;" />
 
 Java 虚拟机规范，其实就是为输入和执行字节码提供一个运行环境。Java 语法规范，比如 switch、for、泛型、lambda 等相关的程序，最终都会编译成字节码。而连接左右两部分的桥梁依然是 Java 的字节码。
 
@@ -70,25 +70,25 @@ JVM 就是靠解析这些 opcode 和操作数来完成程序的执行的。当�
 
 Java 8 及之后的版本，彻底移除了持久代，而使用 Metaspace 来进行替代。这也表示着 -XX:PermSize 和 -XX:MaxPermSize 等参数调优，已经没有了意义。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Cgq2xl4VrjWAPqAuAARqnz6cigo666.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Cgq2xl4VrjWAPqAuAARqnz6cigo666.png)
 
 **虚拟机栈**
 
 在每个 Java 方法被调用的时候，都会创建一个栈帧，并入栈。一旦完成相应的调用，则出栈。所有的栈帧都出栈后，线程也就结束了。每个栈帧，都包含四个区域：局部变量表、操作数栈、动态连接、返回地址。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Cgq2xl4VrjWABK2qAATDn4DQbvE629.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Cgq2xl4VrjWABK2qAATDn4DQbvE629.png)
 
 **程序计数器**
 
 如果我们的程序在线程之间进行切换，就代表它在获取 CPU 时间片上，是不可预知的，需要有一个地方，对线程正在运行的点位进行缓冲记录，以便在获取 CPU 时间片时能够快速恢复。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Cgq2xl4VrjaANruFAAQKxZvgfSs652.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Cgq2xl4VrjaANruFAAQKxZvgfSs652.png)
 
 可以看到，程序计数器也是因为线程而产生的，与虚拟机栈配合完成计算操作。程序计数器还存储了当前正在运行的流程，包括正在执行的指令、跳转、分支、循环、异常处理等。
 
 **堆（Heap）**
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Cgq2xl4VrjaAXnuQAANJIXDvNhI844.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Cgq2xl4VrjaAXnuQAANJIXDvNhI844.png)
 
 Java 的对象可以分为基本数据类型和普通对象。
 
@@ -104,7 +104,7 @@ Java 的对象可以分为基本数据类型和普通对象。
 
 Perm 区在 Java 8 中已经被彻底废除，取而代之的是 Metaspace。原来的 Perm 区是在堆上的，现在的元空间是在非堆上的。可以看下这张图。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Cgq2xl4VrjaAIlgaAAJKReuKXII670.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Cgq2xl4VrjaAIlgaAAJKReuKXII670.png)
 
 元空间的好处也是它的坏处。使用非堆可以使用操作系统的内存，JVM 不会再出现方法区的内存溢出；但是，无限制的使用会造成操作系统的死亡。所以，一般也会使用参数 -XX:MaxMetaspaceSize 来控制大小。
 
@@ -116,7 +116,7 @@ Perm 区在 Java 8 中已经被彻底废除，取而代之的是 Metaspace。原
 
 **类加载过程**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Cgq2xl4cQNeAO_j6AABZKdVbw1w802.png" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Cgq2xl4cQNeAO_j6AABZKdVbw1w802.png" style="zoom:67%;" />
 
 - 加载
 
@@ -146,7 +146,7 @@ Perm 区在 Java 8 中已经被彻底废除，取而代之的是 Metaspace。原
 
   \<cinit\> 方法和 \<init\> 方法有什么区别？
 
-  ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/CgpOIF4cQNeAYYhRAADbeRet_7k581.png)
+  ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/CgpOIF4cQNeAYYhRAADbeRet_7k581.png)
 
 **类加载器**
 
@@ -168,7 +168,7 @@ Perm 区在 Java 8 中已经被彻底废除，取而代之的是 Metaspace。原
 
 **双亲委派机制**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Cgq2xl4cQNeAG0ECAAA_CbVCY1M014.png" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Cgq2xl4cQNeAG0ECAAA_CbVCY1M014.png" style="zoom:67%;" />
 
 比如 Object 类，这个毫无疑问应该交给最上层的加载器进行加载，即使是你覆盖了它，最终也是由系统默认的加载器进行加载的。
 
@@ -180,7 +180,7 @@ Perm 区在 Java 8 中已经被彻底废除，取而代之的是 Metaspace。原
 
 - 案例一：tomcat
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Cgq2xl4cQNeAZ4FuAABzsqSozok762.png" style="zoom:80%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Cgq2xl4cQNeAZ4FuAABzsqSozok762.png" style="zoom:80%;" />
 
   那么 tomcat 是怎么打破双亲委派机制的呢？可以看图中的 WebAppClassLoader，它加载自己目录下的 .class 文件，并不会传递给父类的加载器。但是，它却可以使用 SharedClassLoader 所加载的类，实现了共享和分离的功能。
 
@@ -251,7 +251,7 @@ public class A {
 - 类的静态变量的引用。
 - JNI 引用。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Cgq2xl4hefWAWKFZAAMwndGjScg437.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Cgq2xl4hefWAWKFZAAMwndGjScg437.png)
 
 **引用级别**
 

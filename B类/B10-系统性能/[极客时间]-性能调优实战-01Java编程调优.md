@@ -164,7 +164,7 @@
 
 **总结**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/性能调优策略.jpg" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/性能调优策略.jpg" style="zoom: 67%;" />
 
 **思考题**
 
@@ -199,7 +199,7 @@ assertSame(str1 == str3); // true
 
 一起来看看 Java 对 String 的优化过程，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Java对String的优化.jpg" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Java对String的优化.jpg" style="zoom:50%;" />
 
 1. 在 Java 6 以及之前的版本中，String 对象是对 char 数组进行了封装实现的对象。
 
@@ -340,7 +340,7 @@ Java 实现的这个特性叫作 String 对象的不可变性，即 String 对�
 
       下面我用一张图来总结下 String 字符串的创建分配内存地址情况：
 
-      ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/String字符串的创建分配内存地址情况.jpg)
+      ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/String字符串的创建分配内存地址情况.jpg)
 
       使用 intern 方法需要注意的一点是，一定要结合实际场景。因为常量池的实现是类似于一个 HashTable 的实现方式，HashTable 存储的数据越大，遍历的时间复杂度就会增加。如果数据过大，会增加整个字符串常量池的负担。
 
@@ -358,7 +358,7 @@ Java 实现的这个特性叫作 String 对象的不可变性，即 String 对�
 
 构造正则表达式语法的元字符，由普通字符、标准字符、限定字符（量词）、定位字符（边界字符）组成。详情可见下图：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/正则表达式元字符.jpg" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/正则表达式元字符.jpg" style="zoom: 50%;" />
 
 **正则表达式引擎**
 
@@ -375,11 +375,11 @@ regex = "bc"
 
 首先，读取正则表达式的第一个匹配符和字符串的第一个字符进行比较，b 对 a，不匹配；继续换字符串的下一个字符，也是 a，不匹配；继续换下一个，是 b，匹配。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/NFA自动机匹配过程.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/NFA自动机匹配过程.jpg)
 
 读取正则表达式的第二个匹配符和字符串的第四个字符进行比较，c 对 c，匹配；继续读取正则表达式的下一个字符，然而后面已经没有可匹配的字符了，结束。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/NFA自动机匹配过程2.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/NFA自动机匹配过程2.jpg)
 
 **NFA 自动机的回溯**
 
@@ -392,11 +392,11 @@ regex = "ab{1,3}c"
 
 首先，读取正则表达式第一个匹配符 a 和字符串第一个字符 a 进行比较，a 对 a，匹配。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/NFA回溯1.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/NFA回溯1.jpg)
 
 然后，读取正则表达式第二个匹配符 b{1,3} 和字符串的第二个字符 b 进行比较，匹配。但因为 b{1,3} 表示 1-3 个 b 字符串，NFA 自动机又具有贪婪特性，所以此时不会继续读取正则表达式的下一个匹配符，而是依旧使用 b{1,3} 和字符串的第三个字符 b 进行比较，结果还是匹配。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/NFA回溯2.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/NFA回溯2.jpg)
 
 接着继续使用 b{1,3} 和字符串的第四个字符 c 进行比较，发现不匹配了，此时就会发生回溯，已经读取的字符串第四个字符 c 将被吐出去，指针回到第三个字符 b 的位置。
 
@@ -404,7 +404,7 @@ regex = "ab{1,3}c"
 
 发生回溯以后，程序会读取正则表达式的下一个匹配符 c，和字符串中的第四个字符 c 进行比较，结果匹配，结束。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/NFA回溯4.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/NFA回溯4.jpg)
 
 **如何避免回溯问题？**
 
@@ -509,7 +509,7 @@ JDK 里面，还有哪些工具方法用到了正则表达式？
 
  List 集合类的接口和类的实现关系：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/List 集合类的接口和类的实现关系.jpg" style="zoom: 80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/List 集合类的接口和类的实现关系.jpg" style="zoom: 80%;" />
 
  ArrayList、Vector、LinkedList 集合类继承了 AbstractList 抽象类，而 AbstractList 实现了 List 接口，同时也继承了 AbstractCollection 抽象类。
 
@@ -761,7 +761,7 @@ Stream 是如何做到优化迭代的呢？并行又是如何实现的？下面�
 
    终结操作又可以分为短路（Short-circuiting）与非短路（Unshort-circuiting）操作，前者是指遇到某些符合条件的元素就可以得到最终结果，后者是指必须处理完所有元素才能得到最终结果。操作分类详情如下图所示：
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091624.jpg" style="zoom: 50%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091624.jpg" style="zoom: 50%;" />
 
    我们通常还会将中间操作称为懒操作，也正是由这种懒操作结合终结操作、数据源构成的处理管道（Pipeline），实现了 Stream 的高效。
 
@@ -783,7 +783,7 @@ Stream 是如何做到优化迭代的呢？并行又是如何实现的？下面�
 
    Head 类主要用来定义数据源操作，在我们初次调用 names.stream() 方法时，会初次加载 Head 对象，此时为加载数据源操作；接着加载的是中间操作，分别为无状态中间操作 StatelessOp 对象和有状态操作 StatefulOp 对象，此时的 Stage 并没有执行，而是通过 AbstractPipeline 生成了一个中间操作 Stage 链表；当我们调用终结操作时，会生成一个最终的 Stage，通过这个 Stage 触发之前的中间操作，从最后一个 Stage 开始，递归产生一个 Sink 链。如下图所示：
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091635.jpg" style="zoom: 50%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091635.jpg" style="zoom: 50%;" />
 
    下面我们再通过一个例子来感受下 Stream 的操作分类是如何实现高效迭代大数据集合的。
 
@@ -1122,13 +1122,13 @@ if ((p = tab[i = (n - 1) & hash]) == null)
 
 在 JDK1.8 中，HashMap 引入了红黑树数据结构来提升链表的查询效率。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Java8 HashMap优化.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Java8 HashMap优化.png)
 
 > 图片来源：https://blog.csdn.net/u011240877/article/details/53358305
 
 链表的长度超过 8 后，红黑树的查询效率要比链表高，所以当链表超过 8 时，HashMap 就会将链表转换为红黑树。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Java8 HashMap数据结构图.jpg" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Java8 HashMap数据结构图.jpg" style="zoom: 67%;" />
 
 **HashMap 扩容优化**
 
@@ -1146,7 +1146,7 @@ if ((p = tab[i = (n - 1) & hash]) == null)
 
 Java 的 I/O 操作类在包 java.io 下，分为4个基本类：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091642.jpg" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091642.jpg" style="zoom: 67%;" />
 
 不管是文件读写还是网络发送接收，信息的最小存储单元都是字节，那为什么 I/O 流操作要分为字节流操作和字符流操作呢？
 
@@ -1154,7 +1154,7 @@ Java 的 I/O 操作类在包 java.io 下，分为4个基本类：
 
 - 字节流
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091648.jpg" style="zoom: 50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091648.jpg" style="zoom: 50%;" />
 
   如果是文件的读写操作，就使用 FileInputStream/FileOutputStream；
 
@@ -1164,7 +1164,7 @@ Java 的 I/O 操作类在包 java.io 下，分为4个基本类：
 
 - 字符流
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091653.jpg" style="zoom:50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091653.jpg" style="zoom:50%;" />
 
 **传统 I/O 的性能问题**
 
@@ -1468,9 +1468,9 @@ RPC 通信包括了建立通信、实现报文、传输协议以及传输数据�
 
    为了提高传输的效率，我们可以根据自己的业务和架构来考虑设计，尽量实现报体小、满足功能、易解析等特性。我们可以参考下面的数据格式：
 
-   ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091743.jpg)
+   ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091743.jpg)
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091659.jpg" style="zoom:67%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091659.jpg" style="zoom:67%;" />
 
 5. 编码、解码
 
@@ -1482,7 +1482,7 @@ RPC 通信包括了建立通信、实现报文、传输协议以及传输数据�
 
    我们可以通过 sysctl -a | grep net.xxx 命令运行查看 Linux 系统默认的的 TCP 参数设置，如果需要修改某项配置，可以通过编辑 vim/etc/sysctl.conf，加入需要修改的配置项， 并通过 sysctl -p 命令运行生效修改后的配置项设置。通常我们会通过修改以下几个配置项来提高网络吞吐量和降低延时。
 
-   ![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091725.jpg)
+   ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091725.jpg)
 
 **思考题**
 
@@ -1494,11 +1494,11 @@ RPC 通信包括了建立通信、实现报文、传输协议以及传输数据�
 
 Socket 通信中的 conect、accept、read 以及 write 为阻塞操作，在 Selector 中分别对应 SelectionKey 的四个监听事件 OP_ACCEPT、OP_CONNECT、OP_READ 以及 OP_WRITE。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091705.png"  />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091705.png"  />
 
 在 NIO 服务端通信编程中，首先会创建一个 Channel，用于监听客户端连接；接着，创建多路复用器 Selector，并将 Channel 注册到 Selector，程序会通过 Selector 来轮询注册在其上的 Channel，当发现一个或多个 Channel 处于就绪状态时，返回就绪的监听事件，最后程序匹配到监听事件，进行相关的 I/O 操作。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091711.jpg" style="zoom: 80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091711.jpg" style="zoom: 80%;" />
 
 在创建 Selector 时，程序会根据操作系统版本选择使用哪种 I/O 复用函数。在 JDK1.5 版本中，如果程序运行在 Linux 操作系统，且内核版本在 2.6 以上，NIO 中会选择 epoll 来替代传统的 select/poll，这也极大地提升了 NIO 通信的性能。
 

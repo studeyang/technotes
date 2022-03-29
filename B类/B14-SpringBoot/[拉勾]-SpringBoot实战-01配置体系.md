@@ -16,7 +16,7 @@ Spring Boot 是一个集成性的框架，内部整合了市面上很多开源�
 
 Web 应用程序总体可以拆分为下图的维度。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210330224842.png" alt="image-20210330224841931" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210330224842.png" alt="image-20210330224841931" style="zoom:50%;" />
 
 可以从下面8个部分进行学习。
 
@@ -37,7 +37,7 @@ Web 应用程序总体可以拆分为下图的维度。
 
 我们访问 Spring 的官方网站（https://spring.io/）来对这个框架做宏观的了解。在 Spring 的主页中，展示了下面这张图：
 
-![image-20210330230706127](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210330230706.png)
+![image-20210330230706127](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210330230706.png)
 
 这里罗列了 Spring 框架的七大核心技术体系，分别是微服务架构、响应式编程、云原生、Web 应用、Serverless 架构、事件驱动以及批处理。
 
@@ -51,7 +51,7 @@ Web 应用程序总体可以拆分为下图的维度。
 
 我们现在能看到的 Spring 家族技术体系都是在 Spring Framework 基础上逐步演进而来的。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210330231153.png" alt="image-20210330231153856" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210330231153.png" alt="image-20210330231153856" style="zoom:50%;" />
 
 Spring 从诞生之初就被认为是一种容器，上图中的“核心容器”部分就包含了一个容器所应该具备的核心功能。
 
@@ -65,7 +65,7 @@ Spring 从诞生之初就被认为是一种容器，上图中的“核心容器�
 
 一个典型的 Web 应用程序的项目结构如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210401222615.png" alt="image-20210401222615599" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210401222615.png" alt="image-20210401222615599" style="zoom:50%;" />
 
 1. 包依赖
 
@@ -123,7 +123,7 @@ public class AccountController {
 
 customer-service 一般会与用户服务 account-service 进行交互，生成客户工单；也需要从 order-service 服务中查询订单信息。SpringCSS 的整个系统交互过程如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210401224346.png" alt="image-20210401224346130" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210401224346.png" alt="image-20210401224346130" style="zoom:50%;" />
 
 # 构建多维度配置层
 
@@ -287,13 +287,13 @@ public class SpringCssConfig {
 
 当我们输入某一个配置项的前缀时，诸如 IDEA、Eclipse 这样的 IDE 就会自动弹出该前缀下的所有配置信息供你进行选择，效果如下：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210402222532.png" alt="image-20210402222532470" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210402222532.png" alt="image-20210402222532470" style="zoom:50%;" />
 
 如何实现这种效果呢？
 
 我们需要生成配置元数据。通过 IDE 的“Create metadata for 'springcss.order.point'”按钮，就可以选择创建配置元数据文件。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210402222817.png" alt="image-20210402222817447" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210402222817.png" alt="image-20210402222817447" style="zoom:50%;" />
 
 这个文件的名称为 additional-spring-configuration-metadata.json，文件内容如下所示：
 
@@ -312,7 +312,7 @@ public class SpringCssConfig {
 
 效果如下所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210402223055.png" alt="image-20210402223055622" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210402223055.png" alt="image-20210402223055622" style="zoom:50%;" />
 
 **如何组织和整合配置信息？**
 
@@ -342,7 +342,7 @@ java -jar customerservice-0.0.1-SNAPSHOT.jar --spring.config.location=file:///D:
 
 通过前面的示例，我们看到可以把配置文件保存在多个路径，而这些路径在加载配置文件时具有一定的顺序。Spring Boot 在启动时会扫描以下位置的 application.properties 或者 application.yml 文件作为全局配置文件：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210402223922.png" alt="image-20210402223922742" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210402223922.png" alt="image-20210402223922742" style="zoom:50%;" />
 
 **如何覆写内置的配置类？**
 
@@ -452,13 +452,13 @@ public @interface EnableAutoConfiguration {
 
 AutoConfigurationImportSelector 类是一种选择器，负责从各种配置项中找到需要导入的具体配置类。该类的结构如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210406225204.png" alt="image-20210406225204010" style="zoom: 33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210406225204.png" alt="image-20210406225204010" style="zoom: 33%;" />
 
 **SPI 机制**
 
 JDK 提供了用于服务查找的一个工具类 java.util.ServiceLoader 来实现 SPI 机制。可以在 jar 包的 META-INF/services/ 目录下创建一个以服务接口命名的文件。JDK 中 SPI 机制开发流程如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210406225433.png" alt="image-20210406225433071" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210406225433.png" alt="image-20210406225433071" style="zoom:50%;" />
 
 **SpringFactoriesLoader**
 

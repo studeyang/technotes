@@ -62,7 +62,7 @@ RPC 一般默认采用 TCP 来传输。
 
 该代理实现类会拦截所有的方法调用，在提供的方法处理逻辑里面完成一整套的远程调用，并把远程调用结果返回给调用方，这样调用方在调用远程方法的时候就获得了像调用本地接口一样的体验。 
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120075310.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120075310.jpg)
 
 **RPC 在架构中的位置**
 
@@ -70,7 +70,7 @@ RPC 一般默认采用 TCP 来传输。
 
 RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景，比如：发 MQ、分布式缓存、数据库等。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225632.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225632.jpg" style="zoom:25%;" />
 
 由此可以，RPC 确实是我们日常开发中经常接触的东西，只是被包装成了各种框架，导致我们很少意识到这就是 RPC。
 
@@ -81,7 +81,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
 我们可以先了解下 HTTP 协议，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225654.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225654.jpg" style="zoom:25%;" />
 
 **协议的作用**
 
@@ -106,7 +106,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
    RPC 每次发请求发的大小都是不固定的，所以我们的协议必须能让接收方正确地读出不定长的内容。
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119225727.jpg" style="zoom:25%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225727.jpg" style="zoom:25%;" />
 
 2. 序列化方式
 
@@ -118,7 +118,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
 这样一个完整的 RPC 协议大概就出来了，协议头是由一堆固定的长度参数组成，而协议体是根据请求接口和参数构造的，长度属于可变的，具体协议如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201119230555.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119230555.jpg" style="zoom:25%;" />
 
 **可扩展的协议**
 
@@ -130,7 +130,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
 所以为了保证能平滑地升级改造前后的协议，我们有必要设计一种支持可扩展的协议。整体协议就变成了三部分内容：固定部分、协议头内容、协议体内容。具体协议如下：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120073746.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120073746.jpg" style="zoom:25%;" />
 
 设计一个简单的 RPC 协议并不难，难的是怎么去设计一个可扩展的协议。
 
@@ -150,7 +150,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
 网络传输的数据必须是二进制数据，但调用方请求的出入参数都是对象。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120073800.jpg" style="zoom: 25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120073800.jpg" style="zoom: 25%;" />
 
 **有哪些常用的序列化？**
 
@@ -160,7 +160,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
    JDK 的序列化过程是怎样完成的呢？我们看下面这张图：
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120073912.jpg" style="zoom:25%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120073912.jpg" style="zoom:25%;" />
 
    序列化过程就是在读取对象数据的时候，不断加入一些特殊分隔符，用于在反序列化过程中截断作用。
 
@@ -265,7 +265,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 3. 通用性和兼容性，支持升级 RPC 版本。
 4. 安全性。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120073936.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120073936.jpg" style="zoom:25%;" />
 
 **RPC 框架在使用时要注意哪些问题？**
 
@@ -288,7 +288,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
    首先，应用进程发起 IO 系统调用后，应用进程被阻塞，转到内核空间处理。之后，内核开始等待数据，等待到数据之后，再将内核中的数据拷贝到用户内存中，整个 IO 处理完毕后返回进程。最后应用的进程解除阻塞状态，运行业务逻辑。 
 
-   ![image-20201026111324316](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201026111324.png)
+   ![image-20201026111324316](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201026111324.png)
 
    这里我们可以看到，系统内核处理 IO 操作分为两个阶段——等待数据和拷贝数据。而在这两个阶段中，应用进程中 IO 操作的线程会一直都处于阻塞状态，如果是基于 Java 多线程开发，那么每一个 IO 操作都要占用线程，直至 IO 操作结束。 
 
@@ -300,7 +300,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
    多个网络连接的 IO 可以注册到一个复用器（select）上，当用户进程调用了 select，那么整个进程会被阻塞。同时，内核会“监视”所有 select 负责的 socket，当任何一个socket 中的数据准备好了，select 就会返回。这个时候用户进程再调用 read 操作，将数据从内核中拷贝到用户进程。
 
-   ![image-20201026111426509](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201026111426.png)
+   ![image-20201026111426509](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201026111426.png)
 
    整个流程要比阻塞 IO 要复杂，似乎也更浪费性能。但它最大的优势在于，用户可以在一个线程内同时处理多个 socket 的 IO 请求。用户可以注册多个 socket，然后不断地调用 select 读取被激活的socket，即可达到在同一个线程内同时处理多个 IO 请求的目的。而在同步阻塞模型中，必须通过多线程的方式才能达到这个目的。IO 复用避免了上下文切换带来的性能开销。
 
@@ -310,19 +310,19 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
    进程发起 IO 系统调用后，如果内核缓冲区没有数据，需要到 IO 设备中读取，进程返回一个错误而不会被阻塞；进程发起 IO 系统调用后，如果内核缓冲区有数据，内核就会把数据返回进程。
    
-   ![image-20201026112303800](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201026112303.png)
+   ![image-20201026112303800](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201026112303.png)
 
 4. 信号驱动 IO 模型：
 
    当进程发起一个 IO 操作，会向内核注册一个信号处理函数，然后进程返回不阻塞；当内核数据就绪时会发送一个信号给进程，进程便在信号处理函数中调用 IO 读取数据。
    
-   ![image-20201026112544733](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201026112544.png)
+   ![image-20201026112544733](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201026112544.png)
 
 5. 异步非阻塞 IO
 
    当进程发起一个 IO 操作，进程返回（不阻塞），但也不能返回结果；内核把整个 IO 处理完后，会通知进程结果。如果 IO 操作成功则进程直接获取到数据。
    
-   ![image-20201026112836952](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201026112837.png)
+   ![image-20201026112836952](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201026112837.png)
 
 **为什么说阻塞 IO 和 IO 多路复用最为常用？**
 
@@ -342,7 +342,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
 刚才讲阻塞 IO 的时候我讲到，系统内核处理 IO 操作分为两个阶段——等待数据和拷贝数据。等待数据，就是系统内核在等待网卡接收到数据后，把数据写到内核中；而拷贝数据，就是系统内核在获取到数据后，将数据拷贝到用户进程的空间中。以下是具体流程： 
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120074047.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120074047.jpg" style="zoom:25%;" />
 
 应用进程的每一次写操作，都会把数据写到用户空间的缓冲区中，再由 CPU 将数据拷贝到系统内核的缓冲区中，之后再由 DMA 将这份数据拷贝到网卡中，最后由网卡发送出去。
 
@@ -354,7 +354,7 @@ RPC 不仅可以用来解决通信问题，它还被用在了很多其他场景�
 
 那怎么做到零拷贝？你想一下是不是用户空间与内核空间都将数据写到一个地方，就不需要拷贝了？此时你有没有想到虚拟内存？ 零拷贝有两种解决方式，分别是 mmap+write 方式和 sendfile 方式，其核心原理都是通过虚拟内存来解决的。 
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120074142.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120074142.jpg" style="zoom:25%;" />
 
 **Netty 中的零拷贝**
 
@@ -404,7 +404,7 @@ public class TestProxy {
 
 下面的流程图是按照 1.7.X 版本梳理的：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120074154.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120074154.jpg" style="zoom:25%;" />
 
 **实现方法**
 

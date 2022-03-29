@@ -4,7 +4,7 @@
 
 作为一套统一标准，JDBC 规范具备完整的架构体系，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210407225931.png" alt="image-20210407225931153" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210407225931.png" alt="image-20210407225931153" style="zoom:50%;" />
 
 **JDBC 规范中有哪些核心编程对象？**
 
@@ -54,7 +54,7 @@ public interface DataSource  extends CommonDataSource, Wrapper {
 
 CommonDataSource 是 JDBC 中关于数据源定义的根接口，除了 DataSource 接口之外，它还有另外两个子接口，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210407230746.png" alt="image-20210407230746295" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210407230746.png" alt="image-20210407230746295" style="zoom:50%;" />
 
 其中，DataSource 是官方定义的获取 Connection 的基础接口，XADataSource 用来在分布式事务环境下实现 Connection 的获取，而 ConnectionPoolDataSource 是从连接池 ConnectionPool 中获取 Connection 的接口。
 
@@ -357,7 +357,7 @@ public interface Repository<T, ID> {
 
 在 Spring Data 中，存在一大批 Repository 接口的子接口和实现类：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210409215021.png" alt="image-20210409215021417" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210409215021.png" alt="image-20210409215021417" style="zoom:67%;" />
 
 其中 SimpleJpaRepository 类的 save 方法如下代码所示：
 
@@ -418,7 +418,7 @@ JPQL 与原生的 SQL 唯一的区别就是 JPQL FROM 语句后面跟的是对�
 
 想要使用方法名实现衍生查询，我们需要对 Repository 中定义的方法名进行一定约束。首先我们需要指定一些查询关键字，常见的关键字如下表所示：
 
-![Lark20201215-174017.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210409221850.png)
+![Lark20201215-174017.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210409221850.png)
 
 其次需要指定查询字段和一些限制性条件，例如“firstname”和“lastname”。
 

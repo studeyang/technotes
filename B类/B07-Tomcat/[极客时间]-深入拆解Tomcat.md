@@ -70,7 +70,7 @@ HTTP 协议的本质就是一种浏览器与服务器之间约定好的通信格
 
 以一次实际调用为例。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091112.jpg" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091112.jpg" style="zoom: 67%;" />
 
 Tomcat 服务器接受连接、解析请求数据、处理请求和发送响应。实际情况可能会有成千上万的浏览器同时请求同一个 HTTP 服务器，为了提高服务能力和并发度，Tomcat 使用了多线程技术。
 
@@ -78,7 +78,7 @@ Tomcat 服务器接受连接、解析请求数据、处理请求和发送响应�
 
 那 HTTP 协议的数据包具体长什么样呢？
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091117.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091117.png)
 
 HTTP 请求数据由三部分组成，分别是**请求行、请求报头、请求正文**。
 
@@ -86,7 +86,7 @@ HTTP 请求数据由三部分组成，分别是**请求行、请求报头、请�
 
 HTTP 的响应也是由三部分组成，分别是**状态行、响应报头、报文主体**。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091124.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091124.png)
 
 **Cookie 和 Session**
 
@@ -128,7 +128,7 @@ HTTP 协议有个特点是无状态，请求与请求之间是没有关系的。
 
 下面我们通过一张图来加深理解。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091131.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091131.jpg)
 
 Servlet 接口和 Servlet 容器这一整套规范叫作 Servlet 规范。
 
@@ -182,7 +182,7 @@ Servlet 规范提供了 GenericServlet 抽象类，我们可以通过扩展它�
 
   当客户请求某个资源时，HTTP 服务器会用一个 ServletRequest 对象把客户的请求信息封装起来，然后调用 Servlet 容器的 service 方法，Servlet 容器拿到请求后，根据请求的 URL 和 Servlet 的映射关系，找到相应的 Servlet，如果 Servlet 还没有被加载，就用反射机制创建这个 Servlet，并调用 Servlet 的 init 方法来完成初始化，接着调用 Servlet 的 service 方法来处理请求，把 ServletResponse 对象返回给 HTTP 服务器，HTTP 服务器会把响应发送给客户端。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091138.jpg" style="zoom: 67%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091138.jpg" style="zoom: 67%;" />
 
 - Web应用
 
@@ -261,7 +261,7 @@ Tomcat 为了实现支持多种 I/O 模型和应用层协议，一个容器可�
 
 这里请你注意，Service 本身没有做什么重要的事情，只是在连接器和容器外面多包了一层，把它们组装在一起。Tomcat 内可能有多个 Service，通过在 Tomcat 中配置多个 Service，可以实现通过不同的端口号来访问同一台机器上部署的不同应用。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091145.jpg" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091145.jpg" style="zoom: 50%;" />
 
 从图上你可以看到，最顶层是 Server，这里的 Server 指的就是一个 Tomcat 实例。一个 Server 中有一个或者多个 Service，一个 Service 中有多个连接器和一个容器。连接器与容器之间通过标准的 ServletRequest 和 ServletResponse 通信。
 
@@ -290,13 +290,13 @@ Tomcat 为了实现支持多种 I/O 模型和应用层协议，一个容器可�
 
 EndPoint 负责提供字节流给 Processor，Processor 负责提供 Tomcat Request 对象给 Adapter，Adapter 负责提供 ServletRequest 对象给容器。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091152.jpg" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091152.jpg" style="zoom:50%;" />
 
 Tomcat 的设计者将网络通信和应用层协议解析放在一起考虑，设计了一个叫 ProtocolHandler 的接口来封装这两种变化点。各种协议和通信模型的组合有相应的具体实现类。比如：Http11NioProtocol 和 AjpNioProtocol。
 
 继承关系如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091158.jpg" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091158.jpg" style="zoom:50%;" />
 
 通过上图，你可以看到每一种 I/O 模型和协议的组合都有相应的具体实现类，我们在使用时可以自由选择。
 
@@ -318,7 +318,7 @@ Tomcat 的设计者将网络通信和应用层协议解析放在一起考虑，�
 
 我们再来看看连接器的组件图：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091202.jpg" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091202.jpg" style="zoom:50%;" />
 
 从图中我们看到，EndPoint 接收到 Socket 连接后，生成一个 SocketProcessor 任务提交到线程池去处理，SocketProcessor 的 Run 方法会调用 Processor 组件去解析应用层协议，Processor 通过解析生成 Request 对象后，会调用 Adapter 的 Service 方法。
 
@@ -338,7 +338,7 @@ Tomcat 的设计者将网络通信和应用层协议解析放在一起考虑，�
 
 Tomcat 设计了 4 种容器，分别是 Engine、Host、Context 和 Wrapper。这 4 种容器是父子关系，如下图所示。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091207.jpg" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091207.jpg" style="zoom:50%;" />
 
 为什么要设计这么多层次的容器呢？
 
@@ -405,7 +405,7 @@ Tomcat 是用 Mapper 组件来完成这个任务的。Mapper 组件的功能就�
 
 假如有一个网购系统，有面向网站管理人员的后台管理系统，还有面向终端客户的在线购物系统。这两个系统跑在同一个 Tomcat 上，为了隔离它们的访问域名，配置了两个虚拟域名：`manage.shopping.com`和`user.shopping.com`。网站管理人员可以管理用户和商品；终端客户可以搜索商品和下订单，搜索功能和订单管理也是两个独立的 Web 应用。如下图所示。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091213.jpg" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091213.jpg" style="zoom: 50%;" />
 
 假如有用户访问一个 URL，比如图中的`http://user.shopping.com:8080/order/buy`，Tomcat 如何将这个 URL 定位到一个 Servlet 呢？
 
@@ -460,7 +460,7 @@ Pipeline 中维护了 Valve 链表，Valve 可以插入到 Pipeline 中，对请
 
  Pipeline 中还有个 getBasic 方法。这个 BasicValve 处于 Valve 链表的末端，负责调用下层容器的 Pipeline 里的第一个 Valve。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091220.jpg" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091220.jpg" style="zoom:50%;" />
 
 整个调用过程由连接器中的 Adapter 触发的，它会调用 Engine 的第一个 Valve：
 
@@ -498,7 +498,7 @@ Tomcat 内的 Context 组件跟 Servlet 规范中的 ServletContext 接口有什
 
 我们通过一张简化的类图来回顾一下 Tomcat 的组件。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091228.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091228.png)
 
 图中的虚线表示一个请求在 Tomcat 中流转的过程。
 
@@ -539,7 +539,7 @@ public interface Lifecycle {
 
 具体来说就是在 Lifecycle 接口里加入两个方法：添加监听器和删除监听器。除此之外，我们还需要定义一个 Enum 来表示组件有哪些状态，以及处在什么状态会触发什么样的事件。因此 Lifecycle 接口和 LifecycleState 就定义成了下面这样。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091234.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091234.png)
 
 一旦组件到达相应的状态就触发相应的事件，比如 NEW 状态表示组件刚刚被实例化；而当 init() 方法被调用时，状态就变成 INITIALIZING 状态，这个时候，就会触发 BEFORE_INIT_EVENT 事件，如果有监听器在监听这个事件，它的方法就会被调用。
 
@@ -593,7 +593,7 @@ Tomcat 自定义了一些监听器，这些监听器是父组件在创建子组�
 
 **生命周期管理总体类图**
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091239.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091239.png)
 
 这里请你注意，图中的 StandardServer、StandardService 等是 Server 和 Service 组件的具体实现类，它们都继承了 LifeCycleBase。
 
@@ -611,7 +611,7 @@ StandardEngine、StandardHost、StandardContext 和 StandardWrapper 是相应容
 
 我们通过 Tomcat 的 /bin 目录下的脚本 startup.sh 来启动 Tomcat，那你是否知道我们执行了这个脚本后发生了什么呢？你可以通过下面这张流程图来了解一下。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120091247.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091247.png)
 
 1. startup.sh 脚本会启动一个 JVM 来运行 Tomcat 的启动类 Bootstrap；
 2. Bootstrap 初始化 Tomcat 的类加载器，并创建 Catalina；

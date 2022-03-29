@@ -6,7 +6,7 @@ Spring Cloud 专门提供了一个 Spring Cloud Stream 框架来实现事件驱�
 
 **事件驱动架构**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316151433.png" alt="image-20210316151433557" style="zoom: 33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316151433.png" alt="image-20210316151433557" style="zoom: 33%;" />
 
 在上图中，事件生产者和消费者之间的虚线代表的是一种相互松散、没有直接调用的关联关系。满足以上特性的系统代表着一种松耦合的架构，通常被称为事件驱动架构，而这里的事件也可以被理解是服务与服务之间发送的一种消息。
 
@@ -18,7 +18,7 @@ Spring Cloud 专门提供了一个 Spring Cloud Stream 框架来实现事件驱�
 
 这三个框架之间的依赖关系如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316152133.png" alt="image-20210316152132946" style="zoom: 33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316152133.png" alt="image-20210316152132946" style="zoom: 33%;" />
 
 接下来的内容，我们先来对位于底层的 Spring Messaging 和 Spring Integration 框架做一些展开。
 
@@ -61,7 +61,7 @@ Spring Integration 的设计目的是系统集成，因此内部提供了大量�
 
 Spring Cloud Stream 在消息生产者和消费者之间添加了一种桥梁机制，所有的消息都将通过 Spring Cloud Stream 进行发送和接收，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316215557.png" alt="image-20210316215557193" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316215557.png" alt="image-20210316215557193" style="zoom:50%;" />
 
 Spring Cloud Stream 具备四个核心组件，分别是 Binder、Channel、Source 和 Sink，其中 Binder 和 Channel 成对出现，而 Source 和 Sink 分别面向消息的发布者和消费者。
 
@@ -108,19 +108,19 @@ public interface SpringHealthChannel {
 
 在 Spring Cloud Stream 中，统一通过发布-订阅模型完成消息的发布和消费，如下所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316221701.png" alt="image-20210316221701734" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316221701.png" alt="image-20210316221701734" style="zoom:50%;" />
 
 - 消费者组
 
 一条消息就只能被同一个组中的某一个服务实例所消费。消费者的基本结构如下图所示（其中虚线表示不会发生的消费场景）：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316221822.png" alt="image-20210316221822025" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316221822.png" alt="image-20210316221822025" style="zoom:50%;" />
 
 - 消息分区
 
 同一分区中的消息能够确保始终是由同一个消费者实例进行消费。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316222006.png" alt="image-20210316222006133" style="zoom: 33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316222006.png" alt="image-20210316222006133" style="zoom: 33%;" />
 
 # 22 | 消息发布：如何使用 Spring Cloud Stream 实现消息发布者和消费者？（上）
 
@@ -128,11 +128,11 @@ public interface SpringHealthChannel {
 
 类似 SpringHealth 这样的系统中的用户信息变动并不会太频繁，所以很多时候我们会想到通过缓存系统来存放用户信息。而一旦用户信息发生变化，user-service 可以发送一个事件，给到相关的订阅者并更新缓存信息，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316224022.png" alt="image-20210316224022503" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316224022.png" alt="image-20210316224022503" style="zoom:50%;" />
 
 接下来我们关注于上图中的事件发布者 user-service。在 user-service 中需要设计并实现使用 Spring Cloud Stream 发布消息的各个组件，包括 Source、Channel 和 Binder。我们围绕 UserInfoChangedEvent 事件给出 user-service 内部的整个实现流程，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316224120.png" alt="image-20210316224120602" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316224120.png" alt="image-20210316224120602" style="zoom:50%;" />
 
 **实现消息发布者**
 
@@ -250,11 +250,11 @@ public class UserService {
 
 负责消费消息的是 Sink 组件，因此，我们同样围绕 UserInfoChangedEvent 事件给出 intervention-service 内部的整个实现流程，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316225158.png" alt="image-20210316225158301" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316225158.png" alt="image-20210316225158301" style="zoom:50%;" />
 
 Spring Cloud Stream 通过 Sink 获取消息并交由 UserInfoChangedSink 实现具体的消费逻辑。
 
-![image-20210316225547206](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210316225547.png)
+![image-20210316225547206](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210316225547.png)
 
 # 23 | 消息消费：如何使用 Spring Cloud Stream 实现消息发布者和消费者？（下）
 
@@ -371,7 +371,7 @@ spring:
 
 在集群环境下，我们希望服务的不同实例被放置在竞争的消费者关系中，同一服务集群中只有一个实例能够处理给定消息。Spring Cloud Stream 提供的消费者分组可以很方便地实现这一需求，效果图如下所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210317231101.png" alt="image-20210317231101428" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210317231101.png" alt="image-20210317231101428" style="zoom: 50%;" />
 
 要想实现上图所示的消息消费效果，在配置Binder时指定消费者分组信息即可，如下所示：
 
@@ -394,7 +394,7 @@ spring:
 
 我们希望用户信息中 id 为单号的 UserInfoChangedEvent 始终由第一个 intervention-service 实例进行消费，而id为双号的 UserInfoChangedEvent 则始终由第二个 intervention-service 实例进行消费。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210317231440.png" alt="image-20210317231440858" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210317231440.png" alt="image-20210317231440858" style="zoom:50%;" />
 
 Binder 配置如下。
 
@@ -428,7 +428,7 @@ spring:
 
 所谓认证，解决的是“你是谁”这一个问题。一旦明确 “你是谁”之后，下一步就可以判断“你能做什么”，这个步骤就是授权。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210317232529.png" alt="image-20210317232529450" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210317232529.png" alt="image-20210317232529450" style="zoom:50%;" />
 
 上图代表的是一种通用方案。微服务架构中的认证和授权模型与上图中的类似，但在具体设计和实现过程中也有其特殊性。
 
@@ -484,7 +484,7 @@ public class AuthApplication {
 
 在密码模式下，用户向客户端提供用户名和密码，并将用户名和密码发给授权服务器从而请求 Token。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210318215633.png" alt="image-20210318215633452" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210318215633.png" alt="image-20210318215633452" style="zoom:50%;" />
 
 **设置客户端信息**
 
@@ -603,11 +603,11 @@ public class SpringHealthWebSecurityConfigurer extends WebSecurityConfigurerAdap
 
 授权服务器中会暴露一批端点供HTTP请求进行访问。获取 Token 的端点就是http://localhost:8080/oauth/token，在使用该端点时，我们需要提供前面所配置的客户端信息和用户信息。
 
-![image-20210318223410970](https://gitee.com/yanglu_u/ImgRepository/raw/master/20210318223617.png)
+![image-20210318223410970](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/20210318223617.png)
 
 接下来我们指定针对授权模式的专用配置信息：
 
-![image-20210318223617642](https://gitee.com/yanglu_u/ImgRepository/raw/master/20210318223617.png)
+![image-20210318223617642](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/20210318223617.png)
 
 会得到如下所示的返回结果：
 
@@ -727,7 +727,7 @@ public class SpringHealthResourceServerConfiguration extends ResourceServerConfi
 
 **在微服务中传播 Token**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210320231755.png" alt="image-20210320231755420" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210320231755.png" alt="image-20210320231755420" style="zoom:50%;" />
 
 持有 Token 的客户端访问 intervention-service 提供的 HTTP 端点进行下单操作，该服务会验证所传入 Token 的有效性。intervention-service 会再通过网关访问 user-service 和 device-service，这两个服务同样分别对所传入 Token 进行验证并返回相应的结果。
 

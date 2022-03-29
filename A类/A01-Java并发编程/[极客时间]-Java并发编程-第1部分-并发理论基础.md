@@ -38,7 +38,7 @@
 
    实现互斥的核心技术就是锁，Java 语言里 synchronized、SDK 里的各种 Lock 都能解决互斥问题。虽说锁解决了安全性问题，但同时也带来了性能问题，那如何保证安全性的同时又尽量提高性能呢？可以分场景优化，Java SDK 里提供的 ReadWriteLock、StampedLock 就可以优化读多写少场景下锁的性能。还可以使用无锁的数据结构，例如 Java SDK 里提供的原子类都是基于无锁技术实现的。
 
-   ![并发编程知识全景图](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/并发编程知识全景图.png)
+   ![并发编程知识全景图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/并发编程知识全景图.png)
 
 **钻进去，看本质**
 
@@ -62,13 +62,13 @@ CPU、内存、I/O 设备在这个快速发展的过程中，有一个**核心�
 
 在单核时代，所有的线程都是在一颗 CPU 上执行，所有线程都是操作同一个 CPU 的缓存，一个线程对缓存的写，对另外一个线程来说一定是可见的。例如在下面的图中，线程 A 和线程 B 都是操作同一个 CPU 里面的缓存，所以线程 A 更新了变量 V 的值，那么线程 B 之后再访问变量 V，得到的一定是 V 的最新值（线程 A 写过的值）。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/CPU 缓存与内存的关系图.png" alt="CPU 缓存与内存的关系图" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/CPU 缓存与内存的关系图.png" alt="CPU 缓存与内存的关系图" style="zoom:50%;" />
 
 一个线程对共享变量的修改，另外一个线程能够立刻看到，我们称为**可见性**。
 
 多核时代，每颗 CPU 都有自己的缓存，当多个线程在不同的 CPU 上执行时，这些线程操作的是不同的 CPU 缓存。比如下图中，线程 A 操作的是 CPU-1 上的缓存，而线程 B 操作的是 CPU-2 上的缓存，很明显，这个时候线程 A 对变量 V 的操作对于线程 B 而言就不具备可见性了。这个就属于硬件程序员给软件程序员挖的“坑”。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/多核 CPU 的缓存与内存关系图.png" alt="多核 CPU 的缓存与内存关系图" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/多核 CPU 的缓存与内存关系图.png" alt="多核 CPU 的缓存与内存关系图" style="zoom:50%;" />
 
 下面我们再用一段代码来验证一下多核场景下的可见性问题。
 
@@ -109,7 +109,7 @@ public class Test {
 
 由于 IO 太慢，早期的操作系统就发明了多进程。操作系统允许某个进程执行一小段时间，例如 50 毫秒，过了 50 毫秒操作系统就会重新选择一个进程来执行（我们称为“任务切换”），这个 50 毫秒称为“**时间片**”。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/线程切换示意图.png" alt="线程切换示意图" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/线程切换示意图.png" alt="线程切换示意图" style="zoom:50%;" />
 
 早期的操作系统基于进程来调度 CPU，不同进程间是不共享内存空间的，所以进程要做任务切换就要切换内存映射地址，而一个进程创建的所有线程，都是共享一个内存空间的，所以线程做任务切换成本就很低了。现代的操作系统都基于更轻量的线程来调度，现在我们提到的“任务切换”都是指“线程切换”。
 
@@ -121,7 +121,7 @@ Java 并发程序都是基于多线程的，自然也会涉及到任务切换，
 
 操作系统做任务切换，可以发生在任何一条**CPU 指令**执行完，是的，是 CPU 指令，而不是高级语言里的一条语句。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/非原子操作的执行路径示意图.png" alt="非原子操作的执行路径示意图" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/非原子操作的执行路径示意图.png" alt="非原子操作的执行路径示意图" style="zoom:50%;" />
 
 （线程切换过多会带来什么问题？如何解决？）
 
@@ -163,7 +163,7 @@ public class Singleton {
 
 优化后会导致什么问题呢？我们假设线程 A 先执行 getInstance() 方法，当执行完指令 2 时恰好发生了线程切换，切换到了线程 B 上；如果此时线程 B 也执行 getInstance() 方法，那么线程 B 在执行第一个判断时会发现 `instance != null` ，所以直接返回 instance，而此时的 instance 是没有初始化过的，如果我们这个时候访问 instance 的成员变量就可能触发空指针异常。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/双重检查创建单例的异常执行路径.png" alt="双重检查创建单例的异常执行路径" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/双重检查创建单例的异常执行路径.png" alt="双重检查创建单例的异常执行路径" style="zoom:80%;" />
 
 （针对上面的双重检查单例模式，如何避免编译优化？）
 
@@ -226,7 +226,7 @@ Happens-Before 可以理解为：对...可见。A Happens-Before B => B能看到
 
    我们将规则 3 的传递性应用到我们的例子中，可以看下面这幅图：
 
-   <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/示例代码中的传递性规则.png" alt="示例代码中的传递性规则" style="zoom: 80%;" />
+   <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/示例代码中的传递性规则.png" alt="示例代码中的传递性规则" style="zoom: 80%;" />
 
    从图中，我们可以看到：
 
@@ -322,7 +322,7 @@ public FinalFieldExample() {
 
 **简易锁模型**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/简易锁模型.png" alt="简易锁模型" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/简易锁模型.png" alt="简易锁模型" style="zoom:80%;" />
 
 我们把一段需要互斥执行的代码称为**临界区**。线程在进入临界区之前，首先尝试加锁 lock()，如果成功，则进入临界区，此时我们称这个线程持有锁；否则呢就等待，直到持有锁的线程解锁；持有锁的线程执行完临界区的代码后，执行解锁 unlock()。
 
@@ -330,7 +330,7 @@ public FinalFieldExample() {
 
 我们知道在现实世界里，锁和锁要保护的资源是有对应关系的，比如你用你家的锁保护你家的东西，我用我家的锁保护我家的东西。在并发编程世界里，锁和资源也应该有这个关系，但这个关系在我们上面的模型中是没有体现的，所以我们需要完善一下我们的模型。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/改进后的锁模型.png" alt="改进后的锁模型" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/改进后的锁模型.png" alt="改进后的锁模型" style="zoom:80%;" />
 
 另外，在锁 LR 和受保护资源之间，我特地用一条线做了关联，这个关联关系非常重要。很多并发 Bug 的出现都是因为把它忽略了，然后就出现了类似锁自家门来保护他家资产的事情，这样的 Bug 非常不好诊断，因为潜意识里我们认为已经正确加锁了。
 
@@ -401,7 +401,7 @@ class SafeCalc {
 
 上面的代码转换为我们提到的锁模型，就是下面图示这个样子。get() 方法和 addOne() 方法都需要访问 value 这个受保护的资源，这个资源用 this 这把锁来保护。线程要进入临界区 get() 和 addOne()，必须先获得 this 这把锁，这样 get() 和 addOne() 也是互斥的。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/保护临界区 get() 和 addOne() 的示意图.png" alt="保护临界区 get() 和 addOne() 的示意图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/保护临界区 get() 和 addOne() 的示意图.png" alt="保护临界区 get() 和 addOne() 的示意图" style="zoom:80%;" />
 
 **锁和受保护资源的关系**
 
@@ -421,7 +421,7 @@ class SafeCalc {
 
 如果你仔细观察，就会发现改动后的代码是用两个锁保护一个资源。这个受保护的资源就是静态变量 value，两个锁分别是 this 和 SafeCalc.class。我们可以用下面这幅图来形象描述这个关系。由于临界区 get() 和 addOne() 是用两个锁保护的，因此这两个临界区没有互斥关系，临界区 addOne() 对 value 的修改对临界区 get() 也没有可见性保证，这就导致并发问题了。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/两把锁保护一个资源的示意图.png" alt="两把锁保护一个资源的示意图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/两把锁保护一个资源的示意图.png" alt="两把锁保护一个资源的示意图" style="zoom:80%;" />
 
 **课后思考**
 
@@ -527,13 +527,13 @@ class Account {
 
 this 这把锁可以保护自己的余额 this.balance，却保护不了别人的余额 target.balance，就像你不能用自家的锁来保护别人家的资产。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/用锁 this 保护 this.balance 和 target.balance 的示意图.png" alt="用锁 this 保护 this.balance 和 target.balance 的示意图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/用锁 this 保护 this.balance 和 target.balance 的示意图.png" alt="用锁 this 保护 this.balance 和 target.balance 的示意图" style="zoom:80%;" />
 
 下面我们具体分析一下，假设有 A、B、C 三个账户，余额都是 200 元，我们用两个线程分别执行两个转账操作：账户 A 转给账户 B 100 元，账户 B 转给账户 C 100 元，最后我们期望的结果应该是账户 A 的余额是 100 元，账户 B 的余额是 200 元， 账户 C 的余额是 300 元。
 
 我们假设线程 1 执行账户 A 转账户 B 的操作，线程 2 执行账户 B 转账户 C 的操作。这两个线程分别在两颗 CPU 上同时执行，那它们是互斥的吗？我们期望是，但实际上并不是。因为线程 1 锁定的是账户 A 的实例（A.this），而线程 2 锁定的是账户 B 的实例（B.this），所以这两个线程可以同时进入临界区 transfer()。同时进入临界区的结果是什么呢？线程 1 和线程 2 都会读到账户 B 的余额为 200，导致最终账户 B 的余额可能是 300（线程 1 后于线程 2 写 B.balance，线程 2 写的 B.balance 值被线程 1 覆盖），可能是 100（线程 1 先于线程 2 写 B.balance，线程 1 写的 B.balance 值被线程 2 覆盖），就是不可能是 200。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/并发转账示意图.png" alt="并发转账示意图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/并发转账示意图.png" alt="并发转账示意图" style="zoom:80%;" />
 
 **使用锁的正确姿势**
 
@@ -606,7 +606,7 @@ class Account {
 
 上面这个过程在编程的世界里怎么实现呢？其实用两把锁就实现了，转出账本一把，转入账本另一把。在 transfer() 方法内部，我们首先尝试锁定转出账户 this（先把转出账本拿到手），然后尝试锁定转入账户 target（再把转入账本拿到手），只有当两者都成功时，才执行转账操作。这个逻辑可以图形化为下图这个样子。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/两个转账操作并行示意图.png" alt="两个转账操作并行示意图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/两个转账操作并行示意图.png" alt="两个转账操作并行示意图" style="zoom:80%;" />
 
 而至于详细的代码实现，如下所示。经过这样的优化后，账户 A 转账户 B 和账户 C 转账户 D 这两个转账操作就可以并行了。
 
@@ -635,7 +635,7 @@ class Account {
 
 如果有客户找柜员张三做个转账业务：账户 A 转账户 B 100 元，此时另一个客户找柜员李四也做个转账业务：账户 B 转账户 A 100 元，于是张三和李四同时都去文件架上拿账本，这时候有可能凑巧张三拿到了账本 A，李四拿到了账本 B。张三拿到账本 A 后就等着账本 B（账本 B 已经被李四拿走），而李四拿到账本 B 后就等着账本 A（账本 A 已经被张三拿走），他们要等多久呢？
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/转账业务中的“死等”.png" alt="转账业务中的“死等”" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/转账业务中的“死等”.png" alt="转账业务中的“死等”" style="zoom:80%;" />
 
 现实世界里的死等，就是编程领域的死锁了。**死锁**的一个比较专业的定义是：**一组互相竞争资源的线程因互相等待，导致“永久”阻塞的现象**。
 
@@ -685,7 +685,7 @@ class Account {
 
   可以增加一个账本管理员，然后只允许账本管理员从文件架上拿账本，也就是说柜员不能直接在文件架上拿账本，必须通过账本管理员才能拿到想要的账本。例如，张三同时申请账本 A 和 B，账本管理员如果发现文件架上只有账本 A，这个时候账本管理员是不会把账本 A 拿下来给张三的，只有账本 A 和 B 都在的时候才会给张三。这样就保证了“一次性申请所有资源”。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/通过账本管理员拿账本.png" alt="通过账本管理员拿账本" style="zoom:80%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/通过账本管理员拿账本.png" alt="通过账本管理员拿账本" style="zoom:80%;" />
 
   ```java
   class Allocator {
@@ -808,13 +808,13 @@ while(!actr.apply(this, target));
 
 在下面这个图里，左边有一个等待队列，同一时刻，只允许一个线程进入 synchronized 保护的临界区（这个临界区可以看作大夫的诊室），当有一个线程进入临界区后，其他线程就只能进入图中左边的等待队列里等待（相当于患者分诊等待）。**这个等待队列和互斥锁是一对一的关系，每个互斥锁都有自己独立的等待队列。**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/wait() 操作工作原理图.png" alt="wait() 操作工作原理图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/wait() 操作工作原理图.png" alt="wait() 操作工作原理图" style="zoom:80%;" />
 
 在并发程序中，当一个线程进入临界区后，由于某些条件不满足，需要进入等待状态，Java 对象的 wait() 方法就能够满足这种需求。如上图所示，当调用 wait() 方法后，当前线程就会被阻塞，并且进入到右边的等待队列中，**这个等待队列也是互斥锁的等待队列**。 线程在进入等待队列的同时，**会释放持有的互斥锁**，线程释放锁后，其他线程就有机会获得锁，并进入临界区了。
 
 那线程要求的条件满足时，该怎么通知这个等待的线程呢？很简单，就是 Java 对象的 notify() 和 notifyAll() 方法。我在下面这个图里为你大致描述了这个过程，当条件满足时调用 notify()，会通知等待队列（**互斥锁的等待队列**）中的线程，告诉它**条件曾经满足过**。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/notify() 操作工作原理图.png" alt="notify() 操作工作原理图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/notify() 操作工作原理图.png" alt="notify() 操作工作原理图" style="zoom:80%;" />
 
 为什么说是曾经满足过呢？因为**notify() 只能保证在通知时间点，条件是满足的**。而被通知线程的**执行时间点和通知的时间点**基本上不会重合，所以当线程执行的时候，很可能条件已经不满足了（保不齐有其他线程插队）。这一点需要格外注意。
 
@@ -1045,7 +1045,7 @@ Java 采用的是管程技术来解决并发问题，synchronized 关键字及 w
 
 管程解决互斥问题的思路很简单，就是将共享变量及其对共享变量的操作统一封装起来。在下图中，管程 X 将共享变量 queue 这个队列和相关的操作入队 enq()、出队 deq() 都封装起来了；线程 A 和线程 B 如果想访问共享变量 queue，只能通过调用管程提供的 enq()、deq() 方法来实现；enq()、deq() 保证互斥性，只允许一个线程进入管程。不知你有没有发现，管程模型和面向对象高度契合的。估计这也是 Java 选择管程的原因吧。而我在前面章节介绍的互斥锁用法，其背后的模型其实就是它。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/管程模型的代码化语义.png" alt="管程模型的代码化语义" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/管程模型的代码化语义.png" alt="管程模型的代码化语义" style="zoom:80%;" />
 
 那管程如何解决线程间的**同步**问题呢？
 
@@ -1053,7 +1053,7 @@ Java 采用的是管程技术来解决并发问题，synchronized 关键字及 w
 
 管程里还引入了条件变量的概念，而且**每个条件变量都对应有一个等待队列**，如下图，条件变量 A 和条件变量 B 分别都有自己的等待队列。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/MESA 管程模型.png" alt="MESA 管程模型" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/MESA 管程模型.png" alt="MESA 管程模型" style="zoom:80%;" />
 
 那条件变量等待队列的作用是什么呢？其实就是解决线程同步问题。
 
@@ -1154,7 +1154,7 @@ notEmpty.signal();
 
 Java 参考了 MESA 模型，语言内置的管程（synchronized）对 MESA 模型进行了精简。MESA 模型中，条件变量可以有多个，Java 语言内置的管程里只有一个条件变量。具体如下图所示。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Java 中的管程示意图.png" alt="Java 中的管程示意图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Java 中的管程示意图.png" alt="Java 中的管程示意图" style="zoom:80%;" />
 
 Java 内置的管程方案（synchronized）使用简单，synchronized 关键字修饰的代码块，在编译期会自动生成相关加锁和解锁的代码，但是仅支持一个条件变量；而 Java SDK 并发包实现的管程支持多个条件变量，不过并发包里的锁，需要开发人员自己进行加锁和解锁操作。
 
@@ -1168,7 +1168,7 @@ wait() 方法，在 Hasen 模型和 Hoare 模型里面，都是没有参数的�
 
 通用的线程生命周期基本上可以用下图这个“五态模型”来描述。这五态分别是：**初始状态、可运行状态、运行状态、休眠状态**和**终止状态**。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Java 线程的生命周期状态.jpg" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Java 线程的生命周期状态.jpg" style="zoom: 50%;" />
 
 这“五态模型”的详细情况如下所示。
 
@@ -1197,7 +1197,7 @@ Java 语言中线程共有六种状态，分别是：
 
 所以 Java 线程的生命周期可以简化为下图：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Java 中的线程状态转换图.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Java 中的线程状态转换图.png" style="zoom:50%;" />
 
 其中，BLOCKED、WAITING、TIMED_WAITING 可以理解为线程导致休眠状态的三种原因。那具体是哪些情形会导致线程从 RUNNABLE 状态转换到这三种状态呢？而这三种状态又是何时转换回 RUNNABLE 的呢？以及 NEW、TERMINATED 和 RUNNABLE 状态是如何转换的？
 
@@ -1259,7 +1259,7 @@ top() 方法会真的杀死线程，不给线程喘息的机会，如果线程�
 
 你可以通过 `jstack` 命令或者`Java VisualVM`这个可视化工具将 JVM 所有的线程栈信息导出来，完整的线程栈信息不仅包括线程的当前状态、调用栈，还包括了锁的信息。例如，我曾经写过一个死锁的程序，导出的线程栈明确告诉我发生了死锁，并且将死锁线程的调用栈信息清晰地显示出来了（如下图）。导出线程栈，分析线程状态是诊断并发问题的一个重要工具。
 
-![发生死锁的线程栈](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/发生死锁的线程栈.png)
+![发生死锁的线程栈](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/发生死锁的线程栈.png)
 
 **课后思考**
 
@@ -1316,11 +1316,11 @@ while(true) {
 
 如下图所示，如果只有一个线程，执行 CPU 计算的时候，I/O 设备空闲；执行 I/O 操作的时候，CPU 空闲，所以 CPU 的利用率和 I/O 设备的利用率都是 50%。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/单线程执行示意图.png" alt="单线程执行示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/单线程执行示意图.png" alt="单线程执行示意图" style="zoom:67%;" />
 
 如果有两个线程，如下图所示，当线程 A 执行 CPU 计算的时候，线程 B 执行 I/O 操作；当线程 A 执行 I/O 操作的时候，线程 B 执行 CPU 计算，这样 CPU 的利用率和 I/O 设备的利用率就都达到了 100%。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/二线程执行示意图.png" alt="二线程执行示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/二线程执行示意图.png" alt="二线程执行示意图" style="zoom:67%;" />
 
 我们将 CPU 的利用率和 I/O 设备的利用率都提升到了 100%，会对性能产生了哪些影响呢？通过上面的图示，很容易看出：单位时间处理的请求数量翻了一番，也就是说吞吐量提高了 1 倍。此时可以逆向思维一下，**如果 CPU 和 I/O 设备的利用率都很低，那么可以尝试通过增加线程来提高吞吐量**。
 
@@ -1328,7 +1328,7 @@ while(true) {
 
 为便于你理解，这里我举个简单的例子说明一下：计算 1+2+… … +100 亿的值，如果在 4 核的 CPU 上利用 4 个线程执行，线程 A 计算 [1，25 亿)，线程 B 计算 [25 亿，50 亿)，线程 C 计算 [50，75 亿)，线程 D 计算 [75 亿，100 亿]，之后汇总，那么理论上应该比一个线程计算 [1，100 亿] 快将近 4 倍，响应时间能够降到 25%。一个线程，对于 4 核的 CPU，CPU 的利用率只有 25%，而 4 个线程，则能够将 CPU 的利用率提高到 100%。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/多核执行多线程示意图.png" alt="多核执行多线程示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/多核执行多线程示意图.png" alt="多核执行多线程示意图" style="zoom:67%;" />
 
 **创建多少线程合适？**
 
@@ -1340,7 +1340,7 @@ while(true) {
 
 对于 I/O 密集型的计算场景，比如前面我们的例子中，如果 CPU 计算和 I/O 操作的耗时是 1:1，那么 2 个线程是最合适的。如果 CPU 计算和 I/O 操作的耗时是 1:2，那多少个线程合适呢？是 3 个线程，如下图所示：CPU 在 A、B、C 三个线程之间切换，对于线程 A，当 CPU 从 B、C 切换回来时，线程 A 正好执行完 I/O 操作。这样 CPU 和 I/O 设备的利用率都达到了 100%。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/三线程执行示意图.png" alt="三线程执行示意图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/三线程执行示意图.png" alt="三线程执行示意图" style="zoom:67%;" />
 
 通过上面这个例子，我们会发现，对于 I/O 密集型计算场景，最佳的线程数是与程序中 CPU 计算和 I/O 操作的耗时比相关的，我们可以总结出这样一个公式：
 $$
@@ -1402,7 +1402,7 @@ int[] c = b;
 
 当你调用 fibonacci(a) 的时候，CPU 要先找到方法 fibonacci() 的地址，然后跳转到这个地址去执行代码，最后 CPU 执行完方法 fibonacci() 之后，要能够返回。首先找到调用方法的下一条语句的地址：也就是`int[] c=b;`的地址，再跳转到这个地址去执行。 
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/方法的调用过程.png" alt="方法的调用过程" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/方法的调用过程.png" alt="方法的调用过程" style="zoom: 67%;" />
 
 有一个很重要的问题，CPU 去哪里找到调用方法的参数和返回地址？
 
@@ -1410,7 +1410,7 @@ int[] c = b;
 
 例如，有三个方法 A、B、C，他们的调用关系是 A->B->C（A 调用 B，B 调用 C），在运行时，会构建出下面这样的调用栈。每个方法在调用栈里都有自己的独立空间，称为**栈帧**，每个栈帧里都有对应方法需要的参数和返回地址。当调用方法时，会创建新的栈帧，并压入调用栈；当方法返回时，对应的栈帧就会被自动弹出。也就是说，**栈帧和方法是同生共死的**。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/调用栈结构.png" alt="调用栈结构" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/调用栈结构.png" alt="调用栈结构" style="zoom:67%;" />
 
 利用栈结构来支持方法调用这个方案非常普遍，以至于 CPU 里内置了栈寄存器。虽然各家编程语言定义的方法千奇百怪，但是方法的内部执行原理却是出奇的一致：都是**靠栈结构解决**的。Java 语言虽然是靠虚拟机解释执行的，但是方法的调用也是利用栈结构解决的。
 
@@ -1418,7 +1418,7 @@ int[] c = b;
 
 局部变量的作用域是方法内部，也就是说当方法执行完，局部变量就没用了，局部变量应该和方法同生共死。此时你应该会想到调用栈的栈帧，调用栈的栈帧就是和方法同生共死的，所以局部变量放到调用栈里那儿是相当的合理。事实上，的确是这样的，**局部变量就是放到了调用栈里**。于是调用栈的结构就变成了下图这样。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/保护局部变量的调用栈结构.png" alt="保护局部变量的调用栈结构" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/保护局部变量的调用栈结构.png" alt="保护局部变量的调用栈结构" style="zoom:67%;" />
 
 局部变量是和方法同生共死的，一个变量如果想跨越方法的边界，就必须创建在堆里。
 
@@ -1426,7 +1426,7 @@ int[] c = b;
 
 两个线程可以同时用不同的参数调用相同的方法，那调用栈和线程之间是什么关系呢？答案是：**每个线程都有自己独立的调用栈**。因为如果不是这样，那两个线程就互相干扰了。如下面这幅图所示，线程 A、B、C 每个线程都有自己独立的调用栈。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/线程与调用栈的关系图.png" alt="线程与调用栈的关系图" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/线程与调用栈的关系图.png" alt="线程与调用栈的关系图" style="zoom:67%;" />
 
 现在，让我们回过头来再看篇首的问题：Java 方法里面的局部变量是否存在并发问题？现在你应该很清楚了，一点问题都没有。因为每个线程都有自己的调用栈，局部变量保存在线程各自的调用栈里面，不会共享，所以自然也就没有并发问题。
 

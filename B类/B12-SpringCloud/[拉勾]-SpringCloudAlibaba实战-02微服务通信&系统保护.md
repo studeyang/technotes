@@ -18,7 +18,7 @@ OpenFeign 则是在 Netflix Feign 的基础上进行封装，结合原有 Spring
 
 假设某电商平台日常订单业务中，为保证每一笔订单不会超卖，在创建订单前订单服务（order-service）首先去仓储服务（warehouse-service）检查对应商品 skuId（品类编号）的库存数量是否足够，库存充足创建订单，不足 App 前端提示“库存不足”。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808220423.png" alt="image-20210808220417309" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210808220423.png" alt="image-20210808220417309" style="zoom:67%;" />
 
 第一步，order-service 工程引入 pom.xml。
 
@@ -136,17 +136,17 @@ feign:
 
 RPC 采用客户端（Client) - 服务端（Server） 的架构方式实现跨进程通信，实现的通信协议也没有统一的标准，具体实现依托于研发厂商的设计。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223857.png" alt="image-20210808223857154" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210808223857.png" alt="image-20210808223857154" style="zoom:50%;" />
 
 那 RESTful 与 RPC 孰优孰劣呢？我们通过一个表格进行说明：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223948.png" alt="image-20210808223948543" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210808223948.png" alt="image-20210808223948543" style="zoom:50%;" />
 
 在微服务架构场景下，因为大多数服务都是轻量级的，同时 90%的任务通过短连接就能实现，因此更推荐使用 RESTful 通信。
 
 **Apache Dubbo**
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223135.png" alt="image-20210808223135525" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210808223135.png" alt="image-20210808223135525" style="zoom: 50%;" />
 
 Dubbo 架构中，包含 5 种角色。
 
@@ -160,7 +160,7 @@ Dubbo 架构中，包含 5 种角色。
 
 还是以“订单与库存服务”案例为例。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808223251.png" alt="image-20210808223251858" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210808223251.png" alt="image-20210808223251858" style="zoom:67%;" />
 
 第一步：引入 pom.xml 依赖。
 
@@ -203,7 +203,7 @@ dubbo: #dubbo与nacos的通信配置
 
 注册示意图如下：
 
-![image-20210808225440206](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808225440.png)
+![image-20210808225440206](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210808225440.png)
 
 第三步：开发接口与实现类。
 
@@ -235,7 +235,7 @@ public class WarehouseServiceImpl implements WarehouseService {
 
 可以看到下图效果：
 
-![image-20210808225924093](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808225924.png)
+![image-20210808225924093](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210808225924.png)
 
 **Dubbo与 Nacos 协同作业：开发 Consumer 订单服务**
 
@@ -297,11 +297,11 @@ public class OrderController {
 
 业务逻辑如下图所示：
 
-![image-20210808230506545](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808230506.png)
+![image-20210808230506545](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210808230506.png)
 
 第五步，启动微服务，验证 Nacos 注册信息。
 
-![image-20210808230529484](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210808230529.png)
+![image-20210808230529484](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210808230529.png)
 
 此时 Consumer 已在服务列表中出现，说明消费者已注册成功。
 
@@ -338,11 +338,11 @@ Spring Cloud Gateway 是 Spring 自己开发的新一代 API 网关产品。它�
 
 假设“service-a”微服务提供了三个 RESTful 接口。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224559.png" alt="image-20210809224559049" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210809224559.png" alt="image-20210809224559049" style="zoom:50%;" />
 
 假设 “service-b” 微服务提供了三个 RESTful 接口。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809224624.png" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210809224624.png" style="zoom:50%;" />
 
 如何通过部署 Spring Cloud Gateway 实现 API 路由功能来屏蔽后端细节呢？
 
@@ -383,7 +383,7 @@ http://192.168.31.103:80/service-a/list
 
 访问后 Gateway 按下图流程进行请求路由转发。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809223117.png" alt="image-20210809223117733" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210809223117.png" alt="image-20210809223117733" style="zoom:67%;" />
 
 **谓词（Predicate）与过滤器（Filter）**
 
@@ -475,7 +475,7 @@ filters:
 
 下图是 Spring Cloud Gateway 的执行流程。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210809223635.png" alt="img" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210809223635.png" alt="img" style="zoom: 67%;" />
 
 在整个处理过程中谓词（Predicate）与过滤器（Filter）起到了重要作用，谓词决定了路径的匹配规则，让 Gateway 确定应用哪个微服务，而 Filter 则是对请求或响应作出实质的前置、后置处理。
 
@@ -554,7 +554,7 @@ public class ElapsedFilter implements GlobalFilter, Ordered {
 
 为什么微服务会产生雪崩效应？
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810231240.png" alt="image-20210810231240612" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810231240.png" alt="image-20210810231240612" style="zoom:50%;" />
 
 假如服务 I 因为优化问题，导致需要 20 秒才能返回响应，这就必然会导致 20 秒内该请求线程会一直处于阻塞状态。
 
@@ -569,7 +569,7 @@ public class ElapsedFilter implements GlobalFilter, Ordered {
 
 Sentinel 以流量为切入点，从流量控制、熔断降级、系统负载保护等多个维度保护服务的稳定性。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810231651.png" alt="image-20210810231651809" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810231651.png" alt="image-20210810231651809" style="zoom:67%;" />
 
 Sentinel 分为两个部分：Sentinel Dashboard和Sentinel 客户端。
 
@@ -589,7 +589,7 @@ java -jar -Dserver.port=9100 sentinel-dashboard-1.8.0.jar
 
 输入 sentinel/sentinel，便可进入 Dashboard。
 
-![image-20210810232105397](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232105.png)
+![image-20210810232105397](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810232105.png)
 
 **微服务内置 Sentinel 客户端**
 
@@ -623,7 +623,7 @@ spring:
 
 在 Sentinel Dashboard 左侧看到 sentinel-sample 服务出现，则代表 Sentinel 客户端与 Dashboard 已经完成通信。
 
-![image-20210810232335630](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232335.png)
+![image-20210810232335630](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810232335.png)
 
 如何配置限流规则？
 
@@ -645,15 +645,15 @@ public class SentinelSampleController {
 
 在左侧找到簇点链路，右侧定位到 /test_flow_rule，点击后面的“流控”按钮。
 
-![image-20210810232618999](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232619.png)
+![image-20210810232618999](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810232619.png)
 
 为 /test_flow_rule 接口配置每秒钟只允许 1QPS 访问。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232706.png" alt="image-20210810232706581" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810232706.png" alt="image-20210810232706581" style="zoom: 50%;" />
 
 此时针对 /test_flow_rule 接口的流控规则已生效，可以在“流控规则”面板看到。
 
-![image-20210810232739728](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232739.png)
+![image-20210810232739728](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810232739.png)
 
 - 第三步，验证流控效果。
 
@@ -661,7 +661,7 @@ public class SentinelSampleController {
 
 同一秒内再次刷新便会出现 “Blocked by Sentinel (flow limiting)”，代表服务已被限流降级。
 
-![image-20210810232823597](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210810232823.png)
+![image-20210810232823597](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810232823.png)
 
 # 11 | 限流与熔断：Sentinel 在项目中的最佳实践
 
@@ -679,7 +679,7 @@ Sentinel 的执行流程分为三个阶段：
 
 > 这里有个重要细节：Sentinel Core为了能够持续接收到来自 Dashboard 的数据，会在微服务实例设备上监听 8719 端口，在心跳包上报时也是上报这个 8719 端口，而非微服务本身的 80 端口。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811225452.png" alt="image-20210811225452372" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811225452.png" alt="image-20210811225452372" style="zoom:50%;" />
 
 在 Sentinel Dashboard 接收到心跳包后，来自 Sentinel Core的AppName、IP、端口信息会被封装为 MachineInfo 对象放入 ConcurrentHashMap 保存在 JVM的内存中，以备后续使用。
 
@@ -687,7 +687,7 @@ Sentinel 的执行流程分为三个阶段：
 
 如果在 Dashboard 页面中设置了新的保护规则，会（第一）先从当前的 MachineInfo 中提取符合要求的微服务实例信息，（第二）之后通过 Dashboard 内置的 transport 模块将新规则打包推送到微服务实例的 Sentinel Core，（第三）Sentinel Core 收到新规则在微服务应用中对本地规则进行更新，这些新规则会保存在微服务实例的 JVM 内存中。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811230108.png" alt="image-20210811230108150" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811230108.png" alt="image-20210811230108150" style="zoom:50%;" />
 
 第三步，处理请求。
 
@@ -695,7 +695,7 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
 在对于每一个处理请求的节点被称为 Slot（槽），通过多个槽的连接形成处理链，在请求的流转过程中，如果有任何一个 Slot 验证未通过，都会产生 BlockException，请求处理链便会中断，并返回“Blocked by sentinel" 异常信息。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811230332.png" alt="img" style="zoom:67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811230332.png" alt="img" style="zoom:67%;" />
 
 前 3 个 Slot为前置处理，用于收集、统计、分析必要的数据；后 4 个为规则校验 Slot，从 Dashboard 推送的新规则保存在“规则池”中，然后对应 Slot 进行读取并校验当前请求是否允许放行，允许放行则送入下一个 Slot 直到最终被 RestController 进行业务处理，不允许放行则直接抛出 BlockException 返回响应。
 
@@ -705,7 +705,7 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
 假设某应用限流控制 1 分钟最多允许 600 次访问。采用滑动窗口算法是将每 1 分钟拆分为 6（变量）个等份时间段，每个时间段为 10 秒，6 个时间段为 1 组在下图用红色边框区域标出，而这个红色边框区域就是滑动窗口。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811231230.png" alt="image-20210811231230786" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811231230.png" alt="image-20210811231230786" style="zoom:50%;" />
 
 每当产生 1 个访问则在对应时间段的计数器自增加 1，当滑动窗口内所有时间段的计数器总和超过 600，后面新的访问将被限流直接拒绝。同时每过 10 秒，滑动窗口向右移动，前面的过期时间段计数器将被作废。
 
@@ -713,13 +713,13 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
 第一，在 Sentinel Dashboard 中“簇点链路”,找到需要限流的 URI，点击“+流控”进入流控设置。
 
-![image-20210811231550033](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811231550.png)
+![image-20210811231550033](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811231550.png)
 
 > 小提示，sentinel-dashboard 基于懒加载模式，如果在簇点链路没有找到对应的 URI，需要先访问下这个功能，对应的 URI 便会出现。
 
 第二，点击后，弹出下框：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811231704.png" alt="image-20210811231704413" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811231704.png" alt="image-20210811231704413" style="zoom:50%;" />
 
 - 资源名：要流控的 URI，在 Sentinel 中 URI 被称为“资源”；
 - 针对来源：默认 default 代表所有来源，可以针对某个微服务或者调用者单独设置；
@@ -728,7 +728,7 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
 第三，点击对话框中的“高级选项”，就会出现更为详细的设置项。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811232050.png" alt="image-20210811232050554" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811232050.png" alt="image-20210811232050554" style="zoom:50%;" />
 
 流控模式是指采用什么方式进行流量控制。Sentinel支持三种模式：直接、关联、链路。
 
@@ -738,17 +738,17 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
   当 List 接口关联的 update 接口 QPS 超过 1 时，再次访问List 接口便会响应“Blocked by Sentinel”。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811232422.png" alt="image-20210811232422736" style="zoom:50%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811232422.png" alt="image-20210811232422736" style="zoom:50%;" />
 
 - 链路模式：
 
   以下图为例，在某个微服务中 List 接口，会被 Check 接口调用。在另一个业务，List 接口也会被 Scan 接口调用。
 
-  <img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811224358.png" alt="image-20210811224358399" style="zoom: 33%;" />
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811224358.png" alt="image-20210811224358399" style="zoom: 33%;" />
 
   如果按下图配置，将入口资源设为“/check”，则只会针对 check 接口的调用链路生效。
 
-  ![image-20210811232921202](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811232921.png)
+  ![image-20210811232921202](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811232921.png)
 
   当访问 check 接口的 QPS 超过 1 时，List 接口就会被限流。而另一条链路从 scan 接口到List 接口的链路则不会受到任何影响。
 
@@ -760,7 +760,7 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
   如下图所示，List 接口平时单机阈值 QPS 处于低水位：默认为 1000/3 (冷加载因子)≈333，当瞬时大流量进来，10 秒钟内将 QPS 阈值逐渐拉升至 1000，为系统留出缓冲时间，预防突发性系统崩溃。
 
-  ![image-20210811233406680](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811233406.png)
+  ![image-20210811233406680](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811233406.png)
 
 - 排队等待：排队等待是采用匀速放行的方式对请求进行处理。如下所示，假设现在有100个请求瞬间进入，那么会出现以下几种情况：
 
@@ -768,7 +768,7 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
   单机 QPS 阈值=4，代表 250 毫秒匀速放行 1 个请求，其他请求队列等待，共需 25 秒处理完毕；
 
-  ![image-20210811233847710](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811233847.png)
+  ![image-20210811233847710](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811233847.png)
 
   如果某一个请求在队列中处于等待状态超过 2000 毫秒，则直接抛出 BlockException。
 
@@ -778,27 +778,27 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
 下图清晰的说明了 Sentinel的熔断过程：
 
-![image-20210811224812688](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811224812.png)
+![image-20210811224812688](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811224812.png)
 
 Sentinel Dashboard 可以设置三种不同的熔断模式：慢调用比例、异常比例、异常数。
 
 - 慢调用比例是指当接口在 1 秒内“慢处理”数量超过一定比例，则触发熔断。
 
-  ![image-20210811234457180](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234457.png)
+  ![image-20210811234457180](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234457.png)
 
-  ![image-20210811234712010](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234712.png)
+  ![image-20210811234712010](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234712.png)
 
 - 异常比例是指 1 秒内按接口调用产生异常的比例（异常调用数/总数量）触发熔断。
 
-  ![image-20210811234529852](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234529.png)
+  ![image-20210811234529852](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234529.png)
 
-  ![image-20210811234738056](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234738.png)
+  ![image-20210811234738056](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234738.png)
 
 - 异常数是指在 1 分钟内异常的数量超过阈值则触发熔断。
 
-  ![image-20210811234809488](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234809.png)
+  ![image-20210811234809488](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234809.png)
 
-  ![image-20210811234826401](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210811234826.png)
+  ![image-20210811234826401](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234826.png)
 
 # 12 | 配置中心：基于 Nacos 集中管理应用配置
 
@@ -806,7 +806,7 @@ Sentinel Dashboard 可以设置三种不同的熔断模式：慢调用比例、�
 
 当引入配置中心后，微服务的架构会产生如下变化。
 
-![image-20210812223749823](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210812223749.png)
+![image-20210812223749823](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210812223749.png)
 
 **微服务接入 Nacos 配置中心**
 
@@ -851,9 +851,9 @@ logging: #开启debug日志，仅为学习时使用
 
 第三步，打开 Nacos 配置中心页面，点击右上角“+”号新建配置。
 
-![image-20210812224424868](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210812224424.png)
+![image-20210812224424868](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210812224424.png)
 
-![image-20210812224508963](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210812224509.png)
+![image-20210812224508963](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210812224509.png)
 
 - Data ID：配置的唯一标识，格式固定为：{微服务id}-{环境名}.yml，例如 order-service-dev.yml。
 - Group：指定配置文件的分组，这里设置默认分组 DEFAULT_GROUP 即可。
@@ -866,7 +866,7 @@ logging: #开启debug日志，仅为学习时使用
 
 Nacos 采用的是一种长轮询机制以支持配置的热加载。当客户端发起 Pull 请求后，服务端先检查配置是否发生了变更，如果有变更，则立即返回最新的配置；如果没有，则设置一个定时任务，延迟 29.5s 执行，并且把当前的客户端长轮询连接加入 allSubs 队列。如图所示：
 
-![image-20210812230219145](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210812230219.png)
+![image-20210812230219145](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210812230219.png)
 
 这时候有两种方式触发该连接结果的返回：
 

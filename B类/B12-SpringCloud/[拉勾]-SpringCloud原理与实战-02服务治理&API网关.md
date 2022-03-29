@@ -10,7 +10,7 @@
 
 首当其冲面临的一大挑战就是服务实例的数量较多。而且，由于自动扩容、服务的失败和更新等因素，服务实例的运行时状态也经常变化，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210302221958.png" alt="image-20210302221958514" style="zoom: 33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210302221958.png" alt="image-20210302221958514" style="zoom: 33%;" />
 
 对于服务提供者而言，需要一个自动化机制将自己的服务实例注册到服务注册中心；对于服务消费者而言，需要它能自动发现这些服务实例并进行远程调用。
 
@@ -22,7 +22,7 @@
 
 注册中心的基本模型参考下图：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210302222626.png" alt="image-20210302222626694" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210302222626.png" alt="image-20210302222626694" style="zoom: 50%;" />
 
 为了提高服务路由的效率和容错性，服务消费者可以配备缓存机制以加速服务路由。
 
@@ -32,11 +32,11 @@
 
 从架构设计上讲，状态变更管理可以采用发布-订阅模式。基于这种思想，就诞生了一种服务监听机制。通常采用监听器以及回调机制，如下图所示。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210302223902.png" alt="image-20210302223902680" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210302223902.png" alt="image-20210302223902680" style="zoom:50%;" />
 
 另外一种确保状态信息同步的方式是采用轮询机制。即服务的消费者定期调用注册中心提供的服务获取接口获取最新的服务列表并更新本地缓存，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210302224045.png" alt="image-20210302224045406" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210302224045.png" alt="image-20210302224045406" style="zoom:50%;" />
 
 轮询机制实现上就是一个定时程序，需要考虑定时的频率以确保数据同步的时效性。
 
@@ -48,7 +48,7 @@
 
 ZooKeeper本质上是一个树形结构，可以在树上创建临时节点，并对节点添加监听器。临时节点的客户端关注该节点的状态，一旦发生变化则通过监听器回传消息到客户端，然后客户端的回调函数就会得到调用。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210302224434.png" alt="image-20210302224434432" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210302224434.png" alt="image-20210302224434432" style="zoom:50%;" />
 
 对于 Netflix Eureka 而言，采用的就是典型的“轮询机制”来实现服务实例状态的同步，默认的同步频率是 30 秒。
 
@@ -56,17 +56,17 @@ ZooKeeper本质上是一个树形结构，可以在树上创建临时节点，�
 
 关于服务发现环节，业界也有两种不同的实现方式，一种是客户端发现机制，一种则是服务器端发现机制。在微服务架构中，主流的是采用客户端发现机制，即在每个服务消费者内部保存着一个服务列表：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210302224817.png" alt="image-20210302224817683" style="zoom: 33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210302224817.png" alt="image-20210302224817683" style="zoom: 33%;" />
 
 当服务消费者真正对某一个服务提供者发起远程调用时，这时候就需要集成负载均衡机制。这时候的负载均衡也是一种客户端行为，被称为客户端负载均衡：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210308151740.png" alt="image-20210302225006561" style="zoom:33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210308151740.png" alt="image-20210302225006561" style="zoom:33%;" />
 
 **Spring Cloud中的服务治理解决方案**
 
 Spring Cloud 整体服务治理方案如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210302225254.png" alt="image-20210302225254781" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210302225254.png" alt="image-20210302225254781" style="zoom: 50%;" />
 
 Spring Cloud Netflix 中也集成了Netflix Ribbon 组件来实现客户端负载均衡。
 
@@ -168,7 +168,7 @@ eureka.instance.hostname 配置项中的 eureka1 和 eureka2 是无法访问的�
 
 我们在对 Eureka 的内部结构做进一步展开，可以得到如下所示的注册中心细化模型图。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210303224426.png" alt="image-20210303224426138" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210303224426.png" alt="image-20210303224426138" style="zoom: 50%;" />
 
 服务注册（Register）：各个微服务通过向 Eureka 服务器提供 IP 地址、端点等各项与服务发现相关的基本信息完成服务注册操作。
 
@@ -182,7 +182,7 @@ eureka.instance.hostname 配置项中的 eureka1 和 eureka2 是无法访问的�
 
 对于一个注册中心而言，我们首先需要关注它的数据存储方法。InstanceRegistry 接口及其实现类承接了这部分职能。类层结构如下所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210303225111.png" alt="image-20210303225111370" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210303225111.png" alt="image-20210303225111370" style="zoom:50%;" />
 
 在 AbstractInstanceRegistry 中发现了 Eureka 用于保存注册信息的数据结构，如下所示：
 
@@ -194,7 +194,7 @@ private final ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>> regist
 
 Eureka 采用 Lease（租约）这个词来表示对服务注册信息的抽象，Lease 对象保存了服务实例信息以及一些实例服务注册相关的时间，如注册时间 registrationTimestamp、最新的续约时间 lastUpdateTimestamp 等。如果用图形化的表达方式来展示这种数据结构，可以参考下图：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210303225905.png" alt="image-20210303225905311" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210303225905.png" alt="image-20210303225905311" style="zoom:50%;" />
 
 3. Eureka 服务缓存源码解析
 
@@ -322,13 +322,13 @@ http://localhost:8761/eureka/apps/userservice
 
 在 Netflix Eureka 中，专门提供了一个客户端包，并抽象了一个客户端接口 EurekaClient。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210304222710.png" alt="image-20210304222710360" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210304222710.png" alt="image-20210304222710360" style="zoom: 67%;" />
 
 # 07 | 负载均衡：如何使用 Ribbon 实现客户端负载均衡？
 
 Spring Cloud 中同样存在着与 Eureka 配套的负载均衡器，这就是 Ribbon 组件。Eureka 和 Ribbon 的交互方式如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210304223949.png" alt="image-20210304223949098" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210304223949.png" alt="image-20210304223949098" style="zoom: 50%;" />
 
 **理解 Ribbon 与 DiscoveryClient**
 
@@ -615,7 +615,7 @@ public interface ILoadBalancer {
 
 ILoadBalancer 接口的类层结构如下所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210305224753.png" alt="image-20210305224753270" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210305224753.png" alt="image-20210305224753270" style="zoom:50%;" />
 
 我们先来梳理 BaseLoadBalancer 包含的作为一个负载均衡器应该具备的一些核心组件，比较重要的有以下三个。
 
@@ -649,7 +649,7 @@ LoadBalancerStats 类记录负载均衡的实时运行信息，用来作为负�
 
 IRule 接口的类层结构如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210305225852.png" alt="image-20210305225852543" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210305225852.png" alt="image-20210305225852543" style="zoom:50%;" />
 
 静态的几种策略相对都比较简单，而像 RetryRule 实际上不算是严格意义上的负载均衡策略，所以这里重点关注 Ribbon 所实现的几种不同的动态策略。
 
@@ -671,7 +671,7 @@ Spring Cloud Netflix Ribbon 专门针对 Netflix Ribbon 提供了一个独立的
 
 Spring Cloud Netflix Ribbon 相当于 Netflix Ribbon 的客户端。而对于 Spring Cloud Netflix Ribbon 而言，我们的应用服务相当于它的客户端。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210305230331.png" alt="image-20210305230331728" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210305230331.png" alt="image-20210305230331728" style="zoom:50%;" />
 
 这次，我们打算从应用服务层的 @LoadBalanced 注解入手，切入 Spring Cloud Netflix Ribbon，然后再从 Spring Cloud Netflix Ribbon 串联到 Netflix Ribbon，从而形成整个负载均衡闭环管理。
 
@@ -787,7 +787,7 @@ protected Server getServer(ILoadBalancer loadBalancer) {
 
 在服务调用过程中添加了一个网关层，所有的客户端都通过这个统一的网关接入微服务。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210306171411.png" alt="image-20210306171357483" style="zoom: 50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210306171411.png" alt="image-20210306171357483" style="zoom: 50%;" />
 
 这样一些非业务功能性需求就可以在网关层进行集中处理。包括请求监控、安全管理、路由规则、日志记录、访问控制、服务适配等功能：
 
@@ -1060,7 +1060,7 @@ public static RequestContext getCurrentContext() {
 
 其中 PRE 过滤器在请求到达目标服务器之前调用，ROUTING 过滤器把请求发送给目标服务，POST 过滤器在请求从目标服务返回之后执行，而 ERROR 过滤器则在发生错误时执行。同时，这四种过滤器有一定的执行顺序，如下所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210307232307.png" alt="image-20210307232307246" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210307232307.png" alt="image-20210307232307246" style="zoom:50%;" />
 
 在 Spring Cloud 中所有请求都是 HTTP 请求，Zuul 作为一个服务网关同样也需要完成对 HTTP 请求的响应。ZuulServlet 是 Zuul 中对 HttpServlet 接口的一个实现类。
 
@@ -1129,7 +1129,7 @@ public class GatewayApplication {
 
 Spring Cloud Gateway 中的核心概念有两个，一个是过滤器（Filter），一个是谓词（Predicate）。Spring Cloud Gateway 的整体架构图如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210308233201.png" alt="image-20210308233200967" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210308233201.png" alt="image-20210308233200967" style="zoom: 67%;" />
 
 Spring Cloud Gateway 中的过滤器和 Zuul 中的过滤器是同一个概念。它们都可以用于在处理 HTTP 请求之前或之后修改请求本身，及对应响应结果。区别在于两者的类型和实现方式不同。
 

@@ -20,7 +20,7 @@
 - Transaction Manager。TP Monitor 中的核心模块，直接负责多 RM 之间事务处理的协调工作，并提供事务界定（Transaction Demarcation）、事务上下文传播（Transaction Context Propagation）等功能接口；
 - Application。事务边界的触发点。
 
-![](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/全局事务示意图.jpg)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/全局事务示意图.jpg)
 
 # 第18章 群雄逐鹿下的 Java 事务管理
 

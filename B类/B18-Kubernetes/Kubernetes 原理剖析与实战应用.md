@@ -51,7 +51,7 @@ Kubernetes 的前世今生要从“云计算”的兴起开始讲起。
 - PaaS 层提供软件部署平台（runtime），抽象掉了硬件和操作系统，可以无缝地扩展（scaling）。开发者只需要关注自己的业务逻辑，不需要关注底层。
 - SaaS 层直接为开发者提供软件服务，将软件的开发、管理、部署等全部都交给第三方，用户不需要再关心技术问题，可以拿来即用。
 
-![Drawing 0.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211222222908.png)
+![Drawing 0.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211222222908.png)
 
 对应到我们生活中，可以想象自己要去一个地方旅行，那么首先就需要解决住的问题。
 
@@ -69,7 +69,7 @@ Docker 镜像解决了环境打包的问题，它直接打包了应用运行所�
 
 有了 Docker，开发人员可以轻松地将其生产环境复制为可立即运行的容器应用程序，让工作更有效率。我们来看看CNCF （Cloud Native Computing Foundation，云计算基金会）在2019年做的调研报告。
 
-![Drawing 6.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211222225533.png)
+![Drawing 6.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211222225533.png)
 
 可以预见的是，未来企业应用容器化会越来越常见，使用容器进行交付、生产、部署是大势所趋，也是企业进行技术改造，业务快速升级的利器。
 
@@ -79,13 +79,13 @@ Docker 镜像解决了环境打包的问题，它直接打包了应用运行所�
 
 我们来看看一个容器编排引擎到底需要哪些能力才能解决上述这些棘手的问题。
 
-![Drawing 7.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211222223441.png)
+![Drawing 7.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211222223441.png)
 
 同时满足上面所述的八大能力的容器调度平台，其实非 Kubernetes 莫属了。以前绝大多数人都是采用自建的方式来管理 Kubernetes 集群的，现在已经逐渐采用公有云的 Kubernetes 服务。可见，Kubernetes 越来越成熟，也越来越受到市场的青睐。
 
 依据 Google Trends 收集的数据，自 Kubernetes出现以后，便呈黑马态势一路开挂，迅速并牢牢占据头把交椅位置，最终成为容器调度的事实标准。
 
-![Drawing 10.png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211222225940.png)
+![Drawing 10.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211222225940.png)
 
 **Kubernetes 成为事实标准**
 
@@ -107,7 +107,7 @@ Kubernetes 的架构设计参考了 Borg 的架构设计，我们先来看看 Bo
 
 Borg 用Cell 来定义一组机器资源。Cluster 即集群，一个数据中心可以同时运行一个或者多个集群，每个集群又可以有多个 Cell。
 
-![image (3).png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211224225320.png)
+![image (3).png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211224225320.png)
 
 Borg 主要模块包括 BorgMaster、Borglet 和调度器。
 
@@ -117,7 +117,7 @@ Borg 主要模块包括 BorgMaster、Borglet 和调度器。
 
 Kubernetes 借鉴了 Borg 的整体架构思想，主要由 Master 和 Node 共同组成。
 
-![image (4).png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211224225510.png)
+![image (4).png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211224225510.png)
 
 在 Kubernetes 集群中也采用了分布式存储系统 Etcd，用于保存集群中的所有对象以及状态信息。
 
@@ -156,7 +156,7 @@ Kubernetes 中所有的状态都是采用上报的方式实现的。APIServer �
 
 
 
-![image (4).png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211224225510.png)
+![image (4).png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211224225510.png)
 
 **常见的集群搭建方法**
 
@@ -174,7 +174,7 @@ Kubernetes 中所有的状态都是采用上报的方式实现的。APIServer �
 
 
 
-![image (19).png](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20211225151648.png)
+![image (19).png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211225151648.png)
 
 **Pod 背后的设计理念**
 

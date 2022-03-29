@@ -8,13 +8,13 @@ REST（Representational State Transfer，表述性状态转移）这种架构风
 
 下表展示了 RESTful 风格的一些具体示例：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210410220238.png" alt="image-20210410220238139"  />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210410220238.png" alt="image-20210410220238139"  />
 
 对于 RESTful 风格设计 HTTP 端点，业界也存在一些约定。以 Account 这个领域实体为例，如果我们把它视为一种资源，那么 HTTP 端点的根节点命名上通常采用复数形式，即“/accounts”。
 
 在设计 RESTful API 时，针对常见的 CRUD 操作，下图展示了 RESTful API 与非 RESTful API 的一些区别。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210410221357.png" alt="image-20210410221357316" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210410221357.png" alt="image-20210410221357316" style="zoom:50%;" />
 
 **使用基础注解**
 
@@ -205,7 +205,7 @@ restTemplate.setErrorHandler(responseErrorHandler);
 
 RestTemplate 的类层结构，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210412233815.png" alt="image-20210412233815363" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210412233815.png" alt="image-20210412233815363" style="zoom:50%;" />
 
 整个类层结构清晰地分成两条支线，左边支线用于完成与 HTTP 请求相关的实现机制，而右边支线提供了基于 RESTful 风格的操作入口，并使用了面向对象中的接口和抽象类完成这两部分功能的聚合。
 
@@ -423,7 +423,7 @@ spring:     
 
 JMS 规范提供了一批核心接口供开发人员使用，而这些接口构成了客户端的 API 体系，如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210413232148.png" alt="image-20210413232148719" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210413232148.png" alt="image-20210413232148719" style="zoom:50%;" />
 
 JMS 规范存在 ActiveMQ、WMQ、TIBCO 等多种第三方实现方式，其中较主流的是 ActiveMQ。
 
@@ -523,7 +523,7 @@ AMQP（Advanced Message Queuing Protocol）是一个提供统一消息服务的�
 
 消息中包含一个路由键（Routing Key），它由消息发送者产生，并提供给 Exchange 路由这条消息的标准。而 Exchange 会检查 Routing Key，并结合路由算法决定将消息路由发送到哪个 Queue 中。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20210415225317.png" alt="image-20210415225316968" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210415225317.png" alt="image-20210415225316968" style="zoom:50%;" />
 
 上图中，不同的路由算法存在不同的 Exchange 类型，AMQP 规范中指定了直接式交换器（Direct Exchange）、广播式交换器（Fanout Exchange）、主题式交换器（Topic Exchange）和消息头式交换器（Header Exchange）。
 

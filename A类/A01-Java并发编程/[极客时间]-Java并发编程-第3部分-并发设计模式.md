@@ -240,11 +240,11 @@ CopyOnWriteArrayList 和 CopyOnWriteArraySet 这两个 Copy-on-Write 容器在�
 
 我曾经写过一个 RPC 框架，有点类似 Dubbo，服务提供方是多实例分布式部署的，所以服务的客户端在调用 RPC 的时候，会选定一个服务实例来调用，这个选定的过程本质上就是在做负载均衡，而做负载均衡的前提是客户端要有全部的路由信息。例如在下图中，A 服务的提供方有 3 个实例，分别是 192.168.1.1、192.168.1.2 和 192.168.1.3，客户端在调用目标服务 A 前，首先需要做的是负载均衡，也就是从这 3 个实例中选出 1 个来，然后再通过 RPC 把请求发送选中的目标实例。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/RPC 路由关系图.png" alt="RPC 路由关系图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/RPC 路由关系图.png" alt="RPC 路由关系图" style="zoom:80%;" />
 
 RPC 框架的一个核心任务就是维护服务的路由关系，我们可以把服务的路由关系简化成下图所示的路由表。当服务提供方上线或者下线的时候，就需要更新客户端的这张路由表。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/rpc框架维护的路由表.png" alt="rpc框架维护的路由表" style="zoom: 67%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/rpc框架维护的路由表.png" alt="rpc框架维护的路由表" style="zoom: 67%;" />
 
 我们首先来分析一下如何用程序来实现。每次 RPC 调用都需要通过负载均衡器来计算目标服务的 IP 和端口号，而负载均衡器需要通过路由表获取接口的所有路由信息，也就是说，每次 RPC 调用都需要访问路由表，所以访问路由表这个操作的性能要求是很高的。不过路由表对数据的一致性要求并不高，一个服务提供方从上线到反馈到客户端的路由表里，即便有 5 秒钟，很多时候也都是能接受的（5 秒钟，对于以纳秒作为时钟周期的 CPU 来说，那何止是一万年，所以路由表对一致性的要求并不高）。而且路由表是典型的读多写少类问题，写操作的量相比于读操作，可谓是沧海一粟，少得可怜。
 
@@ -371,7 +371,7 @@ DateFormat df = SafeDateFormat.get()；
 
 在解释 ThreadLocal 的工作原理之前， 你先自己想想：如果让你来实现 ThreadLocal 的功能，你会怎么设计呢？ThreadLocal 的目标是让不同的线程有不同的变量 V，那最直接的方法就是创建一个 Map，它的 Key 是线程，Value 是每个线程拥有的变量 V，ThreadLocal 内部持有这样的一个 Map 就可以了。你可以参考下面的示意图和示例代码来理解。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/ThreadLocal 持有 Map 的示意图.png" alt="ThreadLocal 持有 Map 的示意图" style="zoom: 80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/ThreadLocal 持有 Map 的示意图.png" alt="ThreadLocal 持有 Map 的示意图" style="zoom: 80%;" />
 
 ```java
 class MyThreadLocal<T> {
@@ -389,7 +389,7 @@ class MyThreadLocal<T> {
 
 那 Java 的 ThreadLocal 是这么实现的吗？这一次我们的设计思路和 Java 的实现差异很大。Java 的实现里面也有一个 Map，叫做 ThreadLocalMap，不过持有 ThreadLocalMap 的不是 ThreadLocal，而是 Thread。Thread 这个类内部有一个私有属性 threadLocals，其类型就是 ThreadLocalMap，ThreadLocalMap 的 Key 是 ThreadLocal。你可以结合下面的示意图和精简之后的 Java 实现代码来理解。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/Thread 持有 ThreadLocalMap 的示意图.png" alt="Thread 持有 ThreadLocalMap 的示意图" style="zoom: 80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/Thread 持有 ThreadLocalMap 的示意图.png" alt="Thread 持有 ThreadLocalMap 的示意图" style="zoom: 80%;" />
 
 ```java
 class Thread {
@@ -470,7 +470,7 @@ es.execute(() -> {
 
 前不久，同事小灰工作中遇到一个问题，他开发了一个 Web 项目：Web 版的文件浏览器，通过它用户可以在浏览器里查看服务器上的目录和文件。这个项目依赖运维部门提供的文件浏览服务，而这个文件浏览服务只支持消息队列（MQ）方式接入。消息队列在互联网大厂中用的非常多，主要用作流量削峰和系统解耦。在这种接入方式中，发送消息和消费结果这两个操作之间是异步的，你可以参考下面的示意图来理解。
 
-![消息队列（MQ）示意图](https://gitee.com/yanglu_u/ImgRepository/raw/master/images/消息队列（MQ）示意图.png)
+![消息队列（MQ）示意图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/消息队列（MQ）示意图.png)
 
 在小灰的这个 Web 项目中，用户通过浏览器发过来一个请求，会被转换成一个异步消息发送给 MQ，等 MQ 返回结果后，再将这个结果返回至浏览器。小灰同学的问题是：给 MQ 发送消息的线程是处理 Web 请求的线程 T1，但消费 MQ 结果的线程并不是线程 T1，那线程 T1 如何等待 MQ 的返回结果呢？为了便于你理解这个场景，我将其代码化了，示例代码如下。
 
@@ -512,7 +512,7 @@ Respond handleWebReq() {
 
 下图就是 Guarded Suspension 模式的结构图，非常简单，一个对象 GuardedObject，内部有一个成员变量——受保护的对象，以及两个成员方法——`get(Predicate<T> p)`和`onChanged(T obj)`方法。其中，对象 GuardedObject 就是我们前面提到的大堂经理，受保护对象就是餐厅里面的包间；受保护对象的 get() 方法对应的是我们的就餐，就餐的前提条件是包间已经收拾好了，参数 p 就是用来描述这个前提条件的；受保护对象的 onChanged() 方法对应的是服务员把包间收拾好了，通过 onChanged() 方法可以 fire 一个事件，而这个事件往往能改变前提条件 p 的计算结果。下图中，左侧的绿色线程就是需要就餐的顾客，而右侧的蓝色线程就是收拾包间的服务员。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/消息队列（MQ）示意图.png" alt="Guarded Suspension 模式结构图" style="zoom:80%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/消息队列（MQ）示意图.png" alt="Guarded Suspension 模式结构图" style="zoom:80%;" />
 
 GuardedObject 的内部实现非常简单，是管程的一个经典用法，你可以参考下面的示例代码，核心是：get() 方法通过条件变量的 await() 方法实现等待，onChanged() 方法通过条件变量的 signalAll() 方法实现唤醒功能。逻辑还是很简单的，所以这里就不再详细介绍了。
 

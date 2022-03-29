@@ -28,7 +28,7 @@
 
 连接发送4次异步请求并且拿到4个 Future，如下图所示，我们的吞吐量可能提升4倍！
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085950.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085950.jpg" style="zoom:25%;" />
 
 那 RPC 框架的 Future 方式异步又该如何实现呢？
 
@@ -38,7 +38,7 @@
 
 所谓的同步调用，不过是 RPC 框架在调用端的处理逻辑中主动执行了这个 Future 的 get 方法，让动态代理等待返回值；而异步调用则是 RPC 框架没有主动执行这个 Future 的 get 方法，用户可以从请求上下文中得到这个 Future，自己决定什么时候执行这个 Future 的 get 方法。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120085958.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120085958.jpg" style="zoom:25%;" />
 
 **如何做到 RPC 调用全异步？**
 
@@ -104,7 +104,7 @@ CompletableFuture 是 Java8 原生支持的。整个调用过程会分为这样�
 
 哪类异常引起的问题（序列化问题或网络超时问题），是调用端还是服务端出现的异常，调用端与服务端的 IP 是什么，以及服务接口与服务分组都是什么等等。
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090005.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090005.jpg" style="zoom:25%;" />
 
 由此可见，一款优秀的 RPC 框架要对异常进行详细地封装，还要对各类异常进行分类，每类异常都要有明确的异常标识码，并整理成一份简明的文档。
 
@@ -114,7 +114,7 @@ CompletableFuture 是 Java8 原生支持的。整个调用过程会分为这样�
 
 Span 就是代表了整个链路中的一段链路，也就是说 Trace 是由多个 Span 组成的。在一个 Trace 下，每个 Span 也都有它的唯一标识 SpanId，而 Span 是存在父子关系的，Span2 的父 Span 就是 Span1。如下图所示：
 
-<img src="https://gitee.com/yanglu_u/ImgRepository/raw/master/images/20201120090011.jpg" style="zoom:25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120090011.jpg" style="zoom:25%;" />
 
 RPC 在整合分布式链路跟踪需要做的最核心的两件事就是埋点和传递。
 
