@@ -142,31 +142,19 @@ Kubernetes 内部有多种授权模块，比如 Node、ABAC、RBAC、Webhook。�
 
 准入控制可以帮助我们在 APIServer 真正处理对象前做一些校验以及修改的工作。
 
-# 19 | 资源限制：如何保障你的 Kubernetes 集群资源不会被打爆
-
-# 20 | 资源优化：Kubernetes 中有 GC（垃圾回收）吗？
-
-# 21 | 优先级调度：你必须掌握的 Pod 抢占式资源调度
-
-# 22 | 安全机制：Kubernetes 如何保障集群安全？
-
-# 23 | 最后的防线：怎样对 Kubernetes 集群进行灾备和恢复？
-
-# 底层核心原理及可扩展性
-
-# 24 | 调度引擎：Kubernetes 如何高效调度 Pod？
-
-# 25 | 稳定基石：带你剖析容器运行时以及 CRI 原理
-
-# 26 | 网络插件：Kubernetes 搞定网络原来可以如此简单？
-
 # 27 | K8s CRD：如何根据需求自定义你的 API？
 
-# 28 | 面向 K8s 编程：如何通过 Operator 扩展 Kubernetes API？
+随着使用的深入，你会发现 Kubernetes 中内置的对象定义，比如 Deployment、StatefulSet、Configmap，可能已经不能满足你的需求了。你很希望在 Kubernetes 定义一些自己的对象，一来可以通过 kube-apiserver 提供统一的访问入口，二来可以像其他内置对象一样，通过 kubectl 命令管理这些自定义的对象。
 
+Kubernetes 中提供了两种自定义对象的方式，一种是聚合 API，另一种是 CRD。
 
+**聚合 API**
 
+聚合 API（Aggregation API，AA）是自 Kubernetes v1.7 版本就引入的功能，主要目的是方便用户将自己定义的 API 注册到 kube-apiserver 中，并且可以像使用其他内置的 API 一样，通过 APIServer 的 URL 就可以访问和操作。
 
+官方文档在[这里](https://kubernetes.io/zh/docs/tasks/extend-kubernetes/setup-extension-api-server/)。
 
+**CRD**
 
+CRD（CustomResourceDefinitions）在 v1.7 刚引入进来的时候，其实是 ThirdPartyResources（TPR）的升级版本，而 TPR 在 v1.8 的版本被剔除了。CRD 目前使用非常广泛，各个周边项目都在使用它，比如 Ingress、Rancher。
 
