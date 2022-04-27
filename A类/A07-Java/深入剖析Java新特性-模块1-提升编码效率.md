@@ -30,5 +30,129 @@ Java 的有些新技术，甚至能催生一个新行业。比如 Java 代理的
 
   学完这一部分内容，你将能够编写出更健壮，更容易维护的代码，并且能够知道怎么高效地把旧系统升级到 Java 的新版本。这一部分的目标，就是帮助你把代码的维护成本降低 20% 或者更多。
 
+# 01 | JShell：怎么快速验证简单的小问题？
+
+JShell 这个特性，是在 JDK 9 正式发布的，是 Java 的脚本语言。
+
+**拖后腿的学习效率**
+
+完成 Java 语言的第一个小程序，要学习使用编辑器、使用编译器、使用运行环境。例如下面的这段代码，需要经过编辑、编译、运行、观察这四个步骤。
+
+```java
+class HowAreYou {
+    public static void main(String[] args) {
+        System.out.println("How are you?");
+    }
+}
+```
+
+我们再来看看 bash 脚本语言的处理。
+
+```shell
+bash $ echo Hello，World！
+Hello, world!
+bash $
+```
+
+显然，使用 bash 编写的“Hello, world!”要简单得多。
+
+**及时反馈的 JShell**
+
+JShell API 和工具提供了一种在 JShell 状态下交互式评估 Java 编程语言的声明、语句和表达式的方法。为了便于快速调查和编码，语句和表达式不需要出现在方法中，变量和方法也不需要出现在类中。
+
+- 启动 JShell
+
+```shell
+$ jshell
+| Welcome to JShell -- Version 17
+| For an introduction type: /help intro
+jshell>
+```
+
+- 退出 JShell
+
+```shell
+jshell> /exit
+| Goodbye
+```
+
+- 立即执行的语句
+
+```shell
+jshell> System.out.println("Hello, world!");
+Hello, world!
+jshell>
+```
+
+**可覆盖的声明**
+
+JShell 还有一个特别好用的功能。那就是，它支持变量的重复声明。
+
+```shell
+jshell> String greeting;
+greeting ==> null
+|  created variable greeting : String
+
+jshell> String language = "English";
+language ==> "English"
+|  created variable language : String
+
+jshell> greeting = switch (language) {
+  ...> case "English" -> "Hello";
+  ...> case "Spanish" -> "Hola";
+  ...> case "Chinese" -> "Nihao";
+  ...> default -> throw new RuntimeException("Unsupported language");
+  ...> };
+greeting ==> "Hello"
+|  assigned to greeting : String
+
+jshell> System.out.println(greeting);
+Hello
+
+jshell>
+```
+
+我们可以再次声明只带问候语的变量。
+
+```shell
+jshell> String greeting = "Hola";
+greeting ==> "Hola"
+|  modified variable greeting : String
+|    update overwrote variable greeting : String
+```
+
+或者，把这个变量声明成一个其他的类型，以便后续的代码使用。
+
+```shell
+jshell> Integer greeting;
+greeting ==> null
+|  replaced variable greeting : Integer
+|    update overwrote variable greeting : String
+```
+
+**独白的表达式**
+
+JShell 工具可以接受的输入包括 Java 语言的表达式、语句或者声明。
+
+```shell
+jshell> 1 + 1
+$1 ==> 2
+| created scratch variable $1 : int
+```
+
+有了独立的表达式，我们就可以直接评估表达式，而不再需要把它附着在一个语句上了。这简化了表达式的评估工作，使得我们可以更快地评估表达式。
+
+```shell
+jshell> "Hello, world" == "Hello, world"
+$2 ==> true
+| created scratch variable $2 : boolean
+
+jshell> "Hello, world" == new String("Hello, world")
+$3 ==> false
+| created scratch variable $3 : boolean
+```
+
+JShell 的设计并不是为了取代 IDE。JShell 在处理简单的小逻辑，验证简单的小问题时，比 IDE 更有效率。如果我们能够在有限的几行代码中，把要验证的问题表达清楚，JShell 就能够快速地给出计算的结果。
+
 
 
