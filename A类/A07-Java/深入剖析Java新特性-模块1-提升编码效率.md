@@ -154,5 +154,110 @@ $3 ==> false
 
 JShell 的设计并不是为了取代 IDE。JShell 在处理简单的小逻辑，验证简单的小问题时，比 IDE 更有效率。如果我们能够在有限的几行代码中，把要验证的问题表达清楚，JShell 就能够快速地给出计算的结果。
 
+# 02 | 文字块：怎么编写所见即所得的字符串？
+
+文字块这个特性，首先在 JDK 13 中以预览版的形式发布。在 JDK 14 中，改进的文字块再次以预览版的形式发布。最后，文字块在 JDK 15 正式发布。
+
+**所见即所得的文字块**
+
+```java
+String textBlock = """
+    <!DOCTYPE html>
+    <html>
+        <body>
+            <h1>"Hello World!"</h1>
+        </body>
+    </html>
+    """;
+System.out.println("Here is the text block:\n" + textBlock);
+```
+
+文字块由零个或多个内容字符组成，从开始分隔符开始，到结束分隔符结束。开始分隔符是由三个双引号字符 (""") ，后面跟着的零个或多个空格，以及行结束符组成的序列。结束分隔符是一个由三个双引号字符 (""") 组成的序列。
+
+需要注意的是，开始分隔符必须单独成行。三个双引号字符后面的空格和换行符都属于开始分隔符。所以，一个文字块至少有两行代码。即使是一个空字符，结束分隔符也不能和开始分隔符放在同一行代码里。
+
+```shell
+jshell> String s = """""";
+| Error:
+| illegal text block open delimiter sequence, missing line terminator
+| String s = """""";
+```
+
+**文字块的编译过程**
+
+上述代码打印结果如下：
+
+```
+Here is the text block:
+<!DOCTYPE html>
+<html>
+    <body>
+        <h1>"Hello World!"</h1>
+    </body>
+</html>
+```
+
+我们可以看到，为了代码整洁而使用的缩进空格并没有出现在打印的结果里。那文字块是怎么处理缩进空格的呢？
+
+首先，我们从整体上来理解一下文字块的编译期处理这种方式。
+
+```java
+package co.ivi.jus.text.modern;
+
+public class TextBlocks {
+    public static void main(String[] args) {
+        String stringBlock =
+                "<!DOCTYPE html>\n" +
+                "<html>\n" +
+                    " <body>\n" +
+                        " <h1>\"Hello World!\"</h1>\n" +
+                    " </body>\n" +
+                "</html>\n";
+        String textBlock = """
+                <!DOCTYPE html>
+                <html>
+                    <body>
+                        <h1>"Hello World!"</h1>
+                    </body>
+                </html>
+                """;
+        System.out.println(
+                "Does the text block equal to the regular string? " +
+                stringBlock.equals(textBlock));
+        System.out.println(
+                "Does the text block refer to the regular string? " +
+                (stringBlock == textBlock));
+    }
+}
+```
+
+使用传统方式声明的字符串和使用文字块声明的字符串，它们的内容是一样的，而且指向的是同一个对象。
+
+这就说明了，文字块是在编译期处理的，并且在编译期被转换成了常量字符串，然后就被当作常规的字符串了。所以，如果文字块代表的内容，和传统字符串代表的内容一样，那么这两个常量字符串变量就指向同一内存地址，代表同一个对象。
+
+# 03 | 档案类：怎么精简地表达不可变数据？
+
+档案类这个特性，首先在 JDK 14 中以预览版的形式发布。在 JDK 15 中，改进的档案类再次以预览版的形式发布。最后，档案类在 JDK 16 正式发布。
+
+那么，什么是档案类呢？官方的说法，Java 档案类是用来表示不可变数据的透明载体。这样的表述，有两个关键词，一个是不可变的数据，另一个是透明的载体。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
