@@ -241,21 +241,213 @@ public class TextBlocks {
 
 那么，什么是档案类呢？官方的说法，Java 档案类是用来表示不可变数据的透明载体。这样的表述，有两个关键词，一个是不可变的数据，另一个是透明的载体。
 
+**阅读案例**
 
+下面的这段代码是一个简单的圆形类的定义。这个抽象类的名字是 Circle。
 
+```java
+package co.ivi.jus.record.former;
 
+public final class Circle implements Shape {
+    private double radius;
+    public Circle(double radius) {
+        this.radius = radius;
+    }
+    @Override
+    public double getArea() {
+        return Math.PI * radius * radius;
+    }
+    public double getRadius() {
+        return radius;
+    }
+    public void setRadius(double radius) {
+        this.radius = radius;
+    }
+}
+```
 
+它有一个私有的变量 radius，用来表示圆的半径。有一个构造方法，用来生成圆形的实例。有一个设置半径的方法 setRadius，一个读取半径的方法 getRadius。还有一个重载的方法 getArea，用来计算圆形的面积。
 
+可是，这样的设计有哪些严重的缺陷呢？
 
+**案例分析**
 
+上面这个例子，最重要的问题，就是它的接口不是多线程安全的。如果在一个多线程的环境中，有些线程调用了 setRadius 方法，有些线程调用 getRadius 方法，这些调用的最终结果是难以预料的。这也就是我们常说的多线程安全问题。
 
+考虑多线程安全的问题，我们增加线程同步。
 
+```java
+package co.ivi.jus.record.former;
 
+public final class Circle implements Shape {
+    private double radius;
+    public Circle(double radius) {
+        this.radius = radius;
+    }
+    @Override
+    public synchronized double getArea() {
+        return Math.PI * radius * radius;
+    }
+    public synchronized double getRadius() {
+        return radius;
+    }
+    public synchronized void setRadius(double radius) {
+        this.radius = radius;
+    }
+}
+```
 
+可是，线程同步并不是免费的午餐。哪怕最简单的同步，比如上面代码里同步的 getRadius 方法，它的吞吐量损失也有十数倍。
 
+这样的代价就有点大了。最有效的办法，就是在接口设计的时候，争取做到即使不使用线程同步，也能做到多线程安全。也就是说，这个对象是一个只读的对象，不支持修改。
 
+```java
+package co.ivi.jus.record.immute;
 
+public final class Circle implements Shape {
+    public final double radius;
+    public Circle(double radius) {
+        this.radius = radius;
+    }
+    @Override
+    public double area() {
+        return Math.PI * radius * radius;
+    }
+}
+```
 
+对于只读的圆形类的设计，有两个好处。第一个好处，就是天生的多线程安全。第二个好处，就是简化的代码。
+
+不过，这样的设计似乎破坏了面向对象编程的封装原则。公开半径变量 radius，相当于公开的实现细节。
+
+**声明档案类**
+
+我们前面说过，Java 档案类是用来表示不可变数据的透明载体。那么，怎么使用档案类来表示不可变数据呢？
+
+```java
+package co.ivi.jus.record.modern;
+
+public record Circle(double radius) implements Shape {
+    @Override
+    public double area() {
+        return Math.PI * radius * radius;
+    }
+}
+```
+
+对比一下传统的 Circle 类的代码，首先，最常见的 class 关键字不见了，取而代之的是 record 关键字。然后，类标识符 Circle 后面，有用小括号括起来的参数。最后，在大括号里，也就是档案类的实现代码里，变量的声明没有了，构造方法也没有了。
+
+我们已经知道怎么生成一个档案类实例了，但还有一个问题是，我们能读取这个圆形档案类的半径吗？
+
+其实，类标识符声明后面的小括号里的参数，就是等价的不可变变量。在档案类里，这样的不可变变量是私有的变量，我们不可以直接使用它们。但是我们可以通过等价的方法来调用它们。
+
+```java
+double radius = circle.radius();
+```
+
+变量的标识符就是等价方法的标识符。
+
+在档案类里，方法调用的形式又回来了。调用形式依然保持着良好的封装形式。打破封装原则的顾虑也就不复存在了。
+
+**档案类的其他改进**
+
+下面的这段代码，Circle 的实现使用的是传统类。
+
+```java
+package co.ivi.jus.record;
+
+import co.ivi.jus.record.immute.Circle;
+
+public class ImmuteUseCases {
+    public static void main(String[] args) {
+        Circle c1 = new Circle(10.0);
+        Circle c2 = new Circle(10.0);
+        System.out.println("Equals? " + c1.equals(c2));
+    }
+}
+```
+
+运行结果告诉我们，两个半径为 10 厘米的圆形的实例，并不是相等的实例。
+
+如果需要比较两个实例是不是相等，我们可以添加 equals、hashCode 和 toString 这三个方法的重载实现。
+
+然而，这三个方法的重载，尤其是 equals 方法和 hashCode 方法的重载实现，一直是代码安全的重灾区。即便是经验丰富的程序员，也可能忘记重载这三个方法；就算没有遗忘，equals 方法和 hashCode 方法也可能没有正确实现，从而带来各种各样的问题。这实在难以让人满意，但是一直以来，我们也没有更好的办法。
+
+我们再来看看使用档案类的代码。下面的这段代码，Circle 的实现使用的是档案类。
+
+```java
+package co.ivi.jus.record;
+
+import co.ivi.jus.record.modern.Circle;
+
+public class ModernUseCases {
+    public static void main(String[] args) {
+        Circle c1 = new Circle(10.0);
+        Circle c2 = new Circle(10.0);
+        System.out.println("Equals? " + c1.equals(c2));
+    }
+}
+```
+
+这段代码运行的结果告诉我们，两个半径为 10 厘米的圆形的档案类实例，是相等的实例。
+
+这是因为，档案类内置了缺省的 equals 方法、hashCode 方法以及 toString 方法的实现。一般情况下，我们就再也不用担心这三个方法的重载问题了。
+
+**透明的载体**
+
+透明载体的意思，通俗地说，就是档案类承载有缺省实现的方法，这些方法可以直接使用，也可以替换掉。
+
+- 重载构造方法
+
+最常见的替换，是要在构造方法里对档案类声明的变量添加必要的检查。
+
+```java
+package co.ivi.jus.record.improved;
+
+public record Circle(double radius) implements Shape {
+    public Circle {
+        if (radius < 0) {
+            throw new IllegalArgumentException(
+                "The radius of a circle cannot be negative [" + radius + "]");
+        }
+    }
+    
+    @Override
+    public double area() {
+        return Math.PI * radius * radius;
+    }
+}
+```
+
+> 如果你阅读了上面的代码，应该已经注意到了一点不太常规的形式。构造方法的声明没有参数，也没有给实例变量赋值的语句。
+>
+> 这并不是说，构造方法就没有参数，或者实例变量不需要赋值。实际上，为了简化代码，Java 编译的时候，已经替我们把这些东西加上去了。
+
+在下面这张表里，我列出了两种构造方法形式上的差异，你可以看看它们的差异。
+
+![image-20220507225848324](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205072258550.png)
+
+- 重载 equals 方法
+
+还有一类常见的替换，如果缺省的 equals 方法或者 hashCode 方法不能正常工作或者存在安全的问题，就需要替换掉缺省的方法。
+
+比如，如果不可变的变量是一个数组，通过下面的例子，我们来看看它的 equals 方法能不能正常工作。
+
+```shell
+jshell> record Password(byte[] password) {}；
+| modified record Password
+
+jshell> Password pA = new Password("123456".getBytes());
+pA ==> Password[password=[B@2ef1e4fa]
+
+jshell> Password pB = new Password("123456".getBytes());
+pB ==> Password[password=[B@b81eda8]
+
+jshell> pA.equals(pB);
+$16 ==> false
+```
+
+运算的结果显示，这两个实例并不相等。这不是我们期望的结果。其中的原因，就是因为数组这个变量的 equals 方法并不能正常工作。
 
 
 
