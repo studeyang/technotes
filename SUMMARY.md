@@ -123,6 +123,7 @@
   - [构建OAuth2服务器](C类/C02-微服务/[极客时间]-08构建OAuth2服务器.md)
   - [美团Shepherd设计与实现](C类/C02-微服务/[美团]Shepherd设计与实现.md)
   - [Nacos配置中心落地与实践](C类/C02-微服务/BLOG-Nacos配置中心落地与实践.md)
+  - [SpringBoot与Kubernetes云原生微服务实践](C类/C02-微服务/[极客时间]-SpringBoot与Kubernetes云原生微服务实践.md)
   
 - 架构设计
   - [从0开始学架构-01架构基础](C类/C03-架构设计/[极客时间]-从0开始学架构-01架构基础.md)
