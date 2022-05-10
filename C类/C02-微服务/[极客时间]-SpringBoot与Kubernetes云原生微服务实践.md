@@ -45,7 +45,7 @@ https://github.com/staffjoy/v2
 - 去掉 gRPC API Gateway
 - 默认采用邮件通知
 
-# 第二章 系统架构设计和技术栈选型（6~13）
+# 第二章 系统架构设计和技术栈选型
 
 ## 07 架构设计和技术栈选型
 
@@ -107,7 +107,7 @@ https://github.com/staffjoy/v2
 
 ![image-20220509222616602](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205092226690.png)
 
-## 10丨Dubbo、SpringCloud和Kubernetes该如何选型
+## 10 Dubbo、SpringCloud和Kubernetes该如何选型
 
 **横向比对**
 
@@ -119,29 +119,97 @@ https://github.com/staffjoy/v2
 
 ![image-20220509224715274](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205092247340.png)
 
+# 第三章：服务开发框架设计和实现 
+
+## 14 Staffjoy项目结构组织
+
+**项目组织代码**
+
+![image-20220510215113896](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102151986.png)
+
+## 16 微服务接口参数校验为何重要？
+
+**控制器接口参数校验**
+
+![image-20220510220234677](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102202729.png)
+
+**DTO 参数校验**
+
+![image-20220510220300725](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102203780.png)
+
+**自定义标注**
+
+![image-20220510220328325](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102203368.png)
+
+## 17 如何实现统一异常处理
+
+**统一异常处理**
+
+![image-20220510221137429](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102211479.png)
+
+**统一异常捕获**
+
+![image-20220510221214054](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102212098.png)
+
+![image-20220510221300992](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102213044.png)
+
+![image-20220510221332679](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102213739.png)
+
+**Web MVC ErrorController**
+
+Web 层的接口，根据错误码返回相应的页面。
+
+![image-20220510221425317](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102214366.png)
+
+## 18 DTO和DMO为什么要互转？
+
+**DTO 和 DMO**
+
+DTO 表示数据传输对象；DMO 表示数据模型对象。
+
+![image-20220510222138452](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102221497.png)
+
+**DTO 和 DMO互转**
+
+![image-20220510222205233](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102222281.png)
+
+> https://github.com/modelmapper/modelmapper
+
+## 19 如何实现基于Feign的强类型接口？
+
+**Spring Feign**
+
+![image-20220510223830268](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102238328.png)
+
+**强类型接口设计**
+
+![image-20220510223855508](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102238576.png)
+
+ListAccountResponse 定义了额外的字段。当正常响应时，会返回一个 ListAccountResponse 对象；而当异常响应时，会返回父对象 BaseResponse，此时额外字段数据也肯定是空的。
+
+![image-20220510224345859](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102243912.png)
+
+![image-20220510224105680](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102241749.png)
+
+**客户端调用范例**
+
+![image-20220510224423909](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102244977.png)
 
 
 
+# 第四章：可编程网关设计和实践 (23)
 
+# 第五章：安全框架设计和实践 (10讲)
 
+# 第六章：服务测试设计和实践 (7讲)
 
+# 第七章：可运维架构设计和实践 (8讲)
 
+# 第八章：服务容器化和Docker Compose部署 (10讲)
 
-# 第三章：服务开发框架设计和实现 (10讲)
+# 第九章：云原生架构和Kubernetes容器云部署 (17讲)
 
-第四章：可编程网关设计和实践 (9讲)
-
-第五章：安全框架设计和实践 (10讲)
-
-第六章：服务测试设计和实践 (7讲)
-
-第七章：可运维架构设计和实践 (8讲)
-
-第八章：服务容器化和Docker Compose部署 (10讲)
-
-第九章：云原生架构和Kubernetes容器云部署 (17讲)
-
-第十章：项⽬复盘、应用和扩展环节 (2讲)
+# 第十章：项⽬复盘、应用和扩展环节 (2讲)
 
 # 第十一章：附录 Staffjoy 项目源代码解析 (8讲)
 
