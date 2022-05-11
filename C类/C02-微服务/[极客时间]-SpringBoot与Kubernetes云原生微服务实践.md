@@ -195,9 +195,45 @@ ListAccountResponse 定义了额外的字段。当正常响应时，会返回一
 
 ![image-20220510224423909](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205102244977.png)
 
+## 21 异步处理为何要复制线程上下文信息？
+
+AsyncExecutor 配置。
+
+![image-20220511223413065](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112234192.png)
+
+Async 标注。
+
+![image-20220511223448565](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112234616.png)
+
+线程上下文拷贝。
+
+![image-20220511223521574](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112235640.png)
+
+## 23 主流微服务框架概览
+
+![image-20220511224549761](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112245827.png)
+
+使用 gRpc 的话，需要引入 gRpc Gateway api。
+
+# 第四章：可编程网关设计和实践 
+
+## 24 网关和BFF是如何演化出来的
+
+BFF：Backend For Frontend
+
+**MyShop SOA V1**
+
+![image-20220511225714081](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112257152.png)
+
+**MyShop SOA V2**
+
+![image-20220511225807386](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112258444.png)
+
+**MyShop SOA V2.5**
+
+![image-20220511225837214](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112258285.png)
 
 
-# 第四章：可编程网关设计和实践 (23)
 
 # 第五章：安全框架设计和实践 (10讲)
 
