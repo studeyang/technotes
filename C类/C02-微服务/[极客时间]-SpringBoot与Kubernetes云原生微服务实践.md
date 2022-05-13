@@ -223,15 +223,55 @@ BFF：Backend For Frontend
 
 **MyShop SOA V1**
 
+2011年的 MyShop 构架。
+
 ![image-20220511225714081](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112257152.png)
+
+此时还没有无线应用。
 
 **MyShop SOA V2**
 
+2012年上线了无线应用。
+
 ![image-20220511225807386](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112258444.png)
+
+问题：
+
+- 调用者与微服务耦合严重
+- 每个服务都需要域名
+- 无线应用展示裁剪逻辑越来越复杂
 
 **MyShop SOA V2.5**
 
 ![image-20220511225837214](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205112258285.png)
+
+问题：
+
+- 随着业务线增加，无线BFF变得臃肿
+- 无线BFF增加安全认证，日志监控，限流熔断等
+- 无线BFF单点问题
+
+**MyShop SOA V3**
+
+![image-20220513215309229](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205132153393.png)
+
+**MyShop SOA V4**
+
+![image-20220513215327795](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205132153854.png)
+
+## 28 如何设计一个最简网关
+
+**Faraday 网关内核设计**
+
+![image-20220513221829682](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205132218741.png)
+
+**静态路由配置**
+
+![image-20220513221904951](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205132219045.png)
+
+
+
+
 
 
 
