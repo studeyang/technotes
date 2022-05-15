@@ -269,13 +269,51 @@ BFF：Backend For Frontend
 
 ![image-20220513221904951](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205132219045.png)
 
+## 31 生产级网关需要考虑哪些环节
 
+- 限流熔断
+- 动态路由和负载均衡
+- 基于 Path 的路由
+  - api.xxx.com/pathx
+- 截获器链
+- 日志采集和 Metrics 埋点
+- 响应流优化
 
+## 32 主流开源网关概览
 
-
-
+![image-20220515224937416](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205152249574.png)
 
 # 第五章：安全框架设计和实践 (10讲)
+
+## 33 安全认证架构演进
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # 第六章：服务测试设计和实践 (7讲)
 
