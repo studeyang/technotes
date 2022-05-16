@@ -285,15 +285,27 @@ BFF：Backend For Frontend
 
 # 第五章：安全框架设计和实践 (10讲)
 
-## 33 安全认证架构演进
+## 35 安全认证架构演进：微服务阶段
 
+**Auth3.0：Auth Service + Token**
 
+![image-20220516220102095](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205162201227.png)
 
+**Auth3.5 Token + Gateway**
 
+![image-20220516220202079](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205162202151.png)
 
+## 36 基于JWT令牌的安全认证架构
 
+![image-20220516220259620](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205162202681.png)
 
+## 37 JWT的原理是什么
 
+**JWT令牌结构**
+
+![image-20220516224622717](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205162246821.png)
+
+https://blog.51cto.com/u_15281317/3009218
 
 
 
