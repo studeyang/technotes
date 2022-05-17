@@ -299,7 +299,7 @@ BFF：Backend For Frontend
 
 ![image-20220516220259620](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205162202681.png)
 
-## 37 JWT的原理是什么
+## 37 JWT的原理是什么？
 
 **JWT令牌结构**
 
@@ -307,17 +307,83 @@ BFF：Backend For Frontend
 
 https://blog.51cto.com/u_15281317/3009218
 
+## 38 JWT有哪两种主要流程？
 
+**HMAC 流程**
 
+![image-20220517221653262](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172216398.png)
 
+**RSA 流程**
 
+![image-20220517221716794](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172217908.png)
 
+**JWT 优劣**
 
+![image-20220517221809040](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172218134.png)
 
+## 39 Staffjoy安全认证架构和SSO
 
+**Staffjoy Auth ~ 登录认证阶段**
 
+![image-20220517222312844](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172223911.png)
 
+![image-20220517222348751](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172223820.png)
 
+**Staffjoy Auth ~ 后续访问阶段**
+
+![image-20220517222437976](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172224043.png)
+
+## 40 用户认证代码剖析
+
+**引入JWT生成和校验库**
+
+```xml
+<dependency>
+    <groupId>com.auth0</groupId>
+    <artifactId>java-jwt</artifactId>
+    <version>3.6.0</version>
+</dependency>
+```
+
+**JWT生成算法**
+
+![image-20220517224417726](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172244820.png)
+
+**JWT校验算法**
+
+![image-20220517224442523](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172244584.png)
+
+**登录login种Cookie**
+
+![image-20220517224755725](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172247787.png)
+
+![image-20220517224811506](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172248566.png)
+
+**Cookie中取出JWT令牌**
+
+![image-20220517224839177](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172248267.png)
+
+**JWT校验和取出用户会话数据**
+
+![image-20220517224959063](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172249128.png)
+
+**网关传递认证授权信息**
+
+![image-20220517224942280](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172249341.png)
+
+faraday / AuthRequestInterceptor
+
+![image-20220517225738157](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172257233.png)
+
+Feign客户端传递用户认证信息，common / FeignRequestHeaderInterceptor
+
+![image-20220517225935819](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172259900.png)
+
+![image-20220517230011574](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172300663.png)
+
+**登出logout**
+
+![image-20220517225811395](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172258465.png)
 
 
 
