@@ -385,15 +385,33 @@ Feign客户端传递用户认证信息，common / FeignRequestHeaderInterceptor
 
 ![image-20220517225811395](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172258465.png)
 
-
-
-
-
-
-
-
-
 # 第六章：服务测试设计和实践 (7讲)
+
+## 43 SpringBoot微服务测试该如何分类？
+
+![image-20220518224504523](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205182245677.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # 第七章：可运维架构设计和实践 (8讲)
 
