@@ -283,7 +283,7 @@ BFF：Backend For Frontend
 
 ![image-20220515224937416](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205152249574.png)
 
-# 第五章：安全框架设计和实践 (10讲)
+# 第五章：安全框架设计和实践 
 
 ## 35 安全认证架构演进：微服务阶段
 
@@ -385,35 +385,35 @@ Feign客户端传递用户认证信息，common / FeignRequestHeaderInterceptor
 
 ![image-20220517225811395](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205172258465.png)
 
-# 第六章：服务测试设计和实践 (7讲)
+# 第六章：服务测试设计和实践
 
 ## 43 SpringBoot微服务测试该如何分类？
 
 ![image-20220518224504523](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205182245677.png)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # 第七章：可运维架构设计和实践 (8讲)
+
+## 50 何谓生产就绪（ProductionReady）?
+
+![image-20220519230620393](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205192306553.png)
+
+## 52 Apollo vs SpringCloudConfig vs K8sConfigMap
+
+![image-20220519232449039](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205192324119.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # 第八章：服务容器化和Docker Compose部署 (10讲)
 
