@@ -391,7 +391,7 @@ Feign客户端传递用户认证信息，common / FeignRequestHeaderInterceptor
 
 ![image-20220518224504523](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205182245677.png)
 
-# 第七章：可运维架构设计和实践 (8讲)
+# 第七章：可运维架构设计和实践
 
 ## 50 何谓生产就绪（ProductionReady）?
 
@@ -401,21 +401,43 @@ Feign客户端传递用户认证信息，common / FeignRequestHeaderInterceptor
 
 ![image-20220519232449039](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205192324119.png)
 
+## 53 CAT vs Zipkin vs Skywalking
 
+![image-20220523214244528](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205232142679.png)
 
+![image-20220523214638056](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205232146151.png)
 
+## 55 结构化日志和业务审计日志
 
+> https://github.com/jacek99/structlog4j
 
+![image-20220523221046059](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205232210159.png)
 
+## 56 集中异常监控和Sentry
 
+> https://sentry.io
+>
+> https://github.com/getsentry/sentry
 
+## 57 EFK & Prometheus & Skywalking+K8s集成架构
 
+**EFK+K8s**
 
+![image-20220523222709075](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205232227183.png)
 
+**Prometheus+K8s**
 
+![image-20220523222724794](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205232227899.png)
 
+**Skywalking+K8s**
+
+![image-20220523222745282](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205232227398.png)
 
 # 第八章：服务容器化和Docker Compose部署 (10讲)
+
+## 58 本地开发部署架构和软件需求
+
+
 
 # 第九章：云原生架构和Kubernetes容器云部署 (17讲)
 
