@@ -437,7 +437,17 @@ Feign客户端传递用户认证信息，common / FeignRequestHeaderInterceptor
 
 ## 58 本地开发部署架构和软件需求
 
+![image-20220523223433542](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205232234619.png)
 
+## 64 容器镜像构建Dockerfile解析
+
+**Account 服务 Dockerfile**
+
+![image-20220525221430714](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205252214883.png)
+
+**MyAccount 单页应用 Dockerfile**
+
+![image-20220525221456350](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205252214469.png)
 
 # 第九章：云原生架构和Kubernetes容器云部署 (17讲)
 
