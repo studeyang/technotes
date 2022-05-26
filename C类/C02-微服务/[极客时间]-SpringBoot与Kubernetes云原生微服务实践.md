@@ -433,7 +433,7 @@ Feign客户端传递用户认证信息，common / FeignRequestHeaderInterceptor
 
 ![image-20220523222745282](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205232227398.png)
 
-# 第八章：服务容器化和Docker Compose部署 (10讲)
+# 第八章：服务容器化和Docker Compose部署 
 
 ## 58 本地开发部署架构和软件需求
 
@@ -450,6 +450,101 @@ Feign客户端传递用户认证信息，common / FeignRequestHeaderInterceptor
 ![image-20220525221456350](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205252214469.png)
 
 # 第九章：云原生架构和Kubernetes容器云部署 (17讲)
+
+## 68 到底什么是云原生架构？
+
+**云原生（Cloud Native）应用定义**
+
+应用开发采用持续交付和 DevOps 实践。基于微服务原理而开发的应用，以容器方式打包。
+
+在运行时，容器由运行于云基础设施之上的平台进行调度。
+
+**CNCF**
+
+cncf.io
+landscape.cncf.io
+
+## 69 Kubernetes架构
+
+![image-20220526220137400](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262201559.png)
+
+## 70 Kubernetes的基本概念
+
+**Kubernetes 集群（Cluster）**
+
+![image-20220526221305569](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262213671.png)
+
+**容器 Container**
+
+![image-20220526221355177](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262213261.png)
+
+**POD**
+
+![image-20220526221428364](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262214465.png)
+
+**副本集 ReplicaSet**
+
+![image-20220526221446498](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262214604.png)
+
+**服务 Service**
+
+![image-20220526221508793](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262215876.png)
+
+**发布Deployment**
+
+![image-20220526221526300](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262215417.png)
+
+**滚动发布 Rolling Update**
+
+![image-20220526221557521](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262215630.png)
+
+**ConfigMap/Secret**
+
+![image-20220526221625225](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262216341.png)
+
+**DaemonSet**
+
+![image-20220526221650191](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262216295.png)
+
+**其它概念**
+
+![image-20220526221732775](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262217857.png)
+
+![image-20220526221918293](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262219408.png)
+
+**概念总结**
+
+![image-20220526222149227](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262221299.png)
+
+![image-20220526222218087](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262222199.png)
+
+## 72 理解Kubernetes节点网络和Pod网络
+
+![image-20220526223202350](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262232480.png)
+
+## 73 深入理解Service和ServiceDiscovery
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # 第十章：项⽬复盘、应用和扩展环节 (2讲)
 
