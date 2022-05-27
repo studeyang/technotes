@@ -522,7 +522,23 @@ landscape.cncf.io
 
 ![image-20220526223202350](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205262232480.png)
 
-## 73 深入理解Service和ServiceDiscovery
+## 76 本地测试Kubernetes环境搭建
+
+https://github.com/AliyunContainerService/k8s-for-docker-desktop
+
+## 80 阿里云Kubernetes环境创建
+
+申请专有网络vpc
+
+-> MySQL RDS
+
+-> 创建Kubernetes
+
+
+
+
+
+
 
 
 
