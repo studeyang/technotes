@@ -534,35 +534,29 @@ https://github.com/AliyunContainerService/k8s-for-docker-desktop
 
 -> 创建Kubernetes
 
+## 83 Kubernetes应用金丝雀发布实验
 
+**金丝雀发布步骤**
 
+1. www-web-deployment 扩容到 3 个实例
 
+2. 发布金丝雀 www-web-deployment-canary
 
+   ```shell
+   kubectl apply -f canary
+   ```
 
+3. 校验
 
+4. 扩容金丝雀到 3 个实例
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+5. 删除 www-web-deployment
 
 # 第十章：项⽬复盘、应用和扩展环节 (2讲)
+
+
+
+
 
 # 第十一章：附录 Staffjoy 项目源代码解析 (8讲)
 
