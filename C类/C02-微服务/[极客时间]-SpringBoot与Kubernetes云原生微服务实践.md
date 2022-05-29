@@ -449,7 +449,7 @@ Feign客户端传递用户认证信息，common / FeignRequestHeaderInterceptor
 
 ![image-20220525221456350](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202205252214469.png)
 
-# 第九章：云原生架构和Kubernetes容器云部署 (17讲)
+# 第九章：云原生架构和Kubernetes容器云部署
 
 ## 68 到底什么是云原生架构？
 
@@ -554,11 +554,21 @@ https://github.com/AliyunContainerService/k8s-for-docker-desktop
 
 # 第十章：项⽬复盘、应用和扩展环节 (2讲)
 
+## 86 项目应用
 
+- 商城 as a Service
 
+  Shopify (https://www.shopify.com/)
 
+- 客服 as a Service
 
-# 第十一章：附录 Staffjoy 项目源代码解析 (8讲)
+  Intercom (https://www.intercom.com/)
 
+- 异常日志 as a Service
 
+  Sentry (https://sentry.io)
+
+- 配置中心 as a Service
+
+  Launch Darkly (https://launchdarkly.com/)
 
