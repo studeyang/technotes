@@ -316,6 +316,85 @@ MyBatis 中的 scripting 模块就是负责动态生成 SQL 的核心模块。�
 
 # 模块二：基础支撑层
 
+## 04 | MyBatis 反射工具箱：带你领略不一样的反射设计思路
+
+反射工具箱的具体代码实现位于 org.apache.ibatis.reflection 包中。下面我们就一起深入分析该模块的核心实现。
+
+**Reflector**
+
+Reflector 是 MyBatis 反射模块的基础。要使用反射模块操作一个 Class，都会先将该 Class 封装成一个 Reflector 对象。
+
+> [Reflector.java](https://github.com/dbses/mybatis-3.5.6/blob/master/src/main/java/org/apache/ibatis/reflection/Reflector.java)
+
+- 核心方法
+
+在 331 行出现了 `currentMethod.isBridge()`：
+
+```java
+private void addUniqueMethods(Map<String, Method> uniqueMethods, Method[] methods)
+    for (Method currentMethod : methods) {
+        if (!currentMethod.isBridge()) {
+            // 值样例：java.lang.String#addGetMethods:java.lang.Class
+            String signature = getSignature(currentMethod);
+            // check to see if the method is already known
+            // if it is known, then an extended class must have
+            // overridden a method
+            if (!uniqueMethods.containsKey(signature)) {
+                uniqueMethods.put(signature, currentMethod);
+            }
+        }
+    }
+}
+```
+
+> 这篇文章解释了桥接方法：https://blog.csdn.net/liu20111590/article/details/81294362
+
+- Invoker
+
+在 Reflector 对象的初始化过程中，所有属性的 getter/setter 方法都会被封装成 MethodInvoker 对象，没有 getter/setter 的字段也会生成对应的 Get/SetFieldInvoker 对象。下面我们就来看看这个 Invoker 接口的定义：
+
+```java
+public interface Invoker {
+   // 调用底层封装的Method方法或是读写指定的字段
+   Object invoke(Object target, Object[] args);
+   Class<?> getType(); // 返回属性的类型
+}
+```
+
+Invoker 接口的继承关系如下图所示：
+
+![image-20220616213607612](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206162136798.png)
+
+- ReflectorFactory
+
+通过上面的分析我们知道，Reflector 初始化过程会有一系列的反射操作，为了提升 Reflector 的初始化速度，MyBatis 提供了 ReflectorFactory 这个工厂接口对 Reflector 对象进行缓存，其中最核心的方法是用来获取 Reflector 对象的 findForClass() 方法。
+
+**DefaultObjectFactory 默认对象工厂**
+
+ObjectFactory 是 MyBatis 中的反射工厂，DefaultObjectFactory 是 ObjectFactory 接口的默认实现，其 create() 方法会选择合适的构造函数实例化对象。
+
+除了使用 DefaultObjectFactory 这个默认实现之外，我们还可以在 mybatis-config.xml 配置文件中配置自定义 ObjectFactory 接口扩展实现类，完成自定义的功能扩展。
+
+**reflection.property 包下的属性解析工具**
+
+PropertyTokenizer 工具类负责解析由“.”和“[]”构成的表达式。PropertyTokenizer 继承了 Iterator 接口，可以迭代处理嵌套多层表达式。
+
+PropertyCopier 是一个属性拷贝的工具类，提供了与 Spring 中 BeanUtils.copyProperties() 类似的功能，实现相同类型的两个对象之间的属性值拷贝，其核心方法是 copyBeanProperties() 方法。
+
+PropertyNamer 工具类提供的功能是转换方法名到属性名，以及检测一个方法名是否为 getter 或 setter 方法。
+
+**MetaClass**
+
+MetaClass 中封装的是 Class 元信息。提供了获取类中属性描述信息的功能，底层依赖前面介绍的 Reflector。
+
+**ObjectWrapper**
+
+ObjectWrapper 封装的是对象元信息。实现了读写对象属性值、检测 getter/setter 等基础功能。实现类如下图所示：
+
+![image-20220616215821025](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206162158152.png)
+
+
+
 
 
 
