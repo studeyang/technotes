@@ -393,7 +393,67 @@ ObjectWrapper 封装的是对象元信息。实现了读写对象属性值、检
 
 ![image-20220616215821025](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206162158152.png)
 
+## 05 | 类型转换：数据库类型体系与 Java 类型体系之间的“爱恨情仇”
 
+JDBC 的数据类型与 Java 语言中的数据类型虽然有点对应关系，但还是无法做到一一对应，也自然无法做到自动映射。
+
+| 数据库类型         | Java类型             |
+| ------------------ | -------------------- |
+| VARCHAR            | Java.lang.String     |
+| CHAR               | Java.lang.String     |
+| BLOB               | Java.lang.byte[]     |
+| INTEGER UNSIGNED   | Java.lang..Long      |
+| TINYINT UNSIGNED   | Java.lang.Integer    |
+| SMALLINT UNSIGNED  | Java.lang.Integer    |
+| MEDIUMINT UNSIGNED | Java.lang.Integer    |
+| BIT                | Java.lang.Boolean    |
+| BIGINT UNSIGNED    | Java.math.BigInteger |
+| FLOAT              | Java.lang.Float      |
+| DOUBLE             | Java.lang.Double     |
+| DECIMAL            | Java.math.BigDecimal |
+
+在 MyBatis 中，可以使用类型转换器类型转换，如下图所示：
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206172141413.png" alt="img" style="zoom: 33%;" />
+
+**深入 TypeHandler**
+
+类型转换器到底是怎么定义的呢？其实，MyBatis 中的类型转换器就是 TypeHandler 这个接口，其定义如下：
+
+```java
+public interface TypeHandler<T> {
+  void setParameter(PreparedStatement ps, int i, T parameter, JdbcType jdbcType) throws SQLException;
+  T getResult(ResultSet rs, String columnName) throws SQLException;
+  T getResult(ResultSet rs, int columnIndex) throws SQLException;
+  T getResult(CallableStatement cs, int columnIndex) throws SQLException;
+}
+```
+
+MyBatis 中定义了 BaseTypeHandler 抽象类来实现一些 TypeHandler 的公共逻辑，BaseTypeHandler 在实现 TypeHandler 的同时，还实现了 TypeReference 抽象类。其继承关系如下图所示：
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206172146283.png" alt="image-20220617214600114" style="zoom:50%;" />
+
+在 BaseTypeHandler 中，简单实现了 TypeHandler 接口的 setParameter() 方法和 getResult() 方法。下图展示了 BaseTypeHandler 的全部实现类：
+
+![image-20220617214838819](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206172148975.png)
+
+**TypeHandler 注册与查询**
+
+了解了 TypeHandler 接口实现类的核心原理之后，我们就来思考下面两个问题：
+
+- MyBatis 如何管理这么多的 TypeHandler 接口实现呢？
+
+MyBatis 会在初始化过程中，获取所有已知的 TypeHandler（包括内置实现和自定义实现），然后创建所有 TypeHandler 实例并注册到 TypeHandlerRegistry 中，由 TypeHandlerRegistry 统一管理所有 TypeHandler 实例。
+
+- 如何在合适的场景中使用合适的 TypeHandler 实现进行类型转换呢？
+
+该功能的具体实现是在 TypeHandlerRegistry 的 getTypeHandler() 方法中，会根据传入的 Java 类型和 JDBC 类型，从底层的几个集合中查询相应的 TypeHandler 实例。
+
+**别名管理**
+
+在 mybatis-config.xml 配置文件中可以使用 \<typeAlias\> 标签为 Customer 等 Java 类的完整名称定义了相应的别名，后续编写 SQL 语句、定义 \<resultMap\> 的时候，直接使用这些别名即可完全替代相应的完整 Java 类名，这样就非常易于代码的编写和维护。
+
+TypeAliasRegistry 是维护别名配置的核心实现所在，其中提供了别名注册、别名查询的基本功能。
 
 
 
