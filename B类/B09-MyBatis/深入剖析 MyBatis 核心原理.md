@@ -455,6 +455,61 @@ MyBatis 会在初始化过程中，获取所有已知的 TypeHandler（包括内
 
 TypeAliasRegistry 是维护别名配置的核心实现所在，其中提供了别名注册、别名查询的基本功能。
 
+## 06 | 日志框架千千万，MyBatis 都能兼容的秘密是什么？
+
+MyBatis 使用的日志接口是自己定义的 Log 接口，但是 Apache Commons Logging、Log4j、Log4j2 等日志框架提供给用户的都是自己的 Logger 接口。
+
+为了统一这些第三方日志框架，MyBatis 使用适配器模式添加了针对不同日志框架的 Adapter 实现，使得第三方日志框架的 Logger 接口转换成 MyBatis 中的 Log 接口，从而实现集成第三方日志框架打印日志的功能。
+
+适配器模式如下图所示：
+
+![image-20220620223954393](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206202239662.png)
+
+下面我们就来看看该模块的具体实现。
+
+**日志模块**
+
+首先是 LogFactory 工厂类，它负责创建 Log 对象。这些 Log 接口的实现类中，就包含了多种第三方日志框架的适配器，如下图所示：
+
+![image-20220620225926870](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206202259063.png)
+
+在 LogFactory 类中有如下一段静态代码块，会依次加载各个第三方日志框架的适配器。
+
+```java
+static {
+    // 尝试按照Slf4j、Common Loggin、Log4j2、Log4j、Jdk Logging、No Logging的顺序，
+    // 依次加载对应的适配器，一旦加载成功，就会记录到logConstructor字段中，并会停止后续适配器
+    tryImplementation(LogFactory::useSlf4jLogging);
+    tryImplementation(LogFactory::useCommonsLogging);
+    tryImplementation(LogFactory::useLog4J2Logging);
+    tryImplementation(LogFactory::useLog4JLogging);
+    tryImplementation(LogFactory::useJdkLogging);
+    tryImplementation(LogFactory::useNoLogging);
+}
+```
+
+**JDBC Logger**
+
+下面我们开始分析 org.apache.ibatis.logging.jdbc 包中的内容。
+
+首先来看其中最基础的抽象类—— BaseJdbcLogger，它是 jdbc 包下其他 Logger 类的父类，继承关系如下图所示：
+
+![image-20220620225404120](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206202254305.png)
+
+从上面的 BaseJdbcLogger 继承关系图中可以看到，BaseJdbcLogger 的子类同时会实现 InvocationHandler 接口。这是 jdk 动态代理。
+
+代理模式如下所示：
+
+![image-20220620231729319](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206202317471.png)
+
+ConnectionLogger 代理了 Connection 的方法执行，打印了一些执行 sql 日志；
+
+ResultSetLogger 代理了 ResultSet 的方法执行，记录了 ResultSet 中的行数。
+
+
+
+
+
 
 
 
