@@ -506,7 +506,91 @@ ConnectionLogger 代理了 Connection 的方法执行，打印了一些执行 sq
 
 ResultSetLogger 代理了 ResultSet 的方法执行，记录了 ResultSet 中的行数。
 
+## 07 | 深入数据源和事务，把握持久化框架的两个关键命脉
 
+作为一款成熟的持久化框架，MyBatis 不仅自己提供了一套数据源实现，而且还能够方便地集成第三方数据源。
+
+MyBatis 提供了两种类型的数据源实现，分别是 PooledDataSource 和 UnpooledDataSource，继承关系如下图所示：
+
+![image-20220621224022707](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206212240915.png)
+
+针对不同的 DataSource 实现，MyBatis 提供了不同的工厂实现来进行创建，如下图所示，这是工厂方法模式的一个典型应用场景。
+
+![image-20220621224158026](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206212241156.png)
+
+MyBatis 对数据库事务抽象了一层 Transaction 接口，它可以管理事务的开启、提交和回滚。
+
+**数据源工厂**
+
+DataSourceFactory 接口中最核心的方法是 getDataSource() 方法，该方法用来生成一个 DataSource 对象。
+
+![image-20220621224402718](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206212244883.png)
+
+在 UnpooledDataSourceFactory 这个实现类的初始化过程中，会直接创建 UnpooledDataSource 对象，其中的 dataSource 字段会指向该 UnpooledDataSource 对象。接下来调用的 setProperties() 方法会根据传入的配置信息，完成对该 UnpooledDataSource 对象相关属性的设置。
+
+PooledDataSourceFactory 是通过继承 UnpooledDataSourceFactory 间接实现了 DataSourceFactory 接口。在 PooledDataSourceFactory 中并没有覆盖 UnpooledDataSourceFactory 中的任何方法，唯一的变化就是将 dataSource 字段指向的 DataSource 对象类型改为 PooledDataSource 类型。
+
+**DataSource**
+
+MyBatis 提供的数据源实现有两个，一个 UnpooledDataSource 实现，另一个 PooledDataSource 实现。
+
+- UnpooledDataSource
+
+MyBatis 的 UnpooledDataSource 实现中定义了如下静态代码块，从而在 UnpooledDataSource 加载时，将已在 DriverManager 中注册的 JDBC 驱动器实例复制一份到 UnpooledDataSource.registeredDrivers 集合中。
+
+```java
+static {
+    // 从DriverManager中读取JDBC驱动
+    Enumeration<Driver> drivers = DriverManager.getDrivers();
+    while (drivers.hasMoreElements()) {
+        Driver driver = drivers.nextElement();
+        // 将DriverManager中的全部JDBC驱动记录到registeredDrivers集合
+        registeredDrivers.put(driver.getClass().getName(), driver);
+    }
+}
+```
+
+在 getConnection() 方法中，UnpooledDataSource 会调用 doGetConnection() 方法获取数据库连接，具体实现如下：
+
+```java
+private Connection doGetConnection(Properties properties) throws SQLException {
+    // 初始化数据库驱动
+    initializeDriver();
+    // 创建数据库连接
+    Connection connection = DriverManager.getConnection(url, properties);
+    // 配置数据库连接
+    configureConnection(connection);
+    return connection;
+}
+```
+
+这里需要注意两个方法：
+
+在调用的 initializeDriver() 方法中，完成了 JDBC 驱动的初始化，其中会创建配置中指定的 Driver 对象，并将其注册到 DriverManager 以及上面介绍的 UnpooledDataSource.registeredDrivers 集合中保存；
+
+configureConnection() 方法会对数据库连接进行一系列配置，例如，数据库连接超时时长、事务是否自动提交以及使用的事务隔离级别。
+
+- PooledDataSource
+
+JDBC 连接的创建是非常耗时的，从数据库这一侧看，能够建立的连接数也是有限的，所以在绝大多数场景中，我们都需要使用数据库连接池来缓存、复用数据库连接。
+
+> 因此，在设置数据库连接池的最大连接数以及最大空闲连接数时，需要进行折中和权衡，当然也要执行一些性能测试来辅助我们判断。
+
+在 PooledDataSource 中并没有直接维护数据库连接的集合，而是维护了一个 PooledState 类型的字段（state 字段），而这个 PooledState 才是管理连接的地方。在 PooledState 中维护的数据库连接并不是真正的数据库连接（不是 java.sql.Connection 对象），而是 PooledConnection 对象。
+
+**事务接口**
+
+MyBatis 专门抽象出来一个 Transaction 接口，Transaction 接口是 MyBatis 中对数据库事务的抽象，其中定义了提交事务、回滚事务，以及获取事务底层数据库连接的方法。
+
+![image-20220621233947614](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206212339797.png)
+
+TransactionFactory 是用于创建 Transaction 的工厂接口，其中最核心的方法是 newTransaction() 方法，它会根据数据库连接或数据源创建 Transaction 对象。
+
+JdbcTransactionFactory 和 ManagedTransactionFactory 是 TransactionFactory 的两个实现类，分别用来创建 JdbcTransaction 对象和 ManagedTransaction 对象。
+
+JdbcTransaction 都是通过 java.sql.Connection 的同名方法实现事务的提交和回滚的。
+
+ManagedTransaction 的实现相较于 JdbcTransaction 来说，有些许类似，也是依赖关联的 DataSource 获取数据库连接，但其 commit()、rollback() 方法都是空实现，事务的提交和回滚都是依靠容器管理的，这也是它被称为 ManagedTransaction 的原因。 
 
 
 
