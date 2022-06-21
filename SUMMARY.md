@@ -169,7 +169,9 @@
   - [中台](D类/D08-杂谈/[极客时间]-说透中台.md)
   - [海量数据处理](D类/D08-杂谈/[advanced-java]-海量数据处理.md)
   - [Info公开课](D类/D08-杂谈/InfoQ公开课.md)
-
+- [RestTemplate使用样例](D类/D08-杂谈/RestTemplate使用样例.md)
+  - [Java8 Stream常见用法](D类/D08-杂谈/Java8%20Stream常见用法.md)
+  
 - 架构方案
   - [企业级高可用延时消息设计](D类/D09-架构方案/企业级高可用延时消息设计.md)
 
