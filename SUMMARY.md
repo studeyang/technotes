@@ -65,6 +65,7 @@
   - [设计模式之美-04开源与项目实战](B类/B08-设计模式/[极客时间]-设计模式之美-04开源与项目实战.md)
 - MyBatis
   - [《MyBatis技术内幕》读书笔记](B类/B09-MyBatis/《MyBatis技术内幕》读书笔记.md)
+  - [深入剖析 MyBatis 核心原理](B类/B09-MyBatis/深入剖析 MyBatis 核心原理.md)
 - 系统性能
   - [性能调优实战-Java编程调优](B类/B10-系统性能/[极客时间]-性能调优实战-01Java编程调优.md)
   - [性能调优实战-多线程调优](B类/B10-系统性能/[极客时间]-性能调优实战-02多线程调优.md)
@@ -169,7 +170,7 @@
   - [中台](D类/D08-杂谈/[极客时间]-说透中台.md)
   - [海量数据处理](D类/D08-杂谈/[advanced-java]-海量数据处理.md)
   - [Info公开课](D类/D08-杂谈/InfoQ公开课.md)
-- [RestTemplate使用样例](D类/D08-杂谈/RestTemplate使用样例.md)
+  - [RestTemplate使用样例](D类/D08-杂谈/RestTemplate使用样例.md)
   - [Java8 Stream常见用法](D类/D08-杂谈/Java8%20Stream常见用法.md)
   
 - 架构方案
