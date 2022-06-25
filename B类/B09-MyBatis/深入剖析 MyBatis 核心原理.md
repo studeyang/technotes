@@ -592,6 +592,36 @@ JdbcTransaction 都是通过 java.sql.Connection 的同名方法实现事务的�
 
 ManagedTransaction 的实现相较于 JdbcTransaction 来说，有些许类似，也是依赖关联的 DataSource 获取数据库连接，但其 commit()、rollback() 方法都是空实现，事务的提交和回滚都是依靠容器管理的，这也是它被称为 ManagedTransaction 的原因。 
 
+## 08 | Mapper 文件与 Java 接口的优雅映射之道
+
+- 为什么需要 CustomerMapper 接口来执行对应的 SQL 语句呢？
+- 为什么无须提供 CustomerMapper 接口的实现类呢？
+- 实际使用的 CustomerMapper 对象是什么呢？CustomerMapper 对象是怎么创建的呢？底层原理是什么呢？
+
+学习完这一讲，你就会找到这些问题的答案。
+
+
+
+![image-20220622220952236](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206222209513.png)
+
+
+
+**MapperRegistry**
+
+
+
+**MapperProxy**
+
+
+
+**MapperMethod**
+
+
+
+
+
+
+
 
 
 
@@ -605,6 +635,159 @@ ManagedTransaction 的实现相较于 JdbcTransaction 来说，有些许类似�
 
 
 # 模块四：扩展延伸
+
+## 20 | 插件体系让 MyBatis 世界更加精彩
+
+插件是应用程序中最常见的一种扩展方式。例如，Dubbo 通过 SPI 方式实现了插件化的效果，SkyWalking 依赖“微内核+插件”的架构轻松加载插件，实现扩展效果。
+
+MyBatis 也提供了类似的插件扩展机制。该模块位于 org.apache.ibatis.plugin 包中，主要使用了两种设计模式：代理模式和责任链模式。
+
+**Interceptor**
+
+MyBatis 插件模块中最核心的接口就是 Interceptor 接口，它是所有 MyBatis 插件必须要实现的接口，其核心定义如下：
+
+```java
+public interface Interceptor {
+  // 插件实现类中需要实现的拦截逻辑
+  Object intercept(Invocation invocation) throws Throwable;
+  // 在该方法中会决定是否触发intercept()方法
+  default Object plugin(Object target) {
+    return Plugin.wrap(target, this);
+  }
+  default void setProperties(Properties properties) {
+    // 在整个MyBatis初始化过程中用来初始化该插件的方法
+  }
+}
+```
+
+MyBatis允许我们自定义 Interceptor 拦截 SQL 语句执行过程中的某些关键逻辑，允许拦截的方法有：
+
+- Executor 类中的 update()、query()、flushStatements()、commit()、rollback()、getTransaction()、close()、isClosed()方法；
+- ParameterHandler 中的 setParameters()、getParameterObject() 方法；
+- ResultSetHandler中的 handleOutputParameters()、handleResultSets()方法；
+- StatementHandler 中的parameterize()、prepare()、batch()、update()、query()方法。
+
+下面我们就结合一个 MyBatis 插件示例，介绍一下 MyBatis 中 Interceptor 接口的具体使用方式。这里我们首先定义一个DemoPlugin 类，定义如下：
+
+```java
+@Intercepts({
+        @Signature(type = Executor.class, method = "query", args = {
+                MappedStatement.class, Object.class, RowBounds.class,
+                ResultHandler.class}),
+        @Signature(type = Executor.class, method = "close", args = {boolean.class})
+})
+public class DemoPlugin implements Interceptor {
+    private int logLevel; 
+    ... // 省略其他方法的实现
+}
+```
+
+@Signature 注解用来指定 DemoPlugin 插件实现类要拦截的目标方法信息，其中的 type 属性指定了要拦截的类，method 属性指定了要拦截的目标方法名称，args 属性指定了要拦截的目标方法的参数列表。
+
+> Interceptor 的加载。
+
+为了让 MyBatis 知道这个类的存在，我们要在 mybatis-config.xml 全局配置文件中对 DemoPlugin 进行配置，相关配置片段如下：
+
+```xml
+<plugins>
+    <plugin interceptor="design.Interceptor.DemoPlugin">
+        <!-- 对拦截器中的属性进行初始化 -->
+        <property name="logLevel" value="1"/>
+    </plugin>
+</plugins>
+```
+
+MyBatis 会在初始化流程中解析 mybatis-config.xml 全局配置文件，其中的 \<plugin\> 节点就会被处理成相应的 Interceptor 对象，同时调用 setProperties() 方法完成配置的初始化，最后MyBatis 会将 Interceptor 对象添加到Configuration.interceptorChain 这个全局的 Interceptor 列表中保存。
+
+> 我们再来看 Interceptor 是如何拦截目标类中的目标方法的。
+
+MyBatis 中 Executor、ParameterHandler、ResultSetHandler、StatementHandler 等与 SQL 执行相关的核心组件都是通过 Configuration.new*() 方法生成的。以 newExecutor() 方法为例，我们会看到下面这行代码，InterceptorChain.pluginAll() 方法会为目标对象创建代理对象并返回。
+
+```java
+executor = (Executor) interceptorChain.pluginAll(executor);
+```
+
+InterceptorChain 的 interceptors 字段中维护了 MyBatis 初始化过程中加载到的全部 Interceptor 对象，在其 pluginAll() 方法中，会调用每个 Interceptor 的 plugin() 方法创建目标类的代理对象，核心实现如下：
+
+```java
+public Object pluginAll(Object target) {
+  for (Interceptor interceptor : interceptors) {
+    // 遍历interceptors集合，调用每个Interceptor对象的plugin()方法
+    target = interceptor.plugin(target);
+  }
+  return target;
+}
+```
+
+**Plugin**
+
+了解了 Interceptor 的加载流程和基本工作原理之后，我们再来介绍一下自定义 Interceptor 的实现。我们首先回到 DemoPlugin 这个示例，关注其中 plugin() 方法的实现：
+
+```java
+@Override
+public Object plugin(Object target) {
+    // 依赖Plugin工具类创建代理对象
+    return Plugin.wrap(target, this);
+}
+```
+
+Plugin 实现了 JDK 动态代理中的 InvocationHandler 接口，我们需要关注其 invoke() 方法实现：
+
+```java
+public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    try {
+        // 获取当前待执行方法所属的类
+        Set<Method> methods = signatureMap.get(method.getDeclaringClass());
+        // 如果当前方法需要被代理，则执行intercept()方法进行拦截处理
+        if (methods != null && methods.contains(method)) {
+            return interceptor.intercept(new Invocation(target, method, args));
+        }
+        // 如果当前方法不需要被代理，则调用target对象的相应方法
+        return method.invoke(target, args);
+    } catch (Exception e) {
+        throw ExceptionUtil.unwrapThrowable(e);
+    }
+}
+```
+
+最后，我们来看一下 Plugin 工具类对外提供的 wrap() 方法是如何创建 JDK 动态代理的。
+
+```java
+public static Object wrap(Object target, Interceptor interceptor) {
+    // 获取自定义Interceptor实现类上的@Signature注解信息，
+    // 这里的getSignatureMap()方法会解析@Signature注解，得到要拦截的类以及要拦截的方法集合
+    Map<Class<?>, Set<Method>> signatureMap = getSignatureMap(interceptor);
+    Class<?> type = target.getClass();
+    // 检查当前传入的target对象是否为@Signature注解要拦截的类型，如果是的话，就
+    // 使用JDK动态代理的方式创建代理对象
+    Class<?>[] interfaces = getAllInterfaces(type, signatureMap);
+    if (interfaces.length > 0) {
+        // 创建JDK动态代理
+        return Proxy.newProxyInstance(
+                type.getClassLoader(),
+                interfaces,
+                // 这里使用的InvocationHandler就是Plugin本身
+                new Plugin(target, interceptor, signatureMap));
+    }
+    return target;
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
