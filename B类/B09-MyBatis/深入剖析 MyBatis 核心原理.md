@@ -773,27 +773,96 @@ public static Object wrap(Object target, Interceptor interceptor) {
 }
 ```
 
+## 21 | 深挖 MyBatis 与 Spring 集成底层原理
 
+**Spring**
 
+依赖注入（Dependency Injection）是实现 IoC 的常见方式之一。所谓依赖注入，就是我们的系统不再主动维护业务对象之间的依赖关系，而是将依赖关系转移到 IoC 容器中动态维护。
 
+Spring 中另一个比较重要的概念是 AOP（Aspect Oriented Programming）。AOP 中有几个关键概念：
 
+- 横切关注点：
+- 切面（@Aspect）：对横切关注点的抽象。
+- 连接点（JoinPoint）：业务逻辑中的某个方法，该方法会被 AOP 拦截。
+- 切入点（@Pointcut）：对连接点进行拦截的定义。
+- 通知：拦截到连接点之后要执行的代码，可以分为5类，分别是前置通知（@Before）、后置通知（@AfterReturning）、异常通知（@AfterThrowing）、最终通知和环绕通知（@Around）。
 
+**Spring MVC**
 
+下图展示了 Spring MVC 处理一次 HTTP 请求的完整流程：
 
+![image-20220628212309690](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206282123031.png)
 
+Spring MVC 框架处理 HTTP 请求的核心步骤如下。
 
+1. 用户的请求到达服务器后，经过HTTP Server 处理得到 HTTP Request 对象，并传到 Spring MVC 框架中的 DispatcherServlet 进行处理。
+2. DispatcherServlet 在接收到请求之后，会根据请求查找对应的 HandlerMapping，在 HandlerMapping 中维护了请求路径与 Controller 之间的映射。
+3. DispatcherServlet 根据步骤 2 中的 HandlerMapping 拿到请求相应的 Controller ，并将请求提交到该 Controller 进行处理。Controller 会调用业务 Service 完成请求处理，得到处理结果；Controller 会根据 Service 返回的处理结果，生成相应的 ModelAndView 对象并返回给 DispatcherServlet。
+4. DispatcherServlet 会从 ModelAndView 中解析出 ViewName，并交给 ViewResolver 解析出对应的 View 视图。
+5. DispatcherServlet 会从 ModelAndView 中拿到 Model（在 Model 中封装了我们要展示的数据），与步骤 4 中得到的 View 进行整合，得到最终的 Response 响应。
 
+**SSM 环境搭建**
 
+> https://github.com/xxxlxy2008/SSM
 
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206282204120.png)
 
+项目中的核心配置文件如下：
 
+- 第一个是 web.xml 配置文件。指定了初始化 Spring 上下文的 ContextLoaderListener 监听器；配置Spring MVC 中的 DispatcherServlet。
+- 第二个是 Spring 初始化时读取的 applicationContext.xml 配置文件。
 
+**Spring 集成 MyBatis 原理剖析**
 
+在搭建 SSM 开发环境的时候，我们引入了一个 mybatis-spring-*.jar 的依赖，这个依赖是 Spring 集成 MyBatis 的关键所在。
 
+下面我们就来看一下 Spring 集成 MyBatis 的几个关键实现。
 
+1. SqlSessionFactoryBean
 
+```java
+protected SqlSessionFactory buildSqlSessionFactory() throws IOException {
+    Configuration configuration;
+    XMLConfigBuilder xmlConfigBuilder = null;
+    if (this.configLocation != null) {
+        // 创建XMLConfigBuilder对象，读取指定的配置文件
+        xmlConfigBuilder = new XMLConfigBuilder(this.configLocation.getInputStream(),
+            null, this.configurationProperties);
+        configuration = xmlConfigBuilder.getConfiguration();
+    } else {
+        // 其他方式初始化Configuration全局配置对象
+    }
+    // 下面会根据前面第10、11讲介绍的初始化流程，初始化MyBatis的相关配置和对象，其中包括：
+    // 扫描typeAliasesPackage配置指定的包，并为其中的类注册别名
+    // 注册plugins集合中指定的插件
+    // 扫描typeHandlersPackage指定的包，并注册其中的TypeHandler
+    // 配置缓存、配置数据源、设置Environment等一系列操作
+    if (this.transactionFactory == null) {
+        // 默认使用的事务工厂类
+        this.transactionFactory = new SpringManagedTransactionFactory();
+    }
 
+    // 根据mapperLocations配置，加载Mapper.xml映射配置文件以及对应的Mapper接口
+    for (Resource mapperLocation : this.mapperLocations) {
+        XMLMapperBuilder xmlMapperBuilder = new XMLMapperBuilder(...);
+        xmlMapperBuilder.parse();
+    }
+    // 最后根据前面创建的Configuration全局配置对象创建SqlSessionFactory对象
+    return this.sqlSessionFactoryBuilder.build(configuration);
+}
+```
 
+2. SpringManagedTransaction
+
+在 SSM 集成环境中默认使用 SpringManagedTransactionFactory 这个 TransactionFactory 接口实现来创建 Transaction 对象，其中创建的 Transaction 对象是 SpringManagedTransaction。需要说明的是，这里的 Transaction 和 TransactionFactory 接口都是 MyBatis 中的接口。
+
+3. SqlSessionTemplate
+
+当 Spring 集成 MyBatis 使用的时候，SqlSession 接口的实现不再直接使用 MyBatis 提供的 DefaultSqlSession 默认实现，而是使用 SqlSessionTemplate，如果我们没有使用 Mapper 接口的方式编写 DAO 层，而是直接使用 Java 代码手写 DAO 层，那么我们就可以使用 SqlSessionTemplate。
+
+SqlSessionTemplate 是线程安全的，可以在多个线程之间共享使用。
+
+4. MapperFactoryBean 与 MapperScannerConfigurer
 
 
 
