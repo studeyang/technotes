@@ -600,25 +600,185 @@ ManagedTransaction 的实现相较于 JdbcTransaction 来说，有些许类似�
 
 学习完这一讲，你就会找到这些问题的答案。
 
-
+在 MyBatis 中，实现 CustomerMapper 接口与 CustomerMapper.xml 配置文件映射功能的是 binding 模块，其中涉及的核心类如下图所示：
 
 ![image-20220622220952236](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206222209513.png)
 
-
+下面我们就开始详细分析 binding 模块中涉及的这些核心组件。
 
 **MapperRegistry**
 
+MapperRegistry 是 MyBatis 初始化过程中构造的一个对象，主要作用就是统一维护 Mapper 接口以及这些 Mapper 的代理对象工厂。
 
+MapperRegistry 中的核心字段如下。
+
+```text
+config（Configuration 类型）：指向 MyBatis 全局唯一的 Configuration 对象，其中维护了解析之后的全部 MyBatis 配置信息。
+knownMappers（Map<Class<?>, MapperProxyFactory<?>> 类型）：维护了所有解析到的 Mapper 接口以及 MapperProxyFactory 工厂对象之间的映射关系。
+```
+
+在我们使用 CustomerMapper.find() 方法执行数据库查询的时候，MyBatis 会先从MapperRegistry 中获取 CustomerMapper 接口的代理对象，这里就使用到 MapperRegistry.getMapper()方法，它会拿到 MapperProxyFactory 工厂对象，并调用其 newInstance() 方法创建 Mapper 接口的代理对象。
+
+**MapperProxyFactory**
+
+MapperProxyFactory 的核心功能就是创建 Mapper 接口的代理对象，其底层核心原理就是 JDK 动态代理。
+
+MapperProxyFactory 的 newInstance() 方法创建代理对象过程如下。
+
+```java
+protected T newInstance(MapperProxy<T> mapperProxy) {
+    // 创建实现了mapperInterface接口的动态代理对象，这里使用的InvocationHandler 实现是MapperProxy
+    return (T) Proxy.newProxyInstance(mapperInterface.getClassLoader(),
+            new Class[]{mapperInterface}, mapperProxy);
+}
+```
 
 **MapperProxy**
 
+MapperProxy 是生成 Mapper 接口代理对象的关键，它实现了 InvocationHandler 接口。
 
+这里涉及 MethodHandle 的内容，所以下面我们就来简单介绍一下 MethodHandle 的基础知识点。
+
+- MethodHandle 简介
+
+从 Java 7 开始，除了反射之外，在 java.lang.invoke 包中新增了 MethodHandle 这个类，它的基本功能与反射中的 Method 类似，但它比反射更加灵活。
+
+使用 MethodHandle 进行方法调用的时候，往往会涉及下面几个核心步骤：
+
+1. 创建 MethodType 对象，确定方法的签名，这个签名会涉及方法参数及返回值的类型；
+2. 在 MethodHandles.Lookup 这个工厂对象中，根据方法名称以及上面创建的 MethodType 查找对应 MethodHandle 对象；
+3. 将 MethodHandle 绑定到一个具体的实例对象；
+4. 调用 MethodHandle.invoke()/invokeWithArguments()/invokeExact() 方法，完成方法调用。
+
+下面是 MethodHandle 的一个简单示例：
+
+```java
+public class MethodHandleDemo {
+    // 定义一个sayHello()方法
+    public String sayHello(String s) {
+        return "Hello, " + s;
+    }
+    public static void main(String[] args) throws Throwable {
+        // 初始化MethodHandleDemo实例
+        MethodHandleDemo subMethodHandleDemo = new SubMethodHandleDemo();
+        // 定义sayHello()方法的签名，第一个参数是方法的返回值类型，第二个参数是方法的参数列表
+        MethodType methodType = MethodType.methodType(String.class, String.class);
+        // 根据方法名和MethodType在MethodHandleDemo中查找对应的MethodHandle
+        MethodHandle methodHandle = MethodHandles.lookup()
+                .findVirtual(MethodHandleDemo.class, "sayHello", methodType);
+        // 将MethodHandle绑定到一个对象上，然后通过invokeWithArguments()方法传入实参并执行
+        System.out.println(methodHandle.bindTo(subMethodHandleDemo)
+                .invokeWithArguments("MethodHandleDemo"));
+        // 下面是调用MethodHandleDemo对象(即父类)的方法
+        MethodHandleDemo methodHandleDemo = new MethodHandleDemo();
+        System.out.println(methodHandle.bindTo(methodHandleDemo)
+                .invokeWithArguments("MethodHandleDemo"));
+    }
+    public static class SubMethodHandleDemo extends MethodHandleDemo{
+        // 定义一个sayHello()方法
+        public String sayHello(String s) {
+            return "Sub Hello, " + s;
+        }
+    }
+}
+```
+
+- MethodProxy 中的代理逻辑
+
+介绍完 MethodHandle 的基础之后，我们回到 MethodProxy 继续分析。
+
+MapperProxy.invoke() 方法是代理对象执行的入口，其中会拦截所有非 Object 方法，针对每个被拦截的方法，都会调用 cachedInvoker() 方法获取对应的 MapperMethod 对象，并调用其 invoke() 方法执行代理逻辑以及目标方法。
+
+```java
+private MapperMethodInvoker cachedInvoker(Method method) throws Throwable {
+    // 尝试从methodCache缓存中查询方法对应的MapperMethodInvoker
+    MapperMethodInvoker invoker = methodCache.get(method);
+    if (invoker != null) {
+        return invoker;
+    }
+    // 如果方法在缓存中没有对应的MapperMethodInvoker，则进行创建
+    return methodCache.computeIfAbsent(method, m -> {
+        if (m.isDefault()) { // 针对default方法的处理
+            // 这里根据JDK版本的不同，获取方法对应的MethodHandle的方式也有所不同
+            // 在JDK 8中使用的是lookupConstructor字段，而在JDK 9中使用的是
+            // privateLookupInMethod字段。获取到MethodHandle之后，会使用
+            // DefaultMethodInvoker进行封装
+            if (privateLookupInMethod == null) {
+                return new DefaultMethodInvoker(getMethodHandleJava8(method));
+            } else {
+                return new DefaultMethodInvoker(getMethodHandleJava9(method));
+            }
+        } else {
+            // 对于其他方法，会创建MapperMethod并使用PlainMethodInvoker封装
+            return new PlainMethodInvoker(
+                    new MapperMethod(mapperInterface, method, sqlSession.getConfiguration()));
+        }
+    });
+}
+```
+
+在 PlainMethodInvoker.invoke() 方法中，会通过底层维护的 MapperMethod 完成方法调用，其核心实现如下：
+
+```java
+public Object invoke(Object proxy, Method method, Object[] args, SqlSession sqlSession) throws Throwable {
+    // 直接执行MapperMethod.execute()方法完成方法调用
+    return mapperMethod.execute(sqlSession, args);
+}
+```
 
 **MapperMethod**
 
+通过对 MapperProxy 的分析我们知道，MapperMethod 是最终执行 SQL 语句的地方，同时也记录了 Mapper 接口中的对应方法，其核心字段也围绕这两方面的内容展开。
 
+- SqlCommand
 
+MapperMethod 的第一个核心字段是 command（SqlCommand 类型），其中维护了关联 SQL 语句的相关信息。
 
+- MethodSignature
+
+MapperMethod 的第二个核心字段是 method 字段（MethodSignature 类型），其中维护了 Mapper 接口中方法的相关信息。
+
+- 深入 execute() 方法
+
+execute() 方法是 MapperMethod 中最核心的方法之一。execute() 方法会根据要执行的 SQL 语句的具体类型执行 SqlSession 的相应方法完成数据库操作，其核心实现如下：
+
+```java
+public Object execute(SqlSession sqlSession, Object[] args) {
+    Object result;
+    switch (command.getType()) { // 判断SQL语句的类型
+        case INSERT: {
+            // 通过ParamNameResolver.getNamedParams()方法将方法的实参与
+            // 参数的名称关联起来
+            Object param = method.convertArgsToSqlCommandParam(args);
+            // 通过SqlSession.insert()方法执行INSERT语句，
+            // 在rowCountResult()方法中，会根据方法的返回值类型对结果进行转换
+            result = rowCountResult(sqlSession.insert(command.getName(), param));
+            break;
+        }
+        case UPDATE: {
+            Object param = method.convertArgsToSqlCommandParam(args);
+            // 通过SqlSession.update()方法执行UPDATE语句
+            result = rowCountResult(sqlSession.update(command.getName(), param));
+            break;
+        }
+        // DELETE分支与UPDATE类似，省略
+        case SELECT:
+            if (method.returnsVoid() && method.hasResultHandler()) {
+                // 如果方法返回值为void，且参数中包含了ResultHandler类型的实参，
+                // 则查询的结果集将会由ResultHandler对象进行处理
+                executeWithResultHandler(sqlSession, args);
+                result = null;
+            } else if (method.returnsMany()) {
+                // executeForMany()方法处理返回值为集合或数组的场景
+                result = executeForMany(sqlSession, args);
+            } else ...// 省略针对Map、Cursor以及Optional返回值的处理
+            }
+            break;
+            // 省略FLUSH和default分支
+    }
+    return result;
+}
+```
 
 
 
