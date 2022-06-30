@@ -780,7 +780,44 @@ public Object execute(SqlSession sqlSession, Object[] args) {
 }
 ```
 
+## 09 | 基于 MyBatis 缓存分析装饰器模式的最佳实践
 
+MyBatis 的缓存分为一级缓存、二级缓存两个级别，并且都实现了 Cache 接口，所以这一讲我们就重点来介绍 Cache 接口及其核心实现类。
+
+**装饰器模式**
+
+装饰器模式是一种通过组合方式实现扩展的设计模式。相较于继承这种静态的扩展方式，装饰器模式可以在运行时根据系统状态，动态决定为一个实现类添加哪些扩展功能。
+
+装饰器模式的核心类图，如下所示：
+
+![image-20220630223436152](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206302234508.png)
+
+装饰器模式中的核心类主要有下面四个。
+
+- Component 接口：整个功能的核心抽象，JDK 中的 IO 流体系就使用了装饰器模式，其中的 InputStream 接口就扮演了 Component 接口的角色。
+- ComponentImpl 实现类：实现了 Component 接口最基础、最核心的功能，也就是被装饰的、原始的基础类。在 JDK IO 流体系之中的 FileInputStream 就扮演了 ComponentImpl 的角色
+- Decorator 抽象类：其核心不是提供新的扩展能力，而是封装一个 Component 类型的字段。
+- DecoratorImpl1、DecoratorImpl2：它们的核心就是在被装饰对象的基础之上添加新的扩展功能。
+
+**Cache 接口及核心实现**
+
+Cache 接口中的核心方法主要是 putObject()、getObject() 和 removeObject() 三个方法，分别用来写入、查询和删除缓存数据。
+
+Cache 接口的 PerpetualCache 实现类扮演了装饰器模式中 ComponentImpl 这个角色，实现了 Cache 接口缓存数据的基本能力。
+
+PerpetualCache 中有两个核心字段：一个是 id 字段（String 类型），记录了缓存对象的唯一标识；另一个是 cache 字段（HashMap 类型），真正实现 Cache 存储的数据结构。
+
+**Cache 接口装饰器**
+
+除了 PerpetualCache 之外的其他所有 Cache 接口实现类，都是装饰器实现。
+
+1. BlockingCache
+
+BlockingCache 是在原有 Cache 实现之上添加了阻塞线程的特性。对于一个 Key 来说，同一时刻，BlockingCache 只会让一个业务线程到数据库中去查找，查找到结果之后，会添加到 BlockingCache 中缓存。
+
+BlockingCache 的核心原理如下图所示：
+
+![image-20220630225350095](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206302253339.png)
 
 
 
