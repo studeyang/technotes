@@ -819,6 +819,68 @@ BlockingCache 的核心原理如下图所示：
 
 ![image-20220630225350095](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206302253339.png)
 
+2. FifoCache
+
+为了控制 Cache 的大小，MyBatis 提供了缓存淘汰规则。FifoCache 是 FIFO（先入先出）策略的装饰器，当 Cache 中的缓存条目达到上限的时候，则会将 Cache 中最早写入的缓存条目清理掉。
+
+FifoCache 作为一个 Cache 装饰器，自然也会包含一个指向 Cache 的 delegate 字段。同时它还维护了两个与 FIFO 相关的字段：一个是 keyList 队列（LinkedList）。
+
+3. LruCache
+
+除了 FIFO 策略之外，MyBatis 还支持 LRU（Least Recently Used，近期最少使用算法）策略来清理缓存。
+
+LruCache 中除了有一个 delegate 字段指向被装饰 Cache 对象之外，还维护了一个 LinkedHashMap 集合（keyMap 字段），用来记录各个缓存条目最近的使用情况，以及一个 eldestKey 字段（Object 类型），用来指向最近最少使用的 Key。
+
+4. SoftCache
+
+我们先来简单回顾一下 Java 中的强引用和软引用，以及这些引用的相关机制。
+
+强引用是 JVM 中最普遍的引用，我们常用的赋值操作就是强引用，例如，Person p = new Person(); 这个 Person 对象被引用的时候，即使是 JVM 内存空间不足触发 GC，甚至是内存溢出（OutOfMemoryError），也不会回收这个 Person 对象。
+
+软引用比强引用稍微弱一些。当 JVM 内存不足时，GC 才会回收那些只被软引用指向的对象，从而避免 OutOfMemoryError。根据软引用的这一特性，我们会发现软引用特别适合做缓存。
+
+SoftCache 中的 value 是 SoftEntry 类型的对象，具体实现如下：
+
+```java
+private static class SoftEntry extends SoftReference<Object> {
+    private final Object key;
+    SoftEntry(Object key, Object value, ReferenceQueue<Object> garbageCollectionQueue) {
+        // 指向value的是软引用，并且关联了引用队列
+        super(value, garbageCollectionQueue);
+        // 指向key的是强引用
+        this.key = key;
+    }
+}
+```
+
+5. WeakCache
+
+弱引用比软引用的引用强度还要弱。在 JVM 进行垃圾回收的时候，若发现某个对象只有一个弱引用指向它，那么这个对象会被 GC 立刻回收。
+
+从这个特性我们可以得到一个结论：只被弱引用指向的对象只在两次 GC 之间存活。而只被软引用指向的对象是在 JVM 内存紧张的时候才被回收，它是可以经历多次 GC 的，这就是两者最大的区别。
+
+## 10 | 鸟瞰 MyBatis 初始化，把握 MyBatis 启动流程脉络（上）
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
