@@ -861,17 +861,98 @@ private static class SoftEntry extends SoftReference<Object> {
 
 ## 10 | 鸟瞰 MyBatis 初始化，把握 MyBatis 启动流程脉络（上）
 
+在初始化的过程中，MyBatis 会读取 mybatis-config.xml 这个全局配置文件以及所有的 Mapper 映射配置文件，同时还会加载这两个配置文件中指定的类，解析类中的相关注解，最终将解析得到的信息转换成配置对象。完成配置加载之后，MyBatis 就会根据得到的配置对象初始化各个模块。
 
+MyBatis 在加载配置文件、创建配置对象的时候，会使用到经典设计模式中的构造者模式。
 
+**构造者模式**
 
+构造者模式是将复杂对象的创建过程分解成了多个简单步骤，在创建复杂对象的时候，只需要了解复杂对象的基本属性即可，而不需要关心复杂对象的内部构造过程。
 
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207021601510.png" alt="image-20220702160153109" style="zoom: 67%;" />
 
+从图中，我们可以看到构造者模式的四个核心组件。
 
+- Product 接口：复杂对象的接口，定义了要创建的目标对象的行为。
+- ProductImpl 类：Product 接口的实现，它真正要创建的复杂对象，其中实现了我们需要的复杂业务逻辑。
+- Builder 接口：定义了构造 Product 对象的每一步行为。
+- BuilderImpl 类：Builder 接口的具体实现，其中具体实现了构造一个 Product 的每一个步骤，例如上图中的 setPart1()、setPart2() 等方法，都是用来构造 ProductImpl 对象的各个部分。在完成整个 Product 对象的构造之后，我们会通过 build() 方法返回这个构造好的 Product 对象。
 
+**mybatis-config.xml 解析全流程**
 
+MyBatis 初始化的第一个步骤就是加载和解析 mybatis-config.xml 这个全局配置文件，得到对应的 Configuration 全局配置对象。入口是 XMLConfigBuilder 这个 Builder 对象。
 
+首先我们来了解一下 XMLConfigBuilder 的核心字段。
 
+- parsed（boolean 类型）：状态标识字段，记录当前 XMLConfigBuilder 对象是否已经成功解析完 mybatis-config.xml 配置文件。
+- parser（XPathParser 类型）：XPathParser 对象是一个 XML 解析器，这里的 parser 对象就是用来解析 mybatis-config.xml 配置文件的。
+- environment（String 类型）： 标签定义的环境名称。
+- localReflectorFactory（ReflectorFactory 类型）：ReflectorFactory 接口的核心功能是实现对 Reflector 对象的创建和缓存。
 
+XMLConfigBuilder.parse() 方法触发了 mybatis-config.xml 配置文件的解析，其中的 parseConfiguration() 方法定义了解析 mybatis-config.xml 配置文件的完整流程，核心步骤如下：
+
+- 解析 \<properties> 标签；
+- 解析 \<settings> 标签；
+- 处理日志相关组件；
+- 解析 \<typeAliases> 标签；
+- 解析 \<plugins> 标签；
+- 解析 \<objectFactory> 标签；
+- 解析 <objectWrapperFactory> 标签；
+- 解析 <reflectorFactory> 标签；
+- 解析 \<environments> 标签；
+- 解析 \<databaseIdProvider> 标签；
+- 解析 \<typeHandlers> 标签；
+- 解析 \<mappers> 标签。
+
+下面我们就逐一介绍这些方法的核心实现。
+
+**1. 处理\<properties>标签**
+
+我们可以通过 <properties> 标签定义 KV 信息供 MyBatis 使用，propertiesElement() 方法的核心逻辑就是解析 mybatis-config.xml 配置文件中的 <properties> 标签。
+
+从 <properties> 标签中解析出来的 KV 信息会被记录到一个 Properties 对象中，在后续解析其他标签的时候，MyBatis 会使用这个 Properties 对象中记录的 KV 信息替换匹配的占位符。
+
+**2. 处理\<settings>标签**
+
+MyBatis 中有很多全局性的配置，例如，是否使用二级缓存、是否开启懒加载功能等，这些都是通过 mybatis-config.xml 配置文件中的 <settings> 标签进行配置的。
+
+XMLConfigBuilder.settingsAsProperties() 方法的核心逻辑就是解析 <settings> 标签，并将解析得到的配置信息记录到 Configuration 这个全局配置对象的同名属性中。
+
+**3. 处理\<typeAliases>和\<typeHandlers>标签**
+
+XMLConfigBuilder 中提供了 typeAliasesElement() 方法和 typeHandlerElement() 方法，分别用来负责处理 <typeAliases> 标签和 <typeHandlers> 标签，解析得到的别名信息和 TypeHandler 信息就会分别记录到 TypeAliasRegistry 和 TypeHandlerRegistry。
+
+**4. 处理\<plugins>标签**
+
+MyBatis 是一个非常易于扩展的持久层框架，而插件就是 MyBatis 提供的一种重要扩展机制。
+
+XMLConfigBuilder 中的 pluginElement()方法的核心就是解析 <plugins> 标签中配置的自定义插件。
+
+**5. 处理\<objectFactory>标签**
+
+MyBatis 支持自定义 ObjectFactory 实现类和 ObjectWrapperFactory。XMLConfigBuilder 中的 objectFactoryElement() 方法就实现了加载自定义 ObjectFactory 实现类的功能，其核心逻辑就是解析 <objectFactory> 标签中配置的自定义 ObjectFactory 实现类，并完成相关的实例化操作。
+
+除了 <objectFactory> 标签之外，我们还可以通过 <objectWrapperFactory> 标签和 <reflectorFactory> 标签配置自定义的 ObjectWrapperFactory 实现类和 ReflectorFactory 实现类，这两个标签的解析分别对应 objectWrapperFactoryElement() 方法和 reflectorFactoryElement() 方法。
+
+**6. 处理\<environments>标签**
+
+在 MyBatis 中，我们可以通过 <environment> 标签为不同的环境添加不同的配置，例如，线上环境、预上线环境、测试环境等，每个 <environment> 标签只会对应一种特定的环境配置。
+
+environmentsElement() 方法中实现了 XMLConfigBuilder 处理 <environments> 标签的核心逻辑，它会根据 XMLConfigBuilder.environment 字段值，拿到正确的 <environment> 标签，然后解析这个环境中使用的 TransactionFactory、DataSource 等核心对象，也就知道了 MyBatis 要请求哪个数据库、如何管理事务等信息。
+
+**7. 处理\<databaseIdProvider>标签**
+
+在 MyBatis 中编写的都是原生的 SQL 语句，而很多数据库产品都会有一些 SQL 方言，这些方言与标准 SQL 不兼容。
+
+在 mybatis-config.xml 配置文件中，我们可以通过 <databaseIdProvider> 标签定义需要支持的全部数据库的 DatabaseId，在后续编写 Mapper 映射配置文件的时候，就可以为同一个业务场景定义不同的 SQL 语句，来支持不同的数据库，这里就是靠 DatabaseId 来确定哪个 SQL 语句支持哪个数据库的。
+
+databaseIdProviderElement() 方法是 XMLConfigBuilder 处理 <databaseIdProvider> 标签的地方，其中的核心就是获取 DatabaseId 值。
+
+**8. 处理\<mappers>标签**
+
+除了 mybatis-config.xml 这个全局配置文件之外，MyBatis 初始化的时候还会加载 <mappers> 标签下定义的 Mapper 映射文件。<mappers> 标签中会指定 Mapper.xml 映射文件的位置，通过解析 <mappers> 标签，MyBatis 就能够知道去哪里加载这些 Mapper.xml 文件了。
+
+mapperElement() 方法就是 XMLConfigBuilder 处理 <mappers> 标签的具体实现，其中会初始化 XMLMapperBuilder 对象来加载各个 Mapper.xml 映射文件。同时，还会扫描 Mapper 映射文件相应的 Mapper 接口，处理其中的注解并将 Mapper 接口注册到 MapperRegistry 中。
 
 
 
