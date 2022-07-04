@@ -172,6 +172,7 @@
   - [Info公开课](D类/D08-杂谈/InfoQ公开课.md)
   - [RestTemplate使用样例](D类/D08-杂谈/RestTemplate使用样例.md)
   - [Java8 Stream常见用法](D类/D08-杂谈/Java8%20Stream常见用法.md)
+  - [JettBrainIDEA使用](D类/D08-杂谈/JettBrainIDEA使用.md)
   
 - 架构方案
   - [企业级高可用延时消息设计](D类/D09-架构方案/企业级高可用延时消息设计.md)
