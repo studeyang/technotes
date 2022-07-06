@@ -859,6 +859,8 @@ private static class SoftEntry extends SoftReference<Object> {
 
 从这个特性我们可以得到一个结论：只被弱引用指向的对象只在两次 GC 之间存活。而只被软引用指向的对象是在 JVM 内存紧张的时候才被回收，它是可以经历多次 GC 的，这就是两者最大的区别。
 
+# 模块三：核心处理层
+
 ## 10 | 鸟瞰 MyBatis 初始化，把握 MyBatis 启动流程脉络（上）
 
 在初始化的过程中，MyBatis 会读取 mybatis-config.xml 这个全局配置文件以及所有的 Mapper 映射配置文件，同时还会加载这两个配置文件中指定的类，解析类中的相关注解，最终将解析得到的信息转换成配置对象。完成配置加载之后，MyBatis 就会根据得到的配置对象初始化各个模块。
@@ -954,6 +956,186 @@ databaseIdProviderElement() 方法是 XMLConfigBuilder 处理 <databaseIdProvide
 
 mapperElement() 方法就是 XMLConfigBuilder 处理 <mappers> 标签的具体实现，其中会初始化 XMLMapperBuilder 对象来加载各个 Mapper.xml 映射文件。同时，还会扫描 Mapper 映射文件相应的 Mapper 接口，处理其中的注解并将 Mapper 接口注册到 MapperRegistry 中。
 
+## 11 | 鸟瞰 MyBatis 初始化，把握 MyBatis 启动流程脉络（下）
+
+这一讲我们就紧接着上一讲的内容，继续介绍 MyBatis 初始化流程，重点介绍Mapper.xml 配置文件的解析以及 SQL 语句的处理逻辑。
+
+**Mapper.xml 映射文件解析全流程**
+
+MyBatis 会为每个 Mapper.xml 映射文件创建一个 XMLMapperBuilder 实例完成解析。XMLMapperBuilder 中 configurationElement() 方法是真正解析 Mapper.xml 映射文件的地方，其中定义了处理 Mapper.xml 映射文件的核心流程：
+
+- 获取 <mapper> 标签中的 namespace 属性，同时会进行多种边界检查；
+- 解析 <cache> 标签；
+- 解析 <cache-ref> 标签；
+- 解析 <resultMap> 标签；
+- 解析 <sql> 标签；
+- 解析 <select>、<insert>、<update>、<delete> 等 SQL 标签。
+
+下面我们就按照顺序逐一介绍这些方法的核心实现。
+
+**1. 处理 <cache> 标签**
+
+Cache 接口及其实现是MyBatis 一级缓存和二级缓存的基础，其中，一级缓存是默认开启的，而二级缓存默认情况下并没有开启，如有需要，可以通过<cache>标签为指定的namespace 开启二级缓存。
+
+XMLMapperBuilder 中解析 <cache> 标签的核心逻辑位于 cacheElement() 方法之中，其具体步骤如下：
+
+- 获取 <cache> 标签中的各项属性（type、flushInterval、size 等属性）；
+- 读取 <cache> 标签下的子标签信息，这些信息将用于初始化二级缓存；
+- MapperBuilderAssistant 会根据上述配置信息，创建一个全新的Cache 对象并添加到 Configuration.caches 集合中保存。
+
+**2. 处理<cache-ref>标签**
+
+MyBatis 可以通过 <cache> 标签为每个 namespace 开启二级缓存，二级缓存是 namespace 级别的。但是，在有的场景中，我们会需要在多个 namespace 共享同一个二级缓存，也就是共享同一个 Cache 对象。
+
+为了解决这个需求，MyBatis提供了 <cache-ref> 标签来引用另一个 namespace 的二级缓存。cacheRefElement() 方法是处理 <cache-ref> 标签的核心逻辑所在，在 Configuration 中维护了一个 cacheRefMap 字段（HashMap<String,String> 类型），其中的 Key 是 <cache-ref> 标签所属的namespace 标识，Value 值是 <cache-ref> 标签引用的 namespace 值，这样的话，就可以将两个namespace 关联起来了，即这两个 namespace 共用一个 Cache对象。
+
+**3. 处理<resultMap>标签**
+
+在使用 JDBC 的时候，我们需要手动写代码将select 语句的结果集转换成 Java 对象，这是一项重复性很大的操作。
+
+为了将 Java 开发者从这种重复性的工作中解脱出来，MyBatis 提供了 <resultMap> 标签来定义结果集与 Java 对象之间的映射规则。
+
+整个 <resultMap> 标签最终会被解析成 ResultMap 对象，它与 ResultMapping 之间的映射关系如下图所示：
+
+![image-20220702220214547](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207022202838.png)
+
+**SQL 语句解析全流程**
+
+在 Mapper.xml 映射文件中，除了上面介绍的标签之外，还有一类比较重要的标签，那就是 <select>、<insert>、<delete>、<update> 等 SQL 语句标签。
+
+虽然定义在 Mapper.xml 映射文件中，但是这些标签是由 XMLStatementBuilder 进行解析的，而不再由 XMLMapperBuilder 来完成解析。
+
+**1. 处理 <include> 标签**
+
+在实际应用中，我们会在<sql> 标签中定义一些能够被重用的SQL 片段，在 XMLMapperBuilder.sqlElement() 方法中会根据当前使用的 DatabaseId 匹配 <sql> 标签，只有匹配的 SQL 片段才会被加载到内存。
+
+针对 <include> 标签的处理如下：
+
+- 查找 refid 属性指向的 <sql> 标签，得到其对应的 Node 对象；
+- 解析 <include> 标签下的 <property> 标签，将得到的键值对添加到 variablesContext 集合（Properties 类型）中，并形成新的 Properties 对象返回，用于替换占位符；
+- 递归执行 applyIncludes()方法，因为在 <sql> 标签的定义中可能会使用 <include> 引用其他 SQL 片段，在 applyIncludes()方法递归的过程中，如果遇到“${}”占位符，则使用 variablesContext 集合中的键值对进行替换；
+- 最后，将 <include> 标签替换成 <sql> 标签的内容。
+
+<include> 标签和 <sql> 标签是可以嵌套多层的，此时就会涉及 applyIncludes()方法的递归，同时可以配合“${}”占位符，实现 SQL 片段模板化，更大程度地提高 SQL 片段的重用率。
+
+**2. 处理 <selectKey> 标签**
+
+在有的数据库表设计场景中，我们会添加一个自增 ID 字段作为主键，例如，用户 ID、订单 ID 或者这个自增 ID 本身并没有什么业务含义，只是一个唯一标识而已。在某些业务逻辑里面，我们希望在执行 insert 语句的时候返回这个自增 ID 值，<selectKey> 标签就可以实现自增 ID 的获取。
+
+<selectKey> 标签不仅可以获取自增 ID，还可以指定其他 SQL 语句，从其他表或执行数据库的函数获取字段值。
+
+**3. 处理 SQL 语句**
+
+经过 <include> 标签和 <selectKey> 标签的处理流程之后，XMLStatementBuilder 中的 parseStatementNode()方法接下来就要开始处理 SQL 语句了。
+
+## 12 | 深入分析动态 SQL 语句解析全流程（上）
+
+MyBatis 会将 Mapper 映射文件中定义的 SQL 语句解析成 SqlSource 对象，其中的动态标签、SQL 语句文本等，会解析成对应类型的 SqlNode 对象。
+
+在开始介绍 SqlSource 接口、SqlNode 接口等核心接口的相关内容之前，我们需要先来了解一下动态 SQL 中使用到的基础知识和基础组件。
+
+**OGNL 表达式语言**
+
+OGNL 表达式语言是一款成熟的、面向对象的表达式语言。在动态 SQL 语句中使用到了 OGNL 表达式读写 JavaBean 属性值、执行 JavaBean 方法这两个基础功能。
+
+OGNL 表达式是相对完备的一门表达式语言，我们可以通过“对象变量名称.方法名称/属性名称”调用一个 JavaBean 对象的方法/属性，还可以通过“@[类的完全限定名]@[静态方法/静态字段]”调用一个 Java 类的静态方法/静态字段。
+
+下面我就通过一个示例来帮助你快速了解 OGNL 表达式的基础使用：
+
+```java
+public class OGNLDemo {
+    private static Customer customer;
+    private static OgnlContext context;
+    private static Customer createCustomer() {
+        customer = new Customer();
+        customer.setId(1);
+        customer.setName("Test Customer");
+        customer.setPhone("1234567");
+        Address address = new Address();
+        address.setCity("city-001");
+        address.setId(1);
+        address.setCountry("country-001");
+        address.setStreet("street-001");
+        ArrayList<Address> addresses = new ArrayList<>();
+        addresses.add(address);
+        customer.setAddresses(addresses);
+        return customer;
+    }
+    public static void main(String[] args) throws Exception {
+        customer = createCustomer(); // 创建Customer对象以及Address对象
+        // 创建OgnlContext上下文对象
+        context = new OgnlContext(new DefaultClassResolver(),
+                new DefaultTypeConverter(),
+                new OgnlMemberAccess());
+        // 设置root以及address这个key，默认从root开始查找属性或方法
+        context.setRoot(customer);
+        context.put("address", customer.getAddresses().get(0));
+        // Ognl.paraseExpression()方法负责解析OGNL表达式，获取Customer的addresses属性
+        Object obj = Ognl.getValue(Ognl.parseExpression("addresses"),
+                context, context.getRoot());
+        System.out.println(obj);
+        // 输出是[Address{id=1, street='street-001', city='city-001', country='country-001'}]
+        // 获取city属性
+        obj = Ognl.getValue(Ognl.parseExpression("addresses[0].city"),
+                context, context.getRoot());
+        System.out.println(obj); // 输出是city-001
+        // #address表示访问的不是root对象，而是OgnlContext中key为addresses的对象
+        obj = Ognl.getValue(Ognl.parseExpression("#address.city"), context,
+                context.getRoot());
+        System.out.println(obj); // 输出是city-001
+        // 执行Customer的getName()方法
+        obj = Ognl.getValue(Ognl.parseExpression("getName()"), context,
+                context.getRoot());
+        System.out.println(obj);
+        // 输出是Test Customer
+    }
+}
+```
+
+MyBatis 为了提高 OGNL 表达式的工作效率，添加了一层 OgnlCache 来缓存表达式编译之后的结果（不是表达式的执行结果）。
+
+**DynamicContext 上下文**
+
+在 MyBatis 解析一条动态 SQL 语句的时候，可能整个流程非常长，其中涉及多层方法的调用、方法的递归、复杂的循环等，其中产生的中间结果需要有一个地方进行存储，那就是 DynamicContext 上下文对象。
+
+**组合模式**
+
+组合模式（有时候也被称为“部分-整体”模式）是将同一类型的多个对象组合成一个树形结构。在使用这个树形结构的时候，我们可以像处理一个对象那样进行处理，而不用关心其复杂的树形结构。
+
+组合模式的核心结构如下图所示：
+
+![image-20220706224428437](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207062244773.png)
+
+从上图中，我们可以看出组合模式的核心组件有下面三个。
+
+- Component 接口：定义了整个树形结构中每个节点的基础行为。一般情况下会定义两类方法，一类是真正的业务行为，另一类是管理子节点的行为，例如 addChild()、removeChild()、getChildren() 等方法。
+- Leaf 类：抽象的是树形结构中的叶子节点。Leaf 类只实现了 Component 接口中的业务方法，而管理子节点的方法是空实现或直接抛出异常。
+- Composite 类：抽象了树形结构中的树枝节点（非叶子节点）。Composite 类不仅要实现 Component 接口的业务方法，而且还需要实现子节点管理的相关方法，并在内部维护一个集合类来管理这些子节点。Composite 实现的业务方法一般逻辑比较简单，大都是直接循环调用所有子节点的业务方法。
+
+可以看出组合模式有以下两个优势：
+
+- 由于使用方并不关心自己使用的是树形 Component 结构还是单个 Component 对象，所以可以帮助上层使用方屏蔽复杂的树形结构，将使用方的逻辑与树形结构解耦；
+- 如果要在树形结构中添加新的功能，只需要增加树形结构中的节点即可，也就是提供新的 Component 接口实现并添加到树中，这符合“开放-封闭”原则。
+
+**SqlNode**
+
+在 MyBatis 处理动态 SQL 语句的时候，会将动态 SQL 标签解析为 SqlNode 对象，多个 SqlNode 对象就是通过组合模式组成树形结构供上层使用的。
+
+首先，介绍一下 SqlNode 接口的定义，如下所示：
+
+```java
+public interface SqlNode {
+    // apply()方法会根据用户传入的实参，解析该SqlNode所表示的动态SQL内容并
+    // 将解析之后的SQL片段追加到DynamicContext.sqlBuilder字段中暂存。
+    // 当SQL语句中全部的动态SQL片段都解析完成之后，就可以从DynamicContext.sqlBuilder字段中
+    // 得到一条完整的、可用的SQL语句了
+    boolean apply(DynamicContext context);
+}
+```
+
+MyBatis 为 SqlNode 接口提供了非常多的实现类（如下图），其中很多实现类都对应一个动态 SQL 标签，但是也有 SqlNode 实现扮演了组合模式中 Composite 的角色，例如，MixedSqlNode 实现类。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207062250235.png)
 
 
 
@@ -968,7 +1150,8 @@ mapperElement() 方法就是 XMLConfigBuilder 处理 <mappers> 标签的具体�
 
 
 
-# 模块三：核心处理层
+
+
 
 
 
