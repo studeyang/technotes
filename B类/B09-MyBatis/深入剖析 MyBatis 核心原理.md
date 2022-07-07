@@ -1137,19 +1137,81 @@ MyBatis 为 SqlNode 接口提供了非常多的实现类（如下图），其中
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207062250235.png)
 
+## 13 | 深入分析动态 SQL 语句解析全流程（下）
 
+我们紧接着上一讲，继续介绍剩余 SqlNode 实现以及 SqlSource 的相关内容。
 
+**SqlNode 剩余实现类**
 
+在上一讲我们已经介绍了 StaticTextSqlNode、MixedSqlNode、TextSqlNode、IfSqlNode、TrimSqlNode 这几个 SqlNode 的实现，下面我们再把剩下的三个 SqlNode 实现类也说明下。
 
+**1. ForeachSqlNode**
 
+ForeachSqlNode 就是 <foreach> 标签的抽象。
 
+**2. ChooseSqlNode**
 
+在 Java 中，我们可以通过 switch...case...default 的方式来编写这段代码；在 MyBatis 的动态 SQL 语句中，我们可以使用 <choose>、<when> 和 <otherwise> 三个标签来实现类似的效果。
 
+<choose> 标签会被 MyBatis 解析成 ChooseSqlNode 对象，<when> 标签会被解析成 IfSqlNode 对象，<otherwise> 标签会被解析成 MixedSqlNode 对象。
 
+**3. VarDeclSqlNode**
 
+VarDeclSqlNode 抽象了 <bind> 标签，其核心功能是将一个 OGNL 表达式的值绑定到一个指定的变量名上，并记录到 DynamicContext 上下文中。
 
+**SqlSourceBuilder**
 
+动态 SQL 语句经过上述 SqlNode 的解析之后，接着会由 SqlSourceBuilder 进行下一步处理。
 
+SqlSourceBuilder 的核心操作主要有两个：
+
+- 解析“#{}”占位符中携带的各种属性，例如，“#{id, javaType=int, jdbcType=NUMERIC, typeHandler=MyTypeHandler}”这个占位符，指定了 javaType、jdbcType、typeHandler 等配置；
+- 将 SQL 语句中的“#{}”占位符替换成“?”占位符，替换之后的 SQL 语句就可以提交给数据库进行编译了。
+
+**SqlSource**
+
+经过上述一系列处理之后，SQL 语句最终会由 SqlSource 进行最后的处理。
+
+在 SqlSource 接口中只定义了一个 getBoundSql() 方法，它控制着动态 SQL 语句解析的整个流程，它会根据从 Mapper.xml 映射文件（或注解）解析到的 SQL 语句以及执行 SQL 时传入的实参，返回一条可执行的 SQL。
+
+下图展示了 SqlSource 接口的核心实现：
+
+![image-20220707221317202](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207072213709.png)
+
+下面我们简单介绍一下这三个核心实现类的具体含义。
+
+- DynamicSqlSource：当 SQL 语句中包含动态 SQL 的时候，会使用 DynamicSqlSource 对象。
+- RawSqlSource：当 SQL 语句中只包含静态 SQL 的时候，会使用 RawSqlSource 对象。
+- StaticSqlSource：DynamicSqlSource 和 RawSqlSource 经过一系列解析之后，会得到最终可提交到数据库的 SQL 语句，这个时候就可以通过 StaticSqlSource 进行封装了。
+
+## 14 | 探究 MyBatis 结果集映射机制背后的秘密（上）
+
+ResultMap 只是定义了一个静态的映射规则，那在运行时，MyBatis 是如何根据映射规则将 ResultSet 映射成 Java 对象的呢？
+
+当 MyBatis 执行完一条 select 语句，拿到 ResultSet 结果集之后，会将其交给关联的 ResultSetHandler 进行后续的映射处理。ResultSetHandler 是一个接口，其中定义了三个方法，分别用来处理不同的查询返回值：
+
+```java
+public interface ResultSetHandler {
+    // 将ResultSet映射成Java对象
+    <E> List<E> handleResultSets(Statement stmt) throws SQLException;
+    // 将ResultSet映射成游标对象
+    <E> Cursor<E> handleCursorResultSets(Statement stmt) throws SQLException;
+    // 处理存储过程的输出参数
+    void handleOutputParameters(CallableStatement cs) throws SQLException;
+}
+```
+
+在 MyBatis 中只提供了一个 ResultSetHandler 接口实现，即 DefaultResultSetHandler。下面我们就以 DefaultResultSetHandler 为中心，介绍 MyBatis 中 ResultSet 映射的核心流程。
+
+**结果集处理入口**
+
+DefaultResultSetHandler 实现的 handleResultSets() 方法支持多个 ResultSet 的处理（单 ResultSet 的处理只是其中的特例）。
+
+**简单映射**
+
+了解了处理 ResultSet 的入口逻辑之后，下面我们继续来深入了解一下 DefaultResultSetHandler 是如何处理单个结果集的，这部分逻辑的入口是 handleResultSet() 方法。
+
+## 15 | 探究 MyBatis 结果集映射机制背后的秘密（下）
 
 
 
