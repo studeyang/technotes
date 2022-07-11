@@ -1211,14 +1211,6 @@ DefaultResultSetHandler 实现的 handleResultSets() 方法支持多个 ResultSe
 
 了解了处理 ResultSet 的入口逻辑之后，下面我们继续来深入了解一下 DefaultResultSetHandler 是如何处理单个结果集的，这部分逻辑的入口是 handleResultSet() 方法。
 
-## 15 | 探究 MyBatis 结果集映射机制背后的秘密（下）
-
-
-
-
-
-
-
 # 模块四：扩展延伸
 
 ## 20 | 插件体系让 MyBatis 世界更加精彩
@@ -1226,6 +1218,12 @@ DefaultResultSetHandler 实现的 handleResultSets() 方法支持多个 ResultSe
 插件是应用程序中最常见的一种扩展方式。例如，Dubbo 通过 SPI 方式实现了插件化的效果，SkyWalking 依赖“微内核+插件”的架构轻松加载插件，实现扩展效果。
 
 MyBatis 也提供了类似的插件扩展机制。该模块位于 org.apache.ibatis.plugin 包中，主要使用了两种设计模式：代理模式和责任链模式。
+
+**责任链模式**
+
+在责任链模式中，Handler 处理器会持有对下一个 Handler 处理器的引用。也就是说当一个 Handler 处理器完成对关注部分的处理之后，会将请求通过这个引用传递给下一个 Handler 处理器，如此往复，直到整个责任链中全部的 Handler 处理器完成处理。责任链模式的核心类图如下所示：
+
+![image-20220711224442895](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207112244232.png)
 
 **Interceptor**
 
@@ -1269,7 +1267,7 @@ public class DemoPlugin implements Interceptor {
 
 @Signature 注解用来指定 DemoPlugin 插件实现类要拦截的目标方法信息，其中的 type 属性指定了要拦截的类，method 属性指定了要拦截的目标方法名称，args 属性指定了要拦截的目标方法的参数列表。
 
-> Interceptor 的加载。
+> 本段：Interceptor 的加载。
 
 为了让 MyBatis 知道这个类的存在，我们要在 mybatis-config.xml 全局配置文件中对 DemoPlugin 进行配置，相关配置片段如下：
 
@@ -1284,9 +1282,9 @@ public class DemoPlugin implements Interceptor {
 
 MyBatis 会在初始化流程中解析 mybatis-config.xml 全局配置文件，其中的 \<plugin\> 节点就会被处理成相应的 Interceptor 对象，同时调用 setProperties() 方法完成配置的初始化，最后MyBatis 会将 Interceptor 对象添加到Configuration.interceptorChain 这个全局的 Interceptor 列表中保存。
 
-> 我们再来看 Interceptor 是如何拦截目标类中的目标方法的。
+> 本段：我们再来看 Interceptor 是如何拦截目标类中的目标方法的。
 
-MyBatis 中 Executor、ParameterHandler、ResultSetHandler、StatementHandler 等与 SQL 执行相关的核心组件都是通过 Configuration.new*() 方法生成的。以 newExecutor() 方法为例，我们会看到下面这行代码，InterceptorChain.pluginAll() 方法会为目标对象创建代理对象并返回。
+MyBatis 中 Executor、ParameterHandler、ResultSetHandler、StatementHandler 等与 SQL 执行相关的核心组件都是通过 Configuration.new() 方法生成的。以 newExecutor() 方法为例，我们会看到下面这行代码，InterceptorChain.pluginAll() 方法会为目标对象创建代理对象并返回。
 
 ```java
 executor = (Executor) interceptorChain.pluginAll(executor);
@@ -1448,6 +1446,58 @@ protected SqlSessionFactory buildSqlSessionFactory() throws IOException {
 SqlSessionTemplate 是线程安全的，可以在多个线程之间共享使用。
 
 4. MapperFactoryBean 与 MapperScannerConfigurer
+
+我们可以通过 MapperFactoryBean 直接将 Mapper 接口注入 Service 层的 Bean 中，由 Mapper 接口完成 DAO 层的功能。
+
+```xml
+<!-- 配置id为customerMapper的Bean -->
+<bean id="customerMapper" class="org.mybatis.spring.mapper.MapperFactoryBean">
+   <!-- 配置Mapper接口 -->
+   <property name="mapperInterface" value="com.example.mapper.CustomerMapper" />
+   <!-- 配置SqlSessionFactory，用于创建底层的SqlSessionTemplate -->
+   <property name="sqlSessionFactory" ref="sqlSessionFactory" />
+</bean>
+```
+
+在 MapperFactoryBean 这个 Bean 初始化的时候，会加载 mapperInterface 配置项指定的 Mapper 接口，并调用 Configuration.addMapper() 方法将 Mapper 接口注册到 MapperRegistry，在注册过程中同时会解析对应的 Mapper.xml 配置文件。
+
+虽然通过 MapperFactoryBean 可以不写一行 Java 代码就能实现 DAO 层逻辑，但还是需要在 Spring 的配置文件中为每个 Mapper 接口配置相应的 MapperFactoryBean，这依然是有一定工作量的。如果连配置信息都不想写，那我们就可以使用 MapperScannerConfigurer 扫描指定包下的全部 Mapper 接口。
+
+## 22 | 基于 MyBatis 的衍生框架一览
+
+**MyBatis-Generator**
+
+可以选择 MyBatis-Generator 工具自动生成 Mapper 接口和 Mapper.xml 配置文件。
+
+**MyBatis 分页插件**
+
+MyBatis 本身提供了 RowBounds 参数，可以实现分页的效果。但通过 RowBounds 方式实现分页的时候，本质是将整个结果集数据加载到内存中，然后在内存中过滤出需要的数据，这其实也是我们常说的“内存分页”。
+
+如果我们想屏蔽底层数据库的分页 SQL 语句的差异，同时使用 MyBatis 的 RowBounds 参数实现“物理分页”，可以考虑使用 MyBatis 的分页插件PageHelper。PageHelper 的使用比较简单，只需要在 pom.xml 中引入 PageHelper 依赖包，并在 mybatis-config.xml 配置文件中配置 PageInterceptor 插件即可，核心配置如下：
+
+```xml
+<plugins>
+    <plugin interceptor="com.github.pagehelper.PageInterceptor">
+        <property name="helperDialect" value="mysql"/>
+	</plugin>
+</plugins>
+```
+
+**MyBatis-Plus**
+
+MyBatis-Plus 是国人开发的一款 MyBatis 增强工具，它并没有改变 MyBatis 本身的功能，而是在 MyBatis 的基础上提供了很多增强功能，使我们的开发更加简洁高效。
+
+MyBatis-Plus 对 MyBatis 的很多方面进行了增强，例如：
+
+- 内置了通用的 Mapper 和通用的 Service，只需要添加少量配置即可实现 DAO 层和 Service 层；
+- 内置了一个分布式唯一 ID 生成器，可以提供分布式环境下的 ID 生成策略；
+- 通过 Maven 插件可以集成生成代码能力，可以快速生成 Mapper、Service 以及 Controller 层的代码，同时支持模块引擎的生成；
+- 内置了分页插件，可以实现和 PageHelper 类似的“物理分页”，而且分页插件支持多种数据库；
+- 内置了一款性能分析插件，通过该插件我们可以获取一条 SQL 语句的执行时间，可以更快地帮助我们发现慢查询。
+
+
+
+
 
 
 
