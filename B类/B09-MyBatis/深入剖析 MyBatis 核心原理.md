@@ -1213,6 +1213,45 @@ DefaultResultSetHandler 实现的 handleResultSets() 方法支持多个 ResultSe
 
 # 模块四：扩展延伸
 
+## 19 | 深入 MyBatis 内核与业务逻辑的桥梁——接口层
+
+这一讲我们就来重点看一下 MyBatis 接口层的实现以及其中涉及的设计模式。
+
+**策略模式**
+
+在策略模式中，我们会将每个算法单独封装成不同的算法实现类（这些算法实现类都实现了相同的接口），每个算法实现类就可以被认为是一种策略实现，我们只需选择不同的策略实现来解决业务问题即可，这样每种算法相对独立，算法内的变化边界也就明确了，新增或减少算法实现也不会影响其他算法。
+
+如下是策略模式的核心类图，其中 StrategyUser 是算法的调用方，维护了一个 Strategy 对象的引用，用来选择具体的算法实现。
+
+![image-20220712224710785](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207122247123.png)
+
+**SqlSession**
+
+SqlSession是MyBatis对外提供的一个 API 接口，整个MyBatis 接口层也是围绕 SqlSession接口展开的，SqlSession 接口中定义了下面几类方法。
+
+- select*() 方法：用来执行查询操作的方法，SqlSession 会将结果集映射成不同类型的结果对象，例如，selectOne() 方法返回单个 Java 对象，selectList()、selectMap() 方法返回集合对象。
+- insert()、update()、delete() 方法：用来执行 DML 语句。
+- commit()、rollback() 方法：用来控制事务。
+- getMapper()、getConnection()、getConfiguration() 方法：分别用来获取接口对应的 Mapper 对象、底层的数据库连接和全局的 Configuration 配置对象。
+
+如下图所示，MyBatis 提供了两个 SqlSession接口的实现类，同时提供了SqlSessionFactory 工厂类来创建 SqlSession 对象。
+
+![image-20220712225527626](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207122255894.png)
+
+默认情况下，我们在使用 MyBatis 的时候用的都是 DefaultSqlSession 这个默认的 SqlSession 实现。DefaultSqlSession 中维护了一个 Executor 对象，通过它来完成数据库操作以及事务管理。DefaultSqlSession 在选择使用哪种 Executor 实现的时候，使用到了策略模式：DefaultSqlSession 扮演了策略模式中的 StrategyUser 角色，Executor 接口扮演的是 Strategy 角色，Executor 接口的不同实现则对应 StrategyImpl 的角色。
+
+**DefaultSqlSessionFactory**
+
+DefaultSqlSessionFactory 是MyBatis中用来创建DefaultSqlSession 的具体工厂实现。通过 DefaultSqlSessionFactory 工厂类，我们可以有两种方式拿到 DefaultSqlSession对象。
+
+第一种方式是通过数据源获取数据库连接，然后在其基础上创建 DefaultSqlSession 对象，其核心实现位于 openSessionFromDataSource() 方法。
+
+第二种方式是上层调用方直接提供数据库连接，并在该数据库连接之上创建 DefaultSqlSession 对象，这种创建方式的核心逻辑位于 openSessionFromConnection() 方法中。
+
+**SqlSessionManager**
+
+通过前面的 SqlSession 继承关系图我们可以看到，SqlSessionManager 同时实现了 SqlSession 和 SqlSessionFactory 两个接口，也就是说，它同时具备操作数据库的能力和创建SqlSession的能力。
+
 ## 20 | 插件体系让 MyBatis 世界更加精彩
 
 插件是应用程序中最常见的一种扩展方式。例如，Dubbo 通过 SPI 方式实现了插件化的效果，SkyWalking 依赖“微内核+插件”的架构轻松加载插件，实现扩展效果。
@@ -1494,16 +1533,4 @@ MyBatis-Plus 对 MyBatis 的很多方面进行了增强，例如：
 - 通过 Maven 插件可以集成生成代码能力，可以快速生成 Mapper、Service 以及 Controller 层的代码，同时支持模块引擎的生成；
 - 内置了分页插件，可以实现和 PageHelper 类似的“物理分页”，而且分页插件支持多种数据库；
 - 内置了一款性能分析插件，通过该插件我们可以获取一条 SQL 语句的执行时间，可以更快地帮助我们发现慢查询。
-
-
-
-
-
-
-
-
-
-
-
-
 
