@@ -486,6 +486,372 @@ public class CassandraDataService implements DataService {
 }
 ```
 
+**案例 3：引用内部类的 Bean 遗忘类名**
+
+我们沿用上面的案例，稍微再添加点别的需求，例如我们需要定义一个内部类来实现一种新的 DataService，代码如下：
+
+```java
+public class StudentController {
+  @Repository
+  public static class InnerClassDataService implements DataService {
+    @Override
+    public void deleteStudent(int id) {
+    //空实现
+    }
+  }
+  //省略其他非关键代码
+}
+```
+
+遇到这种情况，我们一般都会很自然地用下面的方式直接去显式引用这个 Bean：
+
+```java
+@Autowired
+@Qualifier("innerClassDataService")
+DataService innerClassDataService;
+```
+
+实际上这样仍然会报错“找不到 Bean”，这是为什么？
+
+- 案例解析
+
+实际上，我们遭遇的情况是“如何引用内部类的 Bean”。
+
+在代码 AnnotationBeanNameGenerator#buildDefaultBeanName 中，有一行语句是对 class 名字的处理，代码如下：
+
+```java
+String shortClassName = ClassUtils.getShortName(beanClassName);
+```
+
+我们可以看下它的实现，参考 ClassUtils#getShortName 方法：
+
+```java
+public static String getShortName(String className) {
+  Assert.hasLength(className, "Class name must not be empty");
+  int lastDotIndex = className.lastIndexOf(PACKAGE_SEPARATOR);
+  int nameEndIndex = className.indexOf(CGLIB_CLASS_SEPARATOR);
+  if (nameEndIndex == -1) {
+    nameEndIndex = className.length();
+  }
+  String shortName = className.substring(lastDotIndex + 1, nameEndIndex);
+  shortName = shortName.replace(INNER_CLASS_SEPARATOR, PACKAGE_SEPARATOR);
+  return shortName;
+}
+```
+
+假设我们是一个内部类，例如下面的类名：
+
+```java
+com.spring.puzzle.class2.example3.StudentController.InnerClassDataService
+```
+
+在经过这个方法的处理后，我们得到的其实是下面这个名称：
+
+```
+StudentController.InnerClassDataService
+```
+
+最后经过 Introspector.decapitalize 的首字母变换，最终获取的 Bean 名称如下：
+
+```
+studentController.InnerClassDataService
+```
+
+所以我们在案例程序中，直接使用 innerClassDataService 自然找不到想要的 Bean。
+
+- 问题修正
+
+```java
+@Autowired
+@Qualifier("studentController.InnerClassDataService")
+DataService innerClassDataService;
+```
+
+这个引用看起来有些许奇怪，但实际上是可以工作的，反而直接使用 innerClassDataService 来引用倒是真的不可行。
+
+# 03｜Spring Bean 依赖注入常见错误（下）
+
+在实际应用中，我们也会使用 @Value 等不太常见的注解来完成自动注入，同时也存在注入到集合、数组等复杂类型的场景。这些情况下，我们也会遇到一些问题。所以这一讲我们不妨来梳理下。
+
+**@Value 和 @Autowired**
+
+我们一般都会因为 @Value 常用于 String 类型的装配而误以为 @Value 不能用于非内置对象的装配，实际上这是一个常见的误区。例如，我们可以使用下面这种方式来 Autowired 一个属性成员：
+
+```java
+@Value("#{student}")
+private Student student;
+
+@Bean
+public Student student(){
+  Student student = createStudent(1, "xie");
+  return student;
+}
+```
+
+我们使用 @Value 更多是用来装配 String，而且它支持多种强大的装配方式，典型的方式参考下面的示例：
+
+```java
+//注册正常字符串
+@Value("我是字符串")
+private String text;
+
+//注入系统参数、环境变量或者配置文件中的值
+@Value("${ip}")
+private String ip
+
+//注入其他Bean属性，其中student为bean的ID，name为其属性
+@Value("#{student.name}")
+private String name;
+```
+
+**案例 1：@Value 没有注入预期的值**
+
+那么在使用 @Value 时可能会遇到那些错误呢？这里分享一个最为典型的错误，即使用 @Value 可能会注入一个不是预期的值。
+
+我们可以模拟一个场景，我们在配置文件 application.properties 配置了这样一个属性：
+
+```properties
+username=admin
+password=pass
+```
+
+然后我们在一个 Bean 中，分别定义两个属性来引用它们：
+
+```java
+@RestController
+@Slf4j
+public class ValueTestController {
+  @Value("${username}")
+  private String username;
+  @Value("${password}")
+  private String password;
+    
+  @RequestMapping(path = "user", method = RequestMethod.GET)
+  public String getUser(){
+    return username + ":" + password;
+  }
+}
+```
+
+当我们去打印上述代码中的 username 和 password 时，我们会发现 password 正确返回了，但是 username 返回的并不是配置文件中指明的 admin，而是运行这段程序的计算机用户名。很明显，使用 @Value 装配的值没有完全符合我们的预期。
+
+- 案例解析
+
+对于 @Value，Spring 是如何根据 @Value 来查询“值”的。我们可以先通过方法 DefaultListableBeanFactory#doResolveDependency 来了解 @Value 的核心工作流程，代码如下：
+
+```java
+@Nullable
+public Object doResolveDependency(DependencyDescriptor descriptor, @Nullable String beanName,
+    @Nullable Set<String> autowiredBeanNames, @Nullable TypeConverter typeConverter) throw BeansException {
+  //省略其他非关键代码
+  Class<?> type = descriptor.getDependencyType();
+  //寻找@Value
+  Object value = getAutowireCandidateResolver().getSuggestedValue(descriptor);
+  if (value != null) {
+    if (value instanceof String) {
+      //解析Value值
+      String strVal = resolveEmbeddedValue((String) value);
+      BeanDefinition bd = (beanName != null && containsBean(beanName) ? 
+                           getMergedBeanDefinition(beanName) : null);
+      value = evaluateBeanDefinitionString(strVal, bd);
+    }
+    //转化Value解析的结果到装配的类型
+    TypeConverter converter = (typeConverter != null ? typeConverter : getTypeConvertor());
+    try {
+      return converter.convertIfNecessary(value, type, descriptor.getTypeConvertor());
+    } catch (UnsupportedOperationException ex) {
+      //异常处理
+    }
+  }
+//省略其他非关键代码
+}
+```
+
+结合我们的案例，很明显问题应该发生在解析 Value 指定字符串过程，执行过程参考下面的关键代码行：
+
+```java
+String strVal = resolveEmbeddedValue((String) value);
+```
+
+这里其实是在解析嵌入的值，实际上就是“替换占位符”工作。具体而言，它采用的是 PropertySourcesPlaceholderConfigurer 根据 PropertySources 来替换。不过当使用 ${username} 来获取替换值时，其最终执行的查找并不是局限在 application.property 文件中的。
+
+![image-20220720213223561](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207202132912.png)
+
+而具体的查找执行，我们可以通过下面的代码 （PropertySourcesPropertyResolver#getProperty）来获取它的执行方式：
+
+```java
+@Nullable
+protected <T> T getProperty(String key, Class<T> targetValueType, boolean resolveNestedPlaceholders) {
+  if (this.propertySources != null) {
+    for (PropertySource<?> propertySource : this.propertySources) {
+      Object value = propertySource.getProperty(key);
+      if (value != null) {
+        //查到value即退出
+        return convertValueIfNecessary(value, targetValueType);
+      }
+    }
+  }
+  return null;
+}
+```
+
+我们查看 systemEnvironment 这个源，会发现刚好有一个 username 和我们是重合的。
+
+![image-20220720213543389](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207202135551.png)
+
+- 问题修正
+
+```java
+user.name=admin
+user.password=pass
+```
+
+**案例 2：错乱的注入集合**
+
+假设我们存在这样一个需求：存在多个学生 Bean，我们需要找出来，并存储到一个 List 里面去。多个学生 Bean 的定义如下：
+
+```java
+@Bean
+public Student student1() {
+  return createStudent(1, "xie");
+}
+
+@Bean
+public Student student2(){
+  return createStudent(2, "fang");
+}
+
+private Student createStudent(int id, String name) {
+  Student student = new Student();
+  student.setId(id);
+  student.setName(name);
+  return student;
+}
+```
+
+有了集合类型的自动注入后，我们就可以把零散的学生 Bean 收集起来了，代码示例如下：
+
+```java
+@RestController
+@Slf4j
+public class StudentController {
+    
+  private List<Student> students;
+
+  public StudentController(List<Student> students) {
+    this.students = students;
+  }
+  
+  @RequestMapping(path = "students", method = RequestMethod.GET)
+  public String listStudents() {
+    return students.toString();
+  }
+}
+```
+
+通过上述代码，我们就可以完成集合类型的注入工作，输出结果如下：
+
+```
+[Student(id=1, name=xie), Student(id=2, name=fang)]
+```
+
+然而，当我们持续增加一些 student 时，可能就不喜欢用这种方式来注入集合类型了，而是倾向于用下面的方式去完成注入工作：
+
+```java
+@Bean
+public List<Student> students(){
+  Student student3 = createStudent(3, "liu");
+  Student student4 = createStudent(4, "fu");
+  return Arrays.asList(student3, student4);
+}
+```
+
+为了好记，这里我们不妨将上面这种方式命名为“直接装配方式”，而将之前的那种命名为“收集方式”。实际上，如果这两种方式是非此即彼的存在，自然没有任何问题，都能玩转。但是如果我们不小心让这 2 种方式同时存在了，结果会怎样？
+
+- 案例解析
+
+对于收集装配风格，Spring 使用的是 DefaultListableBeanFactory#resolveMultipleBeans 来完成装配工作。大体过程如下：
+
+1. 获取集合类型的元素类型
+
+针对本案例，目标类型定义为 List<Student> students，所以元素类型为 Student，获取
+的具体方法参考代码行：
+
+```java
+Class<?> elementType = descriptor.getResolvableType().asCollection().resolveGeneric();
+```
+
+2. 根据元素类型，找出所有的 Bean
+
+有了上面的元素类型，即可根据元素类型来找出所有的 Bean，关键代码行如下：
+
+```java
+Map<String, Object> matchingBeans = findAutowireCandidates(beanName, elementType, new MultiElementDescriptor(descriptor));
+```
+
+3. 将匹配的所有的 Bean 按目标类型进行转化
+
+在本案例中，我们就需要把它转化为 List，转化的关键代码如下：
+
+```java
+Object result = converter.convertIfNecessary(matchingBeans.values(), type);
+```
+
+如果我们继续深究执行细节，就可以知道最终是转化器 CollectionToCollectionConverter 来完成这个转化过程。
+
+我们再来看下直接装配方式的执行过程，实际上这步在前面的课程中我们就提到过（即 DefaultListableBeanFactory#findAutowireCandidates 方法执行）。
+
+了解了这两种方式，我们再来思考这两种方式的关系：当同时满足这两种装配方式时，Spring 是如何处理的？这里我们可以参考方法 DefaultListableBeanFactory#doResolveDependency 的几行关键代码，代码如下：
+
+```java
+Object multipleBeans = resolveMultipleBeans(descriptor, beanName, autowiredBeanNames, typeConverter);
+if (multipleBeans != null) {
+  return multipleBeans;
+}
+Map<String, Object> matchingBeans = findAutowireCandidates(beanName, type, descriptor);
+```
+
+当使用收集装配方式来装配时，能找到任何一个对应的 Bean，则返回，如果一个都没有找到，才会采用直接装配的方式。
+
+- 问题修正
+
+我们可以使用直接装配的方式去修正问题，代码如下：
+
+```java
+@Bean
+public List<Student> students() {
+  Student student1 = createStudent(1, "xie");
+  Student student2 = createStudent(2, "fang");
+  Student student3 = createStudent(3, "liu");
+  Student student4 = createStudent(4, "fu");
+  return Arrays.asList(student1，student2，student3, student4);
+}
+```
+
+也可以使用收集方式来修正问题时，代码如下：
+
+```java
+@Bean
+public Student student1() {
+  return createStudent(1, "xie");
+}
+
+@Bean
+public Student student2() {
+  return createStudent(2, "fang");
+}
+
+@Bean
+public Student student3() {
+  return createStudent(3, "liu");
+}
+
+@Bean
+public Student student4() {
+  return createStudent(4, "fu");
+}
+```
+
 
 
 
