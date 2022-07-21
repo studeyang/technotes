@@ -1137,33 +1137,132 @@ MyBatis 为 SqlNode 接口提供了非常多的实现类（如下图），其中
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207062250235.png)
 
+## 13 | 深入分析动态 SQL 语句解析全流程（下）
 
+我们紧接着上一讲，继续介绍剩余 SqlNode 实现以及 SqlSource 的相关内容。
 
+**SqlNode 剩余实现类**
 
+在上一讲我们已经介绍了 StaticTextSqlNode、MixedSqlNode、TextSqlNode、IfSqlNode、TrimSqlNode 这几个 SqlNode 的实现，下面我们再把剩下的三个 SqlNode 实现类也说明下。
 
+**1. ForeachSqlNode**
 
+ForeachSqlNode 就是 <foreach> 标签的抽象。
 
+**2. ChooseSqlNode**
 
+在 Java 中，我们可以通过 switch...case...default 的方式来编写这段代码；在 MyBatis 的动态 SQL 语句中，我们可以使用 <choose>、<when> 和 <otherwise> 三个标签来实现类似的效果。
 
+<choose> 标签会被 MyBatis 解析成 ChooseSqlNode 对象，<when> 标签会被解析成 IfSqlNode 对象，<otherwise> 标签会被解析成 MixedSqlNode 对象。
 
+**3. VarDeclSqlNode**
 
+VarDeclSqlNode 抽象了 <bind> 标签，其核心功能是将一个 OGNL 表达式的值绑定到一个指定的变量名上，并记录到 DynamicContext 上下文中。
 
+**SqlSourceBuilder**
 
+动态 SQL 语句经过上述 SqlNode 的解析之后，接着会由 SqlSourceBuilder 进行下一步处理。
 
+SqlSourceBuilder 的核心操作主要有两个：
 
+- 解析“#{}”占位符中携带的各种属性，例如，“#{id, javaType=int, jdbcType=NUMERIC, typeHandler=MyTypeHandler}”这个占位符，指定了 javaType、jdbcType、typeHandler 等配置；
+- 将 SQL 语句中的“#{}”占位符替换成“?”占位符，替换之后的 SQL 语句就可以提交给数据库进行编译了。
 
+**SqlSource**
 
+经过上述一系列处理之后，SQL 语句最终会由 SqlSource 进行最后的处理。
 
+在 SqlSource 接口中只定义了一个 getBoundSql() 方法，它控制着动态 SQL 语句解析的整个流程，它会根据从 Mapper.xml 映射文件（或注解）解析到的 SQL 语句以及执行 SQL 时传入的实参，返回一条可执行的 SQL。
 
+下图展示了 SqlSource 接口的核心实现：
 
+![image-20220707221317202](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207072213709.png)
+
+下面我们简单介绍一下这三个核心实现类的具体含义。
+
+- DynamicSqlSource：当 SQL 语句中包含动态 SQL 的时候，会使用 DynamicSqlSource 对象。
+- RawSqlSource：当 SQL 语句中只包含静态 SQL 的时候，会使用 RawSqlSource 对象。
+- StaticSqlSource：DynamicSqlSource 和 RawSqlSource 经过一系列解析之后，会得到最终可提交到数据库的 SQL 语句，这个时候就可以通过 StaticSqlSource 进行封装了。
+
+## 14 | 探究 MyBatis 结果集映射机制背后的秘密（上）
+
+ResultMap 只是定义了一个静态的映射规则，那在运行时，MyBatis 是如何根据映射规则将 ResultSet 映射成 Java 对象的呢？
+
+当 MyBatis 执行完一条 select 语句，拿到 ResultSet 结果集之后，会将其交给关联的 ResultSetHandler 进行后续的映射处理。ResultSetHandler 是一个接口，其中定义了三个方法，分别用来处理不同的查询返回值：
+
+```java
+public interface ResultSetHandler {
+    // 将ResultSet映射成Java对象
+    <E> List<E> handleResultSets(Statement stmt) throws SQLException;
+    // 将ResultSet映射成游标对象
+    <E> Cursor<E> handleCursorResultSets(Statement stmt) throws SQLException;
+    // 处理存储过程的输出参数
+    void handleOutputParameters(CallableStatement cs) throws SQLException;
+}
+```
+
+在 MyBatis 中只提供了一个 ResultSetHandler 接口实现，即 DefaultResultSetHandler。下面我们就以 DefaultResultSetHandler 为中心，介绍 MyBatis 中 ResultSet 映射的核心流程。
+
+**结果集处理入口**
+
+DefaultResultSetHandler 实现的 handleResultSets() 方法支持多个 ResultSet 的处理（单 ResultSet 的处理只是其中的特例）。
+
+**简单映射**
+
+了解了处理 ResultSet 的入口逻辑之后，下面我们继续来深入了解一下 DefaultResultSetHandler 是如何处理单个结果集的，这部分逻辑的入口是 handleResultSet() 方法。
 
 # 模块四：扩展延伸
+
+## 19 | 深入 MyBatis 内核与业务逻辑的桥梁——接口层
+
+这一讲我们就来重点看一下 MyBatis 接口层的实现以及其中涉及的设计模式。
+
+**策略模式**
+
+在策略模式中，我们会将每个算法单独封装成不同的算法实现类（这些算法实现类都实现了相同的接口），每个算法实现类就可以被认为是一种策略实现，我们只需选择不同的策略实现来解决业务问题即可，这样每种算法相对独立，算法内的变化边界也就明确了，新增或减少算法实现也不会影响其他算法。
+
+如下是策略模式的核心类图，其中 StrategyUser 是算法的调用方，维护了一个 Strategy 对象的引用，用来选择具体的算法实现。
+
+![image-20220712224710785](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207122247123.png)
+
+**SqlSession**
+
+SqlSession是MyBatis对外提供的一个 API 接口，整个MyBatis 接口层也是围绕 SqlSession接口展开的，SqlSession 接口中定义了下面几类方法。
+
+- select*() 方法：用来执行查询操作的方法，SqlSession 会将结果集映射成不同类型的结果对象，例如，selectOne() 方法返回单个 Java 对象，selectList()、selectMap() 方法返回集合对象。
+- insert()、update()、delete() 方法：用来执行 DML 语句。
+- commit()、rollback() 方法：用来控制事务。
+- getMapper()、getConnection()、getConfiguration() 方法：分别用来获取接口对应的 Mapper 对象、底层的数据库连接和全局的 Configuration 配置对象。
+
+如下图所示，MyBatis 提供了两个 SqlSession接口的实现类，同时提供了SqlSessionFactory 工厂类来创建 SqlSession 对象。
+
+![image-20220712225527626](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207122255894.png)
+
+默认情况下，我们在使用 MyBatis 的时候用的都是 DefaultSqlSession 这个默认的 SqlSession 实现。DefaultSqlSession 中维护了一个 Executor 对象，通过它来完成数据库操作以及事务管理。DefaultSqlSession 在选择使用哪种 Executor 实现的时候，使用到了策略模式：DefaultSqlSession 扮演了策略模式中的 StrategyUser 角色，Executor 接口扮演的是 Strategy 角色，Executor 接口的不同实现则对应 StrategyImpl 的角色。
+
+**DefaultSqlSessionFactory**
+
+DefaultSqlSessionFactory 是MyBatis中用来创建DefaultSqlSession 的具体工厂实现。通过 DefaultSqlSessionFactory 工厂类，我们可以有两种方式拿到 DefaultSqlSession对象。
+
+第一种方式是通过数据源获取数据库连接，然后在其基础上创建 DefaultSqlSession 对象，其核心实现位于 openSessionFromDataSource() 方法。
+
+第二种方式是上层调用方直接提供数据库连接，并在该数据库连接之上创建 DefaultSqlSession 对象，这种创建方式的核心逻辑位于 openSessionFromConnection() 方法中。
+
+**SqlSessionManager**
+
+通过前面的 SqlSession 继承关系图我们可以看到，SqlSessionManager 同时实现了 SqlSession 和 SqlSessionFactory 两个接口，也就是说，它同时具备操作数据库的能力和创建SqlSession的能力。
 
 ## 20 | 插件体系让 MyBatis 世界更加精彩
 
 插件是应用程序中最常见的一种扩展方式。例如，Dubbo 通过 SPI 方式实现了插件化的效果，SkyWalking 依赖“微内核+插件”的架构轻松加载插件，实现扩展效果。
 
 MyBatis 也提供了类似的插件扩展机制。该模块位于 org.apache.ibatis.plugin 包中，主要使用了两种设计模式：代理模式和责任链模式。
+
+**责任链模式**
+
+在责任链模式中，Handler 处理器会持有对下一个 Handler 处理器的引用。也就是说当一个 Handler 处理器完成对关注部分的处理之后，会将请求通过这个引用传递给下一个 Handler 处理器，如此往复，直到整个责任链中全部的 Handler 处理器完成处理。责任链模式的核心类图如下所示：
+
+![image-20220711224442895](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207112244232.png)
 
 **Interceptor**
 
@@ -1207,7 +1306,7 @@ public class DemoPlugin implements Interceptor {
 
 @Signature 注解用来指定 DemoPlugin 插件实现类要拦截的目标方法信息，其中的 type 属性指定了要拦截的类，method 属性指定了要拦截的目标方法名称，args 属性指定了要拦截的目标方法的参数列表。
 
-> Interceptor 的加载。
+> 本段：Interceptor 的加载。
 
 为了让 MyBatis 知道这个类的存在，我们要在 mybatis-config.xml 全局配置文件中对 DemoPlugin 进行配置，相关配置片段如下：
 
@@ -1222,9 +1321,9 @@ public class DemoPlugin implements Interceptor {
 
 MyBatis 会在初始化流程中解析 mybatis-config.xml 全局配置文件，其中的 \<plugin\> 节点就会被处理成相应的 Interceptor 对象，同时调用 setProperties() 方法完成配置的初始化，最后MyBatis 会将 Interceptor 对象添加到Configuration.interceptorChain 这个全局的 Interceptor 列表中保存。
 
-> 我们再来看 Interceptor 是如何拦截目标类中的目标方法的。
+> 本段：我们再来看 Interceptor 是如何拦截目标类中的目标方法的。
 
-MyBatis 中 Executor、ParameterHandler、ResultSetHandler、StatementHandler 等与 SQL 执行相关的核心组件都是通过 Configuration.new*() 方法生成的。以 newExecutor() 方法为例，我们会看到下面这行代码，InterceptorChain.pluginAll() 方法会为目标对象创建代理对象并返回。
+MyBatis 中 Executor、ParameterHandler、ResultSetHandler、StatementHandler 等与 SQL 执行相关的核心组件都是通过 Configuration.new() 方法生成的。以 newExecutor() 方法为例，我们会看到下面这行代码，InterceptorChain.pluginAll() 方法会为目标对象创建代理对象并返回。
 
 ```java
 executor = (Executor) interceptorChain.pluginAll(executor);
@@ -1387,11 +1486,51 @@ SqlSessionTemplate 是线程安全的，可以在多个线程之间共享使用�
 
 4. MapperFactoryBean 与 MapperScannerConfigurer
 
+我们可以通过 MapperFactoryBean 直接将 Mapper 接口注入 Service 层的 Bean 中，由 Mapper 接口完成 DAO 层的功能。
 
+```xml
+<!-- 配置id为customerMapper的Bean -->
+<bean id="customerMapper" class="org.mybatis.spring.mapper.MapperFactoryBean">
+   <!-- 配置Mapper接口 -->
+   <property name="mapperInterface" value="com.example.mapper.CustomerMapper" />
+   <!-- 配置SqlSessionFactory，用于创建底层的SqlSessionTemplate -->
+   <property name="sqlSessionFactory" ref="sqlSessionFactory" />
+</bean>
+```
 
+在 MapperFactoryBean 这个 Bean 初始化的时候，会加载 mapperInterface 配置项指定的 Mapper 接口，并调用 Configuration.addMapper() 方法将 Mapper 接口注册到 MapperRegistry，在注册过程中同时会解析对应的 Mapper.xml 配置文件。
 
+虽然通过 MapperFactoryBean 可以不写一行 Java 代码就能实现 DAO 层逻辑，但还是需要在 Spring 的配置文件中为每个 Mapper 接口配置相应的 MapperFactoryBean，这依然是有一定工作量的。如果连配置信息都不想写，那我们就可以使用 MapperScannerConfigurer 扫描指定包下的全部 Mapper 接口。
 
+## 22 | 基于 MyBatis 的衍生框架一览
 
+**MyBatis-Generator**
 
+可以选择 MyBatis-Generator 工具自动生成 Mapper 接口和 Mapper.xml 配置文件。
 
+**MyBatis 分页插件**
+
+MyBatis 本身提供了 RowBounds 参数，可以实现分页的效果。但通过 RowBounds 方式实现分页的时候，本质是将整个结果集数据加载到内存中，然后在内存中过滤出需要的数据，这其实也是我们常说的“内存分页”。
+
+如果我们想屏蔽底层数据库的分页 SQL 语句的差异，同时使用 MyBatis 的 RowBounds 参数实现“物理分页”，可以考虑使用 MyBatis 的分页插件PageHelper。PageHelper 的使用比较简单，只需要在 pom.xml 中引入 PageHelper 依赖包，并在 mybatis-config.xml 配置文件中配置 PageInterceptor 插件即可，核心配置如下：
+
+```xml
+<plugins>
+    <plugin interceptor="com.github.pagehelper.PageInterceptor">
+        <property name="helperDialect" value="mysql"/>
+	</plugin>
+</plugins>
+```
+
+**MyBatis-Plus**
+
+MyBatis-Plus 是国人开发的一款 MyBatis 增强工具，它并没有改变 MyBatis 本身的功能，而是在 MyBatis 的基础上提供了很多增强功能，使我们的开发更加简洁高效。
+
+MyBatis-Plus 对 MyBatis 的很多方面进行了增强，例如：
+
+- 内置了通用的 Mapper 和通用的 Service，只需要添加少量配置即可实现 DAO 层和 Service 层；
+- 内置了一个分布式唯一 ID 生成器，可以提供分布式环境下的 ID 生成策略；
+- 通过 Maven 插件可以集成生成代码能力，可以快速生成 Mapper、Service 以及 Controller 层的代码，同时支持模块引擎的生成；
+- 内置了分页插件，可以实现和 PageHelper 类似的“物理分页”，而且分页插件支持多种数据库；
+- 内置了一款性能分析插件，通过该插件我们可以获取一条 SQL 语句的执行时间，可以更快地帮助我们发现慢查询。
 
