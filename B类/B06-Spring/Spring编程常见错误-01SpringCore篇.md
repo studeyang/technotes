@@ -852,6 +852,117 @@ public Student student4() {
 }
 ```
 
+# 04｜Spring Bean生命周期常见错误
+
+这节课我们来聊一聊 Spring Bean 的初始化过程及销毁过程中的一些问题。
+
+**案例 1：构造器内抛空指针异常**
+
+在构建宿舍管理系统时，有 LightMgrService 来管理 LightService，从而控制宿舍灯的开启和关闭。我们希望在 LightMgrService 初始化时能够自动调用 LightService 的 check 方法来检查所有宿舍灯的电路是否正常，代码如下：
+
+```java
+@Component
+public class LightMgrService {
+    
+  @Autowired
+  private LightService lightService;
+    
+  public LightMgrService() {
+    lightService.check();
+  }
+    
+}
+```
+
+我们在 LightMgrService 的默认构造器中调用了通过 @Autoware 注入的成员变量 LightService 的 check 方法：
+
+```java
+@Service
+public class LightService {
+    
+  public void start() {
+    System.out.println("turn on all lights");
+  }
+    
+  public void shutdown() {
+    System.out.println("turn off all lights");
+  }
+    
+  public void check() {
+    System.out.println("check all lights");
+  }
+    
+}
+```
+
+然而，程序启动后报出 NullPointerException，错误示例如下：
+
+![image-20220721213349700](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207212133941.png)
+
+- 案例解析
+
+上面出错的原因是我们对 Spring 类初始化过程没有足够的了解。下面这张时序图描述了 Spring 启动时的一些关键结点：
+
+![下载](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207212124231.png)
+
+这个图可以分为三部分：
+
+第一部分，将一些必要的系统类，比如 Bean 的后置处理器类，注册到 Spring 容器，其中就包括我们这节课关注的 CommonAnnotationBeanPostProcessor 类；
+
+第二部分，将这些后置处理器实例化，并注册到 Spring 的容器中；
+
+第三部分，实例化所有用户定制类，调用后置处理器进行辅助装配、类初始化等等。
+
+我们重点看下第三部分，即 Spring 初始化单例类的一般过程，基本都是 getBean() -> doGetBean() -> getSingleton()，如果发现 Bean 不存在，则调用 createBean() -> doCreateBean() 进行实例化。
+
+doCreateBean() 的源代码如下：
+
+```java
+protected Object doCreateBean(final String beanName, 
+                              final RootBeanDefinition mbd, 
+                              final @Nullable Object[] args) 
+    throws BeanCreationException {
+  //省略非关键代码
+  if (instanceWrapper == null) {
+    instanceWrapper = createBeanInstance(beanName, mbd, args);
+  }
+  final Object bean = instanceWrapper.getWrappedInstance();
+  //省略非关键代码
+  Object exposedObject = bean;
+  try {
+    populateBean(beanName, mbd, instanceWrapper);
+    exposedObject = initializeBean(beanName, exposedObject, mbd);
+  }
+  catch (Throwable ex) {
+    //省略非关键代码
+  }
+}
+```
+
+上述代码完整地展示了 Bean 初始化的三个关键步骤：createBeanInstance、populateBean、initializeBean，分别对应实例化 Bean，注入 Bean 依赖，以及初始化 Bean。
+
+- 问题修正
+
+通过源码分析，现在我们知道了问题的根源，就是在于使用 @Autowired 直接标记在成员属性上而引发的装配行为是发生在构造器执行之后的。所以这里我们可以通过下面这种修订方法来纠正这个问题：
+
+```java
+@Component
+public class LightMgrService {
+ 
+    private LightService lightService;
+    
+    public LightMgrService(LightService lightService) {
+        this.lightService = lightService;
+        lightService.check();
+    }
+    
+}
+```
+
+当使用上面的代码时，构造器参数 LightService 会被自动注入 LightService 的 Bean，从而在构造器执行时，不会出现空指针。可以说，使用构造器参数来隐式注入是一种 Spring 最佳实践，因为它成功地规避了案例 1 中的问题。
+
+
+
 
 
 
