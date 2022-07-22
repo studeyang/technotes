@@ -961,9 +961,207 @@ public class LightMgrService {
 
 当使用上面的代码时，构造器参数 LightService 会被自动注入 LightService 的 Bean，从而在构造器执行时，不会出现空指针。可以说，使用构造器参数来隐式注入是一种 Spring 最佳实践，因为它成功地规避了案例 1 中的问题。
 
+**案例 2：意外触发 shutdown 方法**
 
+LightService 的实现，它包含了 shutdown 方法，负责关闭所有的灯，关键代码如下：
 
+```java
+@Service
+public class LightService {
+    //省略其他非关键代码
+    public void shutdown() {
+        System.out.println("shutting down all lights");
+    }
+    //省略其他非关键代码
+}
+```
 
+随着业务的需求变化，我们可能会去掉 @Service 注解，使用另外一种产生 Bean 的方式：
+
+```java
+@Configuration
+public class BeanConfiguration {
+    @Bean
+    public LightService getTransmission() {
+        return new LightService();
+    }
+}
+```
+
+我们现在让 Spring 启动完成后立马关闭当前 Spring 上下文。这样等同于模拟宿舍管理系统的启停：
+
+```java
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        ConfigurableApplicationContext context = SpringApplication.run(Application.class);
+        context.close();
+    }
+}
+```
+
+运行这段代码后，我们可以看到控制台上打印了 shutting down all lights。显然 shutdown 方法未按照预期被执行了。
+
+- 案例解析
+
+通过调试，我们发现只有通过使用 Bean 注解注册到 Spring 容器的对象，才会在 Spring 容器被关闭的时候自动调用 shutdown 方法，而使用 @Component 将当前类自动注入到 Spring 容器时，shutdown 方法则不会被自动执行。
+
+我们可以尝试到 Bean 注解类的代码中去寻找一些线索，可以看到属性 destroyMethod 有非常大段的注释，基本上解答了我们对于这个问题的大部分疑惑。
+
+使用 Bean 注解的方法所注册的 Bean 对象，如果用户不设置 destroyMethod 属性，则其属性值为 AbstractBeanDefinition.INFER_METHOD。此时 Spring 会检查当前 Bean 对象的原始类中是否有名为 shutdown 或者 close 的方法，如果有，此方法会被 Spring 记录下来，并在容器被销毁时自动执行。
+
+- 问题修正
+
+如果一定要定义名为 close 或者 shutdown 方法，也可以通过将 Bean 注解内 destroyMethod 属性设置为空的方式来解决这个问题。
+
+```java
+@Configuration
+public class BeanConfiguration {
+    @Bean(destroyMethod="")
+    public LightService getTransmission(){
+        return new LightService();
+    }
+}
+```
+
+# 05｜Spring AOP 常见错误（上）
+
+AOP 是日志记录、监控管理、性能统计、异常处理、权限管理、统一认证等各个方面被广泛使用的技术。
+
+我们之所以能无感知地在容器对象方法前后任意添加代码片段，那是由于 Spring 在运行期帮我们把切面中的代码逻辑动态“织入”到了容器对象方法内，所以说 AOP 本质上就是一个代理模式。然而在使用这种代理模式时，我们常常会用不好，那么这节课我们就来解析下有哪些常见的问题，以及背后的原理是什么。
+
+**案例 1：this 调用的当前类方法无法被拦截**
+
+假设我们正在开发一个宿舍管理系统，这个模块包含一个负责电费充值的类 ElectricService，它含有一个充电方法 charge()：
+
+```java
+@Service
+public class ElectricService {
+    public void charge() throws Exception {
+        System.out.println("Electric charging ...");
+        this.pay();
+    }
+    public void pay() throws Exception {
+        System.out.println("Pay with alipay ...");
+        Thread.sleep(1000);
+    }
+}
+```
+
+因为支付宝支付 pay() 是第三方接口，我们需要记录下接口调用时间。这时候我们就引入了一个 @Around 的增强 ，分别记录在 pay() 方法执行前后的时间，并计算出执行 pay() 方法的耗时。
+
+```java
+@Aspect
+@Service
+@Slf4j
+public class AopConfig {
+@Around("execution(* com.spring.puzzle.class5.example1.ElectricService.pay())")
+    public void recordPayPerformance(ProceedingJoinPoint joinPoint) throws Throwable {
+        long start = System.currentTimeMillis();
+        joinPoint.proceed();
+        long end = System.currentTimeMillis();
+        System.out.println("Pay method time cost（ms）: " + (end - start));
+    }
+}
+```
+
+最后我们再通过定义一个 Controller 来提供电费充值接口，定义如下：
+
+```java
+@RestController
+public class HelloWorldController {
+    @Autowired
+    ElectricService electricService;
+    
+    @RequestMapping(path = "charge", method = RequestMethod.GET)
+    public void charge() throws Exception {
+        electricService.charge();
+    }
+}
+```
+
+完成代码后，我们访问上述接口，会发现这段计算时间的切面并没有执行到，输出日志如下：
+
+```
+Electric charging ...
+Pay with alipay ...
+```
+
+- 案例解析
+
+我们可以从源码中找到真相。首先来设置个断点，调试看看 this 对应的对象是什么样的：
+
+![image-20220722220732765](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207222207979.png)
+
+可以看到，this 对应的就是一个普通的 ElectricService 对象，并没有什么特别的地方。再看看在 Controller 层中自动装配的 ElectricService 对象是什么样：
+
+![image-20220722220804301](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207222208453.png)
+
+可以看到，这是一个被 Spring 增强过的 Bean。而 this 对应的对象只是一个普通的对象，并没有做任何额外的增强。
+
+为什么 this 引用的对象只是一个普通对象呢？这还要从 Spring AOP 增强对象的过程来看。我们具体看下创建代理对象的过程。先来看下调用栈：
+
+![image-20220722221230436](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207222212593.png)
+
+创建代理对象的时机就是创建一个 Bean 的时候，而创建的的关键工作其实是由 AnnotationAwareAspectJAutoProxyCreator 完成的。它本质上是一种 BeanPostProcessor。所以它的执行是在完成原始 Bean 构建后的初始化 Bean（initializeBean）过程中。
+
+- 问题修正
+
+从上述案例解析中，我们知道，只有引用的是被动态代理创建出来的对象，才会被 Spring 增强，具备 AOP 该有的功能。那什么样的对象具备这样的条件呢？
+
+有两种。一种是被 @Autowired 注解的，于是我们的代码可以改成这样，即通过 @Autowired 的方式，在类的内部，自己引用自己：
+
+```java
+@Service
+public class ElectricService {
+    @Autowired
+    ElectricService electricService;
+    
+    public void charge() throws Exception {
+        System.out.println("Electric charging ...");
+        //this.pay();
+        electricService.pay();
+    }
+    
+    public void pay() throws Exception {
+        System.out.println("Pay with alipay ...");
+        Thread.sleep(1000);
+    }
+}
+```
+
+另一种方法就是直接从 AopContext 获取当前的 Proxy。那你可能会问了，AopContext 是什么？简单说，它的核心就是通过一个 ThreadLocal 来将 Proxy 和线程绑定起来，这样就可以随时拿出当前线程绑定的 Proxy。
+
+不过使用这种方法有个小前提，就是需要在 @EnableAspectJAutoProxy 里加一个配置项 exposeProxy = true，表示将代理对象放入到 ThreadLocal，这样才可以直接通过 AopContext.currentProxy() 的方式获取到，否则会报错如下：
+
+![image-20220722221901639](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207222219794.png)
+
+按这个思路，我们修改下相关代码：
+
+```java
+@SpringBootApplication
+@EnableAspectJAutoProxy(exposeProxy = true)
+public class Application {
+    // 省略非关键代码
+}
+```
+
+业务代码如下：
+
+```java
+@Service
+public class ElectricService {
+    public void charge() throws Exception {
+        System.out.println("Electric charging ...");
+        ElectricService electric = ((ElectricService) AopContext.currentProxy());
+        electric.pay();
+    }
+    public void pay() throws Exception {
+        System.out.println("Pay with alipay ...");
+        Thread.sleep(1000);
+    }
+}
+```
 
 
 
