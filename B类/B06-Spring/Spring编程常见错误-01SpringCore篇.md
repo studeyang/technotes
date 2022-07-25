@@ -1163,6 +1163,209 @@ public class ElectricService {
 }
 ```
 
+**案例 2：直接访问被拦截类的属性抛空指针异常**
+
+接上一个案例，在宿舍管理系统中，我们使用了 charge() 方法进行支付。在统一结算的时候我们会用到一个管理员用户付款编号。
+
+```java
+@Service
+public class AdminUserService {
+    public final User adminUser = new User("202101166");
+    
+    public void login() {
+        System.out.println("admin user login...");
+    }
+}
+```
+
+ElectricService 类在电费充值时，需要管理员登录并使用其编号进行结算。完整代码如下：
+
+```java
+@Service
+public class ElectricService {
+    
+    @Autowired
+    private AdminUserService adminUserService;
+    
+    public void charge() throws Exception {
+        System.out.println("Electric charging ...");
+        this.pay();
+    }
+    
+    public void pay() throws Exception {
+        adminUserService.login();
+        String payNum = adminUserService.adminUser.getPayNum();
+        System.out.println("User pay num : " + payNum);
+        System.out.println("Pay with alipay ...");
+        Thread.sleep(1000);
+    }
+}
+```
+
+代码完成后，执行 charge() 操作，一切正常。
+
+```
+Electric charging ...
+admin user login...
+User pay num : 202101166
+Pay with alipay ...
+```
+
+由于安全需要，管理员在登录时，需要记录一行日志以便于以后审计管理员操作。所以我们添加一个 AOP 相关配置类，具体如下：
+
+```java
+@Aspect
+@Service
+@Slf4j
+public class AopConfig {
+    @Before("execution(* com.spring.puzzle.class5.example2.AdminUserService.login(..))")
+    public void logAdminLogin(JoinPoint pjp) throws Throwable {
+        System.out.println("! admin login ...");
+    }
+}
+```
+
+添加这段代码后，我们执行 charge() 操作，发现不仅没有相关日志，而且在执行下面这一行代码的时候直接抛出了 NullPointerException：
+
+```java
+String payNum = dminUserService.user.getPayNum();
+```
+
+- 案例解析
+
+我们先 debug 一下，来看看加入 AOP 后调用的对象是什么样子。
+
+![image-20220725213318634](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252133846.png)
+
+可以看出，加入 AOP 后，我们的对象已经是一个代理对象了，并且属性 adminUser 确实为 null。
+
+为什么会这样？
+
+正常情况下，AdminUserService 只是一个普通的对象，而 AOP 增强过的则是一个 AdminUserService$$EnhancerBySpringCGLIB$$xxxx。这个类实际上是 AdminUserService 的一个子类。它会 overwrite 所有 public 和 protected 方法，并在内部将调用委托给原始的 AdminUserService 实例。
+
+从具体实现角度看，CGLIB 中 AOP 的实现是基于 org.springframework.cglib.proxy 包中 Enhancer 和 MethodInterceptor 两个接口来实现的。整个过程，可以概括为三个步骤：
+
+1. 定义自定义的 MethodInterceptor 负责委托方法执行；
+2. 创建 Enhancer 并设置 Callback 为上述 MethodInterceptor；
+3. enhancer.create() 创建代理。
+
+以 CGLIB 的 Proxy 的实现类 CglibAopProxy 为例，来看看具体的流程：
+
+```java
+public Object getProxy(@Nullable ClassLoader classLoader) {
+    // 省略非关键代码
+    // 创建及配置 Enhancer
+    Enhancer enhancer = createEnhancer();
+    // 省略非关键代码
+    // 获取Callback：包含DynamicAdvisedInterceptor，亦是MethodInterceptor
+    Callback[] callbacks = getCallbacks(rootClass);
+    // 省略非关键代码
+    // 生成代理对象并创建代理（设置 enhancer 的 callback 值）
+    return createProxyClassAndInstance(enhancer, callbacks);
+    // 省略非关键代码
+}
+```
+
+上述代码中的几个关键步骤大体符合之前提及的三个步骤，其中最后一步一般都会执行到 CglibAopProxy 子类 ObjenesisCglibAopProxy 的 createProxyClassAndInstance() 方法：
+
+```java
+protected Object createProxyClassAndInstance(Enhancer enhancer, Callback[] callbacks) {
+    //创建代理类Class
+    Class<?> proxyClass = enhancer.createClass();
+    Object proxyInstance = null;
+    //spring.objenesis.ignore默认为false
+    //所以objenesis.isWorthTrying()一般为true
+    if (objenesis.isWorthTrying()) {
+        try {
+            // 创建实例
+            proxyInstance = objenesis.newInstance(proxyClass, enhancer.getUseCache());
+        }
+        catch (Throwable ex) {
+            // 省略非关键代码
+        }
+    }
+    if (proxyInstance == null) {
+        // 尝试普通反射方式创建实例
+        try {
+            Constructor<?> ctor = (this.constructorArgs != null ?
+                                   proxyClass.getDeclaredConstructor(this.constructorArgTypes) :
+                                   proxyClass.getDeclaredConstructor());
+            ReflectionUtils.makeAccessible(ctor);
+            proxyInstance = (this.constructorArgs != null ?
+                             ctor.newInstance(this.constructorArgs) : ctor.newInstance());
+            //省略非关键代码
+        }
+    }
+    // 省略非关键代码
+    ((Factory) proxyInstance).setCallbacks(callbacks);
+    return proxyInstance;
+}
+```
+
+这里我们可以了解到，Spring 会默认尝试使用 objenesis 方式实例化对象，如果失败则再次尝试使用常规方式实例化对象。现在，我们可以进一步查看 objenesis 方式实例化对象的流程。
+
+![image-20220725215756940](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252157098.png)
+
+参照上述截图所示调用栈，objenesis 方式最后使用了 JDK 的 ReflectionFactory.newConstructorForSerialization() 完成了代理对象的实例化。这种方式创建出来的对象是不会初始化类成员变量的。
+
+- 问题修正
+
+既然是无法直接访问被拦截类的成员变量，那我们就换个方式，在 AdminUserService 里写个 getUser() 方法，从内部访问获取变量。
+
+```java
+public User getUser() {
+    return user;
+}
+```
+
+在 ElectricService 里通过 getUser() 获取 User 对象：
+
+```java
+String payNum = adminUserService.getAdminUser().getPayNum();
+```
+
+运行下来，一切正常，可以看到管理员登录日志了：
+
+```
+Electric charging ...
+! admin login ...
+admin user login...
+User pay num : 202101166
+Pay with alipay ...
+```
+
+你有没有产生另一个困惑呢？既然代理类的类属性不会被初始化，那为什么可以通过在 AdminUserService 里写个 getUser() 方法来获取代理类实例的属性呢？
+
+我们再次回顾 createProxyClassAndInstance 的代码逻辑，创建代理类后，我们会调用 setCallbacks 来设置拦截后需要注入的代码：
+
+```java
+protected Object createProxyClassAndInstance(Enhancer enhancer, Callback[] callbacks) {
+    Class<?> proxyClass = enhancer.createClass();
+    Object proxyInstance = null;
+    if (objenesis.isWorthTrying()) {
+        try {
+            roxyInstance = objenesis.newInstance(proxyClass, enhancer.getUseCache());
+        }
+        // 省略非关键代码
+        ((Factory) proxyInstance).setCallbacks(callbacks);
+        return proxyInstance;
+}
+```
+
+通过代码调试和分析，我们可以得知上述的 callbacks 中会存在一种服务于 AOP 的 DynamicAdvisedInterceptor，它的接口是 MethodInterceptor（callback 的子接口），实现了拦截方法 intercept()。
+
+说到这里，我们已经解决了问题。但其实你改变一个属性，也可以让产生的代理对象的属性值不为 null。例如修改启动参数 spring.objenesis.ignore 如下：
+
+![image-20220725220616162](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252206387.png)
+
+此时再调试程序，你会发现 adminUser 已经不为 null 了：
+
+![image-20220725220635292](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252206494.png)
+
+# 06｜Spring AOP常见错误（下）
+
+
+
 
 
 
