@@ -1364,6 +1364,255 @@ protected Object createProxyClassAndInstance(Enhancer enhancer, Callback[] callb
 
 # 06｜Spring AOP常见错误（下）
 
+当一个系统采用的切面越来越多时，因为执行顺序而导致的问题便会逐步暴露出来，下面我们就重点看一下。
+
+**案例 1：错乱混合不同类型的增强**
+
+这个宿舍管理系统维护了一个电费充值模块，它包含了一个负责电费充值的类 ElectricService，还有一个充电方法 charge()：
+
+```java
+@Service
+public class ElectricService {
+    public void charge() throws Exception {
+        System.out.println("Electric charging ...");
+    }
+}
+```
+
+为了在执行 charge() 之前，鉴定下调用者的权限，我们增加了针对于 Electric 的切面类 AopConfig，其中包含一个 @Before 增强。
+
+```java
+@Aspect
+@Service
+@Slf4j
+public class AspectService {
+    @Before("execution(* com.spring.puzzle.class6.example1.ElectricService.charge())");
+    public void checkAuthority(JoinPoint pjp) throws Throwable {
+        System.out.println("validating user authority");
+        Thread.sleep(1000);
+    }
+}
+```
+
+执行后，得到以下 log：
+
+```
+validating user authority
+Electric charging ...
+```
+
+一段时间后，由于业务发展，ElectricService 中的 charge() 逻辑变得更加复杂了，我们需要仅仅针对 ElectricService 的 charge() 做性能统计。
+
+```java
+@Aspect
+@Service
+public class AopConfig {
+    
+    @Before("execution(* com.spring.puzzle.class6.example1.ElectricService.charge())");
+    public void checkAuthority(JoinPoint pjp) throws Throwable {
+        System.out.println("validating user authority");
+        Thread.sleep(1000);
+    }
+    
+    @Around("execution(* com.spring.puzzle.class6.example1.ElectricService.charge())");
+    public void recordPerformance(ProceedingJoinPoint pjp) throws Throwable {
+        long start = System.currentTimeMillis();
+        pjp.proceed();
+        long end = System.currentTimeMillis();
+        System.out.println("charge method time cost: " + (end - start));
+    }
+}
+```
+
+执行后得到日志如下：
+
+```
+validating user authority
+Electric charging ...
+charge method time cost 1022 (ms)
+```
+
+通过性能统计打印出的日志，我们可以得知 charge() 执行时间超过了 1 秒钟。然而，该方法仅打印了一行日志，它的执行不可能需要这么长时间。
+
+- 案例解析
+
+针对这个案例而言，当同一个切面（Aspect）中同时包含多个不同类型的增强时（Around、Before、After、AfterReturning、AfterThrowing 等），它们的执行是有顺序的。那么顺序如何？我们不妨来解析下。
+
+Spring 初始化单例类的一般过程，基本都是 getBean()->doGetBean()->getSingleton()，如果发现 Bean 不存在，则调用 createBean()->doCreateBean() 进行实例化。
+
+而如果我们的代码里使用了 Spring AOP，doCreateBean() 最终会返回一个代理对象。（参考 AbstractAutoProxyCreator#createProxy）
+
+最终的排序结果依次是 Around.class, Before.class, After.class, AfterReturning.class, AfterThrowing.class。（ReflectiveAspectJAdvisorFactory  类中的静态方法块）
+
+```java
+static {
+    //第一个比较器，用来按照增强类型排序
+    Comparator<Method> adviceKindComparator = new ConvertingComparator<>(
+        new InstanceComparator<>(
+            Around.class, Before.class, After.class, AfterReturning.class, 
+            AfterThrowing.class),
+        (Converter<Method, Annotation>) method -> {
+            AspectJAnnotation<?> annotation =
+                AbstractAspectJAdvisorFactory.findAspectJAnnotationOnMethod(method);
+            return (annotation != null ? annotation.getAnnotation() : null);
+        });
+       
+    //第二个比较器，用来按照方法名排序
+    Comparator<Method> methodNameComparator = new ConvertingComparator<>(Method::getName);
+    METHOD_COMPARATOR = adviceKindComparator.thenComparing(methodNameComparator
+}
+```
+
+- 问题修正
+
+从上述案例解析中，我们知道 Around 类型的增强被调用的优先级高于 Before 类型的增强，所以上述案例中性能统计所花费的时间，包含权限验证的时间。
+
+我们可以按照下面的思路来修改：
+
+1. 将 ElectricService.charge() 的业务逻辑全部移动到 doCharge()，在 charge() 中调用 doCharge()；
+2. 性能统计只需要拦截 doCharge()；
+3. 权限统计增强保持不变，依然拦截 charge()。
+
+ElectricService 类代码更改如下：
+
+```java
+@Service
+public class ElectricService {
+    public void charge() {
+        doCharge();
+    }
+    public void doCharge() {
+        System.out.println("Electric charging ...");
+    }
+}
+```
+
+切面代码更改如下：
+
+```java
+@Aspect
+@Service
+public class AopConfig {
+    
+    @Before("execution(* com.spring.puzzle.class6.example1.ElectricService.charge())")
+    public void checkAuthority(JoinPoint pjp) throws Throwable {
+        System.out.println("validating user authority");
+        Thread.sleep(1000);
+    }
+    
+    @Around("execution(* com.spring.puzzle.class6.example1.ElectricService.doCharge())")
+    public void recordPerformance(ProceedingJoinPoint pjp) throws Throwable {
+        long start = System.currentTimeMillis();
+        pjp.proceed();
+        long end = System.currentTimeMillis();
+        System.out.println("charge method time cost: " + (end - start));
+    }
+}
+```
+
+**案例 2：错乱混合同类型增强**
+
+那如果同一个切面里的多个增强方法其增强都一样，那调用顺序又如何呢？我们继续看下一个案例。
+
+业务逻辑类 ElectricService 不变：
+
+```java
+@Service
+public class ElectricService {
+    public void charge() {
+        System.out.println("Electric charging ...");
+    }
+}
+```
+
+切面类 AspectService 包含两个方法，都是 Before 类型增强。
+
+```java
+@Aspect
+@Service
+public class AopConfig {
+    @Before("execution(* com.spring.puzzle.class5.example2.ElectricService.charge())")
+    public void logBeforeMethod(JoinPoint pjp) throws Throwable {
+        System.out.println("step into ->"+pjp.getSignature());
+    }
+    
+    @Before("execution(* com.spring.puzzle.class5.example2.ElectricService.charge())")
+    public void validateAuthority(JoinPoint pjp) throws Throwable {
+        throw new RuntimeException("authority check failed");
+    }
+}
+```
+
+我们对代码的执行预期为：当鉴权失败时，由于 ElectricService.charge() 没有被调用，那么 logBeforeMethod() 不应该被调用。
+
+但是，执行结果却如下：
+
+```
+step into ->void com.spring.puzzle.class6.example2.Electric.charge()
+Exception in thread "main" java.lang.RuntimeException: authority check failed
+```
+
+这里我们就需要搞清楚一个问题：当同一个切面包含多个同一种类型的多个增强，且修饰的都是同一个方法时，这多个增强的执行顺序是怎样的？
+
+- 案例解析
+
+```java
+static {
+    //第一个比较器，用来按照增强类型排序
+    ......
+    //第二个比较器，用来按照方法名排序
+    Comparator<Method> methodNameComparator = new ConvertingComparator<>(Method::getName);
+    METHOD_COMPARATOR = adviceKindComparator.thenComparing(methodNameComparator
+}
+```
+
+如果两个方法名长度相同，则依次比较每一个字母的 ASCII 码，ASCII 码越小，排序越靠前；若长度不同，且短的方法名字符串是长的子集时，短的排序靠前。
+
+- 问题修正
+
+在同一个切面配置类中，针对同一个方法存在多个同类型增强时，其执行顺序仅和当前增强方法的名称有关。
+
+```java
+@Aspect
+@Service
+public class AopConfig {
+    
+    @Before("execution(* com.spring.puzzle.class6.example2.ElectricService.charge())")
+    public void logBeforeMethod(JoinPoint pjp) throws Throwable {
+        System.out.println("step into ->"+pjp.getSignature());
+    }
+    
+    @Before("execution(* com.spring.puzzle.class6.example2.ElectricService.charge())")
+    public void checkAuthority(JoinPoint pjp) throws Throwable {
+        throw new RuntimeException("authority check failed");
+    }
+}
+```
+
+我们可以将原来的 validateAuthority() 改为 checkAuthority()，这种情况下，对增强 （Advisor）的排序，其实最后就是在比较字符 l 和 字符 c。显然易见，checkAuthority() 的排序会靠前，从而被优先执行，最终问题得以解决。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
