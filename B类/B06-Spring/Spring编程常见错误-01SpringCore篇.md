@@ -1591,25 +1591,205 @@ public class AopConfig {
 
 我们可以将原来的 validateAuthority() 改为 checkAuthority()，这种情况下，对增强 （Advisor）的排序，其实最后就是在比较字符 l 和 字符 c。显然易见，checkAuthority() 的排序会靠前，从而被优先执行，最终问题得以解决。
 
+# 07｜Spring事件常见错误
 
+Spring 事件的设计比较简单。说白了，就是监听器设计模式在 Spring 中的一种实现，参考下图：
 
+![image-20220727220050768](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207272200105.png)
 
+从图中我们可以看出，Spring 事件包含以下三大组件。
 
+1. 事件（Event）：用来区分和定义不同的事件，在 Spring 中，常见的如 ApplicationEvent 和 AutoConfigurationImportEvent，它们都继承于 java.util.EventObject。
 
+2. 事件广播器（Multicaster）：负责发布上述定义的事件。例如，负责发布 ApplicationEvent 的 ApplicationEventMulticaster 就是 Spring 中一种常见的广播器。
 
+3. 事件监听器（Listener）：负责监听和处理广播器发出的事件，例如 ApplicationListener 就是用来处理 ApplicationEventMulticaster 发布的 ApplicationEvent，它继承于 JDK 的 EventListener。
 
+   > 我们可以看下它的定义来验证这个结论：
+   >
+   > ```java
+   > public interface ApplicationListener<E extends ApplicationEvent> extends EventListener {
+   >     void onApplicationEvent(E event);
+   > }
+   > ```
 
+**案例 1：试图处理并不会抛出的事件**
 
+在很多 Spring 初级开发者眼中，Spring 运转的核心就是一个 Context 的维护，那么启动 Spring 自然会启动 Context。
 
+```java
+@Slf4j
+@Component
+public class MyContextStartedEventListener implements ApplicationListener<ContextStartedEvent> {
+    public void onApplicationEvent(final ContextStartedEvent event) {
+        log.info("{} received: {}", this.toString(), event);
+    }
+}
+```
 
+但是当我们启动 Spring Boot 后，会发现并不会拦截到这个事件，如何理解这个错误呢？
 
+- 案例解析
 
+在 Spring Boot 中，这个事件的抛出只发生在一处，即位于方法 AbstractApplicationContext#start 中。
 
+```java
+@Override
+public void start() {
+    getLifecycleProcessor().start();
+    publishEvent(new ContextStartedEvent(this));
+}
+```
 
+只有上述方法被调用，才会抛出 ContextStartedEvent，但是这个方法在 Spring Boot 启动时会被调用么？我们可以查看 Spring 启动方法中围绕 Context 的关键方法调用，代码如下：
 
+```java
+public ConfigurableApplicationContext run(String... args) {
+    //省略非关键代码
+    context = createApplicationContext();
+    //省略非关键代码
+    prepareContext(context, environment, listeners, applicationArguments, printBanner);
+    refreshContext(context);
+    //省略非关键代码
+    return context;
+}
+```
 
+我们发现围绕 Context、Spring Boot 的启动只做了两个关键工作：创建 Context 和 Refresh Context。其中 Refresh 的关键代码如下：
 
+```java
+protected void refresh(ApplicationContext applicationContext) {
+    Assert.isInstanceOf(AbstractApplicationContext.class, applicationContext);
+    ((AbstractApplicationContext) applicationContext).refresh();
+}
+```
 
+很明显，Spring 启动最终调用的是 AbstractApplicationContext#refresh，并不是 AbstractApplicationContext#start，ContextStartedEvent 自然不会被抛出。
+
+- 问题修正
+
+如果我们确实想在 Spring Boot 启动时拦截一个启动事件，可以把监听事件的类型修改成真正发生的事件即可：
+
+```java
+@Component
+public class MyContextRefreshedEventListener implements ApplicationListener<ontextRefreshedEvent> {
+    public void onApplicationEvent(final ContextRefreshedEvent event) {
+        log.info("{} received: {}", this.toString(), event);
+    }
+}
+```
+
+ContextRefreshedEvent 的抛出可以参考方法 AbstractApplicationContext#finishRefresh。
+
+**案例 2：监听事件的体系不对**
+
+```java
+@Slf4j
+@Component
+public class MyApplicationEnvironmentPreparedEventListener implements 
+    ApplicationContext<ApplicationEnvironmentPreparedEvent> {
+    public void onApplicationEvent(final ApplicationEnvironmentPreparedEvent event) {
+        log.info("{} received: {}", this.toString(), event);
+    }
+}
+```
+
+这里我们试图处理 ApplicationEnvironmentPreparedEvent。这个事件在 Spring 中是由 EventPublishingRunListener#environmentPrepared 方法抛出，代码如下：
+
+```java
+@Override
+public void environmentPrepared(ConfigurableEnvironment environment) {
+    this.initialMulticaster
+        .multicastEvent(new ApplicationEnvironmentPreparedEvent(this.application));
+}
+```
+
+但是我们真正去运行程序时会发现，监听器的处理并不执行，这又是为何？
+
+- 案例解析
+
+这是在 Spring 事件处理上非常容易犯的一个错误，即监听的体系不一致。
+
+我们首先来看下关于 ApplicationEnvironmentPreparedEvent 的处理相关的两大组件。
+
+1. 广播器：这个事件的广播器是 EventPublishingRunListener 的 initialMulticaster，代码参考如下：
+
+```java
+public class EventPublishingRunListener implements SpringApplicationRunListener, Orderd {
+    //省略非关键代码
+    private final SimpleApplicationEventMulticaster initialMulticaster;
+    public EventPublishingRunListener(SpringApplication application, String[] args) {
+        //省略非关键代码
+        this.initialMulticaster = new SimpleApplicationEventMulticaster();
+        for (ApplicationListener<?> listener : application.getListeners()) {
+            this.initialMulticaster.addApplicationListener(listener);
+        }
+    }
+}
+```
+
+2. 监听器：这个事件的监听器同样位于 EventPublishingRunListener 中，获取方式参考关键代码行：
+
+```java
+this.initialMulticaster.addApplicationListener(listener);
+```
+
+继续查看代码，我们会发现这个事件的监听器就存储在 SpringApplication#Listeners 中，调试下就可以找出所有的监听器，截图如下：
+
+![image-20220727224007359](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207272240582.png)
+
+从中我们可以发现并不存在我们定义的 MyApplicationEnvironmentPreparedEventListener，这是为何？
+
+当 Spring Boot 被构建时，会使用下面的方法去寻找上述监听器：
+
+```java
+setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class));
+```
+
+最终是从 META-INF/spring.factories 文件中获取 listener 的：
+
+```
+org.springframework.context.ApplicationListener=\
+org.springframework.boot.ClearCachesApplicationListener,\
+org.springframework.boot.builder.ParentContextCloserApplicationListener,\
+org.springframework.boot.cloud.CloudFoundryVcapEnvironmentPostProcessor,\
+//省略其他监听器
+```
+
+我们定义的监听器并没有被放置在 META-INF/spring.factories 中，实际上，我们的监听器监听的体系是另外一套，其关键组件如下：
+
+1. 广播器：即 AbstractApplicationContext#applicationEventMulticaster；
+2. 监听器：由上述提及的 META-INF/spring.factories 中加载的监听器以及扫描到的 ApplicationListener 类型的 Bean 共同组成。
+
+> “另一套监听体系”这里有点逻辑跳跃。
+
+这样比较后，我们可以得出一个结论：我们定义的监听器并不能监听到 initialMulticaster 广播出的 ApplicationEnvironmentPreparedEvent。
+
+- 问题修正
+
+1. 在构建 Spring Boot 时，添加 MyApplicationEnvironmentPreparedEventListener：
+
+```java
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        MyApplicationEnvironmentPreparedEventListener listener 
+            = new MyApplicationEnvironmentPreparedEventListener();
+        SpringApplication springApplication = new SpringApplicationBuilder(Application.class)
+            .listeners(listener).build();
+        springApplication.run(args);
+    }
+}
+```
+
+2. 使用 META-INF/spring.factories，即在 /src/main/resources 下面新建目录 META-INF，然后新建一个对应的 spring.factories 文件：
+
+```
+org.springframework.context.ApplicationListener=\
+com.spring.puzzle.listener.example2.MyApplicationEnvironmentPreparedEventListener
+```
+
+**案例 3：部分事件监听器失效**
 
 
 
