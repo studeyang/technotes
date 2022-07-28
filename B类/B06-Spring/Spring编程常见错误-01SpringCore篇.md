@@ -1791,15 +1791,149 @@ com.spring.puzzle.listener.example2.MyApplicationEnvironmentPreparedEventListene
 
 **案例 3：部分事件监听器失效**
 
+有些时候，我们可能还会发现部分事件监听器一直失效或偶尔失效。这里我们可以写一段代码来模拟偶尔失效的场景：
 
+```java
+public class MyEvent extends ApplicationEvent {
+    public MyEvent(Object source) {
+        super(source);
+    }
+}
 
+@Component
+@Order(1)
+public class MyFirstEventListener implements ApplicationListener<MyEvent> {
+    Random random = new Random();
+    @Override
+    public void onApplicationEvent(MyEvent event) {
+        log.info("{} received: {}", this.toString(), event);
+        //模拟部分失效
+        if(random.nextInt(10) % 2 == 1)
+            throw new RuntimeException("exception happen on first listener");
+    }
+}
 
+@Component
+@Order(2)
+public class MySecondEventListener implements ApplicationListener<MyEvent> {
+    @Override
+    public void onApplicationEvent(MyEvent event) {
+        log.info("{} received: {}", this.toString(), event);
+    }
+}
+```
 
+这里监听器 MyFirstEventListener 的优先级稍高，且执行过程中会有 50% 的概率抛出异常。然后我们再写一个 Controller 来触发事件的发送：
 
+```java
+@RestController
+@Slf4j
+public class HelloWorldController {
+    @Autowired
+    private AbstractApplicationContext applicationContext;
+    
+    @RequestMapping(path = "publishEvent", method = RequestMethod.GET)
+    public String notifyEvent() {
+        log.info("start to publish event");
+        applicationContext.publishEvent(new MyEvent(UUID.randomUUID()));
+        return "ok";
+    }
+}
+```
 
+完成这些代码后，我们使用 http://localhost:8080/publishEvent 来测试监听器的接收和执行。观察测试结果，我们会发现监听器 MySecondEventListener 有一半的概率并没有接收到任何事件。
 
+- 案例解析
 
+处理器的执行是顺序执行的，在执行过程中，如果一个监听器执行抛出了异常，则后续监听器就得不到被执行的机会了。
 
+这里我们可以通过 Spring 源码看下事件是如何被执行的。当广播一个事件，执行的方法参考 SimpleApplicationEventMulticaster#multicastEvent(ApplicationEvent)：
 
+```java
+@Override
+public void multicastEvent(final ApplicationEvent event, @Nullable ResolvableType eventType) {
+    ResolvableType type = (eventType != null ? eventType : resolveDefaultEventType(event));
+    Executor executor = getTaskExecutor();
+    for (ApplicationListener<?> listener : getApplicationListeners(event, type) {
+         if (executor != null) {
+             executor.execute(() -> invokeListener(listener, event));
+         } else {
+             invokeListener(listener, event);
+         }
+    }
+}
+```
 
+每个监听器的执行是通过 invokeListener() 来触发的，调用的是接口方法 ApplicationListener#onApplicationEvent。执行逻辑可参考如下代码：
+
+```java
+protected void invokeListener(ApplicationListener<?> listener, ApplicationEvent event) {
+    ErrorHandler errorHandler = getErrorHandler();
+    if (errorHandler != null) {
+        try {
+            doInvokeListener(listener, event);
+        } catch (Throwable err) {
+            errorHandler.handleError(err);
+        }
+    } else {
+        doInvokeListener(listener, event);
+    }
+}
+
+private void doInvokeListener(ApplicationListener listener, ApplicationEvent event) {
+    try {
+        listener.onApplicationEvent(event);
+    } catch (ClassCastException ex) {
+        //省略非关键代码
+        else {
+            throw ex;
+        }
+    }
+}
+```
+
+这里我们并没有去设置什么 org.springframework.util.ErrorHandler，也没有绑定什么 Executor 来执行任务，所以针对本案例的情况，我们可以看出：最终事件的执行是由同一个线程按顺序来完成的，任何一个报错，都会导致后续的监听器执行不了。
+
+- 问题修正
+
+1. 确保监听器的执行不会抛出异常。
+
+```java
+@Component
+@Order(1)
+public class MyFirstEventListener implements ApplicationListener<MyEvent> {
+    @Override
+    public void onApplicationEvent(MyEvent event) {
+        try {
+            // 省略事件处理相关代码
+        } catch(Throwable throwable) {
+            //write error/metric to alert
+        }
+    }
+}
+```
+
+2. 使用 org.springframework.util.ErrorHandler。
+
+假设我们设置了一个 ErrorHandler，那么就可以用这个 ErrorHandler 去处理掉异常，从而保证后续事件监听器处理不受影响。我们可以使用下面的代码来修正问题：
+
+```java
+SimpleApplicationEventMulticaster simpleApplicationEventMulticaster = 
+    applicationContext.getBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME,                            
+                               SimpleApplicationEventMulticaster.class);
+simpleApplicationEventMulticaster.setErrorHandler(TaskUtils.LOG_AND_SUPPRESS_ERROR_HANDLER);
+```
+
+其中 LOG_AND_SUPPRESS_ERROR_HANDLER 的实现如下：
+
+```java
+public static final ErrorHandler LOG_AND_SUPPRESS_ERROR_HANDLER = new LoggingErrorHandler();
+private static class LoggingErrorHandler implements ErrorHandler {
+    private final Log logger = LogFactory.getLog(LoggingErrorHandler.class);
+    @Override
+    public void handleError(Throwable t) {
+        logger.error("Unexpected error occurred in scheduled task", t);
+    }
+}
+```
 
