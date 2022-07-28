@@ -58,6 +58,7 @@
   - [Spring面试题-第一天](B类/B06-Spring/Spring面试题-第一天.md)
   - [Spring响应式编程](B类/B06-Spring/Spring响应式编程.md)
   - [Spring编程常见错误-SpringCore篇](B类/B06-Spring/Spring编程常见错误-01SpringCore篇.md)
+  - [Spring编程常见错误-SpringWeb篇](B类/B06-Spring/Spring编程常见错误-02SpringWeb篇.md)
 - Tomcat
   - [深入拆解Tomcat](B类/B07-Tomcat/[极客时间]-深入拆解Tomcat.md)
 - 设计模式
