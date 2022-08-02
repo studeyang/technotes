@@ -110,5 +110,104 @@ public String hi1(HttpServletRequest request) {
 
 当然也存在一些其他的方案，例如对传递的参数进行 URL 编码以避免出现 /。
 
+**案例 2：错误使用 @RequestParam、@PathVarible 等注解**
+
+我们去获取一个请求参数 name，我们会定义如下：
+
+```java
+@RequestParam("name") String name
+```
+
+我们会发现变量名称大概率会被定义成 RequestParam 值。所以我们是不是可以用下面这种方式来定义：
+
+```java
+@RequestParam String name
+```
+
+这种方式确实是可以的，本地测试也能通过。
+
+但当我们的项目 pom.xml 配置如下时：
+
+```xml
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-compiler-plugin</artifactId>
+  <configuration>
+    <debug>false</debug>
+    <parameters>false</parameters>
+  </configuration>
+</plugin>
+```
+
+项目上线后就失效了，报错 500，提示匹配不上。
+
+![image-20220802220259134](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208022202330.png)
+
+- 案例解析
+
+上述配置显示关闭了 parameters 和 debug。我们可以开启这两个参数来编译，然后使用下面的命令来查看信息：
+
+```
+javap -verbose HelloWorldController.class
+```
+
+![image-20220802220424316](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208022204379.png)
+
+debug 参数开启的部分信息就是 LocalVaribleTable，而 paramters 参数开启的信息就是 MethodParameters。观察它们的信息，你会发现它们都含有参数名 name。
+
+如果关闭这两个参数，则 name 这个名称自然就没有了。如果 @RequestParam 中又没有指定名称，那么 Spring 此时还能找到解析的方法么？
+
+这里我们可以顺带说下 Spring 解析请求参数名称的过程，参考代码 AbstractNamedValueMethodArgumentResolver#updateNamedValueInfo：
+
+```java
+private NamedValueInfo updateNamedValueInfo(
+    MethodParameter parameter, NamedValueInfo) {
+    String name = info.name;
+    if (info.name.isEmpty()) {
+        name = parameter.getParameterName();
+        if (name == null) {
+            throw new IllegalArgumentException("Name for argument type ["
+                + parameter.getNestedParameterType().getName()
+                + "] not available, and parameter name information not found in class file either.");
+        }
+    }
+    String defaultValue = (ValueConstants.DEFAULT_NONE.equals(info.defaultValue)
+                           ? null : info.defaultValue);
+    return new NamedValueInfo(name, info.required, defaultValue);
+}
+```
+
+其中 NamedValueInfo 的 name 为 @RequestParam 指定的值。很明显，在本案例中，为 null。
+
+所以这里我们就会尝试调用 parameter.getParameterName() 来获取参数名作为解析请求参数的名称。当参数名不存在，@RequestParam 也没有指明，自然就无法决定到底要用什么名称去获取请求参数，所以就会报本案例的错误。
+
+- 问题修正
+
+模拟出了问题是如何发生的，我们自然可以通过开启这两个参数让其工作起来。但是思考这两个参数的作用，很明显，它可以让我们的程序体积更小，所以很多项目都会青睐去关闭这两个参数。
+
+所以最好的修正方式是在 @RequestParam 中指定请求参数名。具体修改如下：
+
+```java
+@RequestParam("name") String name
+```
+
+另外，本案例围绕的都是 @RequestParam，其实 @PathVarible 也有一样的问题。
+
+**案例 3：未考虑参数是否可选**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
