@@ -195,19 +195,209 @@ private NamedValueInfo updateNamedValueInfo(
 
 **案例 3：未考虑参数是否可选**
 
+```java
+@RequestMapping(path = "/hi4", method = RequestMethod.GET)
+public String hi4(@RequestParam("name") String name, 
+                  @RequestParam("address") address) {
+    return name + ":" + address;
+}
+```
 
+在访问 http://localhost:8080/hi4?name=xiaoming&address=beijing 时并不会出问题，但是一旦用户仅仅使用 name 做请求（即 http://localhost:8080/hi4?name=xiaoming ）时，则会直接报错如下：
 
+![image-20220803214049384](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208032140535.png)
 
+既然不存在 address，address 应该设置为 null，而不应该是直接报错不是么？接下来我们就分析下。
 
+- 案例解析
 
+按注解名（@RequestParam）来确定解析发生的位置是在 RequestParamMethodArgumentResolver 中。接下来我们看下 RequestParamMethodArgumentResolver 对参数解析的一些关键操作，参考其父类方法 AbstractNamedValueMethodArgumentResolver#resolveArgument：
 
+```java
+public final Object resolveArgument(
+    MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer,
+    NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory)
+    throws Exception {
+    NamedValueInfo namedValueInfo = getNamedValueInfo(parameter);
+    MethodParameter nestedParameter = parameter.nestedIfOptional();
+    //省略其他非关键代码
+    //获取请求参数
+    Object arg = resolveName(resolvedName.toString(), nestedParameter, webRequest);
+    if (arg == null) {
+        if (namedValueInfo.defaultValue != null) {
+            arg = resolveStringValue(namedValueInfo.defaultValue);
+        } else if (namedValueInfo.required && !nestedParameter.isOptional()) {
+            handleMissingValue(namedValueInfo.name, nestedParameter, webRequest);
+        }
+        arg = handleNullValue(namedValueInfo.name, 
+                              arg, nestedParameter.getNestedParameterType());
+    }
+    //省略后续代码：类型转化等工作
+    return arg;
+}
+```
 
+当缺少请求参数的时候，通常会按照以下几个步骤进行处理。
 
+1. 查看 namedValueInfo 的默认值，如果存在则使用它；
 
+2. 在 @RequestParam 没有指明默认值时，会查看这个参数是否必须，如果必须，则按错误处理；
 
+   我们可以通过 MethodParameter#isOptional 方法看下可选的具体含义：
 
+   ```java
+   public boolean isOptional() {
+       return (getParameterType() == Optional.class || hasNullableAnnotation() ||
+               (KotlinDetector.isKotlinReflectPresent() &&
+                KotlinDetector.isKotlinType(getContainingClass()) &&
+                KotlinDelegate.isOptional(this)));
+   }
+   ```
 
+   在不使用 Kotlin 的情况下，所谓可选，就是参数的类型为 Optional，或者任何标记了注解名为 Nullable 且 RetentionPolicy 为 RUNTIM 的注解。
 
+3. 如果不是必须，则按 null 去做具体处理；
 
+- 问题修正
 
+通过案例解析，我们很容易就能修正这个问题，就是让参数有默认值或为非可选即可，具体方法包含以下几种。
+
+1. 设置 @RequestParam 的默认值
+
+```java
+@RequestParam(value = "address", defaultValue = "no address") String address
+```
+
+2. 设置 @RequestParam 的 required 值
+
+```java
+@RequestParam(value = "address", required = false) String address)
+```
+
+3. 标记任何名为 Nullable 且 RetentionPolicy 为 RUNTIME 的注解
+
+```java
+//org.springframework.lang.Nullable 可以
+//edu.umd.cs.findbugs.annotations.Nullable 可以
+@RequestParam(value = "address") @Nullable String address
+```
+
+4. 修改参数类型为 Optional
+
+```java
+@RequestParam(value = "address") Optional address
+```
+
+**案例 4：请求参数格式错误**
+
+当我们使用 Spring URL 相关的注解，会发现 Spring 是能够完成自动转化的。例如在下面的代码中，age 可以被直接定义为 int 这种基本类型（Integer 也可以）。
+
+```java
+@RequestMapping(path = "/hi5", method = RequestMethod.GET)
+public String hi5(@RequestParam("name") String name, @RequestParam("age") int age) {
+    return name + " is " + age + " years old";
+}
+```
+
+那 Spring 支持日期类型的转化吗？
+
+```java
+@RequestMapping(path = "/hi6", method = RequestMethod.GET)
+public String hi6(@RequestParam("Date") Date date) {
+    return "date is " + date ;
+}
+```
+
+我们使用符合日期格式的 URL 来访问，例如
+http://localhost:8080/hi6?date=2021-5-1 20:26:53，我们会发现 Spring 并不能完成转化，而是报错如下：
+
+```
+Failed to convert value of type 'java.lang.String' to required type 'java.util.Date
+```
+
+- 案例解析
+
+不管是使用 @PathVarible 还是 @RequetParam，我们一般解析出的结果都是一个 String 或 String 数组。使用 @RequetParam 解析的关键代码参考 RequestParamMethodArgumentResolver#resolveName 方法：
+
+```java
+@Nullable
+protected Object resolveName(String name, MethodParameter parameter, 
+                             NativeWebRequest request) throws Exception {
+    //省略其他非关键代码
+    if (arg == null) {
+        String[] paramValues = request.getParameterValues(name);
+        if (paramValues != null) {
+            arg = (paramValues.length == 1 ? paramValues[0] : paramValues);
+        }
+    }
+    return arg;
+}
+```
+
+该方法最终给上层调用者返回的是单个 String 或者 String 数组。
+
+对于 age 而言，最终找出的转化器是 StringToNumberConverterFactory。而对于 Date 型的 Date 变量，在本案例中，最终找到的是 ObjectToObjectConverter。它的转化过程参考下面的代码：
+
+```java
+public Object convert(@Nullable Object source, 
+                      TypeDescriptor sourceType, TypeDescriptor targetType) {
+    if (source == null) {
+        return null;
+    }
+    Class<?> sourceClass = sourceType.getType();
+    Class<?> targetClass = targetType.getType();
+    //根据源类型去获取构建出目标类型的方法：可以是工厂方法（例如 valueOf、from 方法）也可以
+    Member member = getValidatedMember(targetClass, sourceClass);
+    try {
+        if (member instanceof Method) {
+            //如果是工厂方法，通过反射创建目标实例
+        } else if (member instanceof Constructor) {
+            //如果是构造器，通过反射创建实例
+            Constructor<?> ctor = (Constructor<?>) member;
+            ReflectionUtils.makeAccessible(ctor);
+            return ctor.newInstance(source);
+        }
+    } catch (InvocationTargetException ex) {
+        throw new ConversionFailedException(
+            sourceType, targetType, source, ex.getTargetException());
+    } catch (Throwable ex) {
+        throw new ConversionFailedException(sourceType, targetType, source, ex);
+    }
+}
+```
+
+所以对于 Date 而言，最终调用的是下面的 Date 构造器：
+
+```java
+public Date(String s) {
+    this(parse(s));
+}
+```
+
+然而，我们传入的 2021-5-1 20:26:53 虽然确实是一种日期格式，但用来作为 Date 构造器参数是不支持的，最终报错，并被上层捕获，转化为 ConversionFailedException 异常。
+
+- 问题修正
+
+1. 使用 Date 支持的格式
+
+```
+http://localhost:8080/hi6?date=Sat, 12 Aug 1995 13:30:00 GMT
+```
+
+2. 使用好内置格式转化器
+
+在 Spring 中，要完成 String 对于 Date 的转化，ObjectToObjectConverter 并不是最好的转化器。我们可以使用更强大的 AnnotationParserConverter。在 Spring 初
+始化时，会构建一些针对日期型的转化器，即相应的一些 AnnotationParserConverter 的实例。但是为什么有时候用不上呢？
+
+这是因为 AnnotationParserConverter 有目标类型的要求。参考 FormattingConversionService#addFormatterForFieldAnnotation 方法的调试试图：
+
+![image-20220803224321984](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208032243112.png)
+
+这是适应于 String 到 Date 类型的转化器 AnnotationParserConverter 实例的构造过程，其需要的 annotationType 参数为 DateTimeFormat。
+
+为了使用这个转化器，我们可以使用 @DateTimeFormat 并提供合适的格式。
+
+```java
+@DateTimeFormat(pattern="yyyy-MM-dd HH:mm:ss") Date date
+```
 
