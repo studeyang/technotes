@@ -401,3 +401,169 @@ http://localhost:8080/hi6?date=Sat, 12 Aug 1995 13:30:00 GMT
 @DateTimeFormat(pattern="yyyy-MM-dd HH:mm:ss") Date date
 ```
 
+# 10 | Spring Web Header 解析常见错误
+
+虽然 Spring 对于 Header 的解析，大体流程和 URL 相同，但是 Header 本身具有自己的特点。例如，Header 不像 URL 只能出现在请求中。所以，Header 处理相关的错误和 URL 又不尽相同。接下来我们看看具体的案例。
+
+**案例 1：接受 Header 使用错 Map 类型**
+
+在 Spring 中解析 Header 时，我们在多数场合中是直接按需解析的。例如，我们想使用一个名为 myHeaderName 的 Header，我们会书写代码如下：
+
+```java
+@RequestMapping(path = "/hi", method = RequestMethod.GET)
+public String hi(@RequestHeader("myHeaderName") String name) {
+    //省略 body 处理
+}
+```
+
+但是假设我们需要解析的 Header 很多时，按照上面的方式很明显会使得参数越来越多。在这种情况下，我们一般都会使用 Map 去把所有的 Header 都接收到，然后直接对 Map 进行处理。于是我们可能会写出下面的代码：
+
+```java
+@RequestMapping(path = "/hi1", method = RequestMethod.GET)
+public String hi1(@RequestHeader() Map map) {
+    return map.toString();
+}
+```
+
+然后我们按如下方式请求该接口：
+
+```
+GET http://localhost:8080/hi1
+myheader: h1
+myheader: h2
+```
+
+会发现返回的结果并不能将这两个值如数返回，返回结果如下：
+
+```
+{myheader=h1, host=localhost:8080, connection=Keep-Alive, user-agent=Apache-HttpClient/4.5.12 (Java/11.0.6), accept-encodeing=gzip,default}
+```
+
+- 案例解析
+
+对于一个多值的 Header，在实践中，通常有两种方式来传递，一种是采用下面的方式：
+
+```
+Key: value1,value2
+```
+
+而另外一种方式就是我们上面提到的格式：
+
+```
+Key:value1
+Key:value2
+```
+
+对于方式 1，我们使用 Map 接口自然不成问题。但是如果使用的是方式 2，我们使用 Map 接口就不能拿到所有的值。
+
+对于一个 Header 的解析，主要有两种方式，分别实现在 RequestHeaderMethodArgumentResolver 和 RequestHeaderMapMethodArgumentResolver 中，它们都继承于 AbstractNamedValueMethodArgumentResolver，但是应用的场景不同，我们可以对比下它们的 supportsParameter()，来对比它们适合的场景：
+
+![image-20220804214914255](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208042149431.png)
+
+在上图中，左边是 RequestHeaderMapMethodArgumentResolver 的方法。通过比较可以发现，对于一个标记了 @RequestHeader 的参数，如果它的类型是 Map，则使用 RequestHeaderMapMethodArgumentResolver，否则一般使用的是 RequestHeaderMethodArgumentResolver。
+
+在本案例中，参数类型定义为 Map，所以使用的自然是 RequestHeaderMapMethodArgumentResolver。
+
+接下来，我们继续查看它是如何解析 Header 的，关键代码参考 resolveArgument()：
+
+```java
+@Override
+public Object resolveArgument(
+    MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer,
+    NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory)
+    throws Exception {
+    Class<?> paramType = parameter.getParameterType();
+    if (MultiValueMap.class.isAssignableFrom(paramType)) {
+        // ...
+    } else {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Iterator<String> iterator = webRequest.getHeaderNames(); iterator.hasNext();) {
+            String headerName = iterator.next();
+            //只取了一个“值”
+            String headerValue = webRequest.getHeader(headerName);
+            if (headerValue != null) {
+                result.put(headerName, headerValue);
+            }
+        }
+        return result;
+    }
+}
+```
+
+本案例并不是 MultiValueMap，所以会走入 else 分支。这个分支首先会定义一个 LinkedHashMap，然后将请求一一放置进去，并返回。当一个请求出现多个同名 Header 时，我们只要匹配上任何一个即立马返回。
+
+> 其实换一个角度思考这个问题，毕竟前面已经定义的接收类型是 LinkedHashMap，它的 Value 的泛型类型是 String，也不适合去组织多个值的情况。
+
+- 问题修正
+
+在 RequestHeaderMapMethodArgumentResolver 的 resolveArgument() 中，假设我们的参数类型是 MultiValueMap。
+
+```java
+@Override
+public Object resolveArgument(
+    MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer,
+    NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory)
+    throws Exception {
+    Class<?> paramType = parameter.getParameterType();
+    if (MultiValueMap.class.isAssignableFrom(paramType)) {
+        MultiValueMap<String, String> result;
+        if (HttpHeaders.class.isAssignableFrom(paramType)) {
+            result = new HttpHeaders();
+        } else {
+            result = new LinkedMultiValueMap<>();
+        }
+        for (Iterator<String> iterator = webRequest.getHeaderNames(); iterator.hasNext();) {
+            String headerName = iterator.next();
+            String[] headerValues = webRequest.getHeaderValues(headerName);
+            if (headerValues != null) {
+                for (String headerValue : headerValues) {
+                    result.add(headerName, headerValue);
+                }
+            }
+        }
+        return result;
+    } else {
+        //...
+    }
+}
+```
+
+我们一般会创建一个 LinkedMultiValueMap，然后使用下面的语句来获取 Header 的值并添加到 Map 中去：
+
+```java
+String[] headerValues = webRequest.getHeaderValues(headerName)
+```
+
+另外假设我们定义的是 HttpHeaders（也是一种 MultiValueMap），我们会直接创建一个 HttpHeaders 来存储所有的 Header。
+
+有了上面的解析，我们可以采用以下两种方式来修正这个问题：
+
+```java
+//方式 1
+@RequestHeader() MultiValueMap map
+//方式 2
+@RequestHeader() HttpHeaders map
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
