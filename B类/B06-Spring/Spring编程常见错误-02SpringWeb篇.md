@@ -545,25 +545,178 @@ String[] headerValues = webRequest.getHeaderValues(headerName)
 @RequestHeader() HttpHeaders map
 ```
 
+**案例 2：错认为 Header 名称首字母可以一直忽略大小写**
 
+在 HTTP 协议中，Header 的名称是无所谓大小写的。我们可以验证下。
 
+```java
+@RequestMapping(path = "/hi2", method = RequestMethod.GET)
+public String hi2(@RequestHeader("MyHeader") String myHeader, 
+                  @RequestHeader MultiValueMap map) {
+    return myHeader + " compare with : " + map.get("MyHeader");
+}
+```
 
+然后，我们使用下面的请求来测试这个接口：
 
+```
+GET http://localhost:8080/hi2
+myheader: myheadervalue
+```
 
+得出下面的结果：
 
+```
+myheadervalue compare with : null
+```
 
+综合来看，直接获取 Header 是可以忽略大小写的，但是如果从接收过来的 Map 中获取 Header 是不能忽略大小写的。
 
+- 案例解析
 
+对于"@RequestHeader("MyHeader") String myHeader"的定义，Spring 使用的是 RequestHeaderMethodArgumentResolver 来做解析。解析的方法参考 RequestHeaderMethodArgumentResolver#resolveName：
 
+```java
+protected Object resolveName(String name, MethodParameter parameter, 
+                             NativeWebRequest request) throws Exception {
+    String[] headerValues = request.getHeaderValues(name);
+    if (headerValues != null) {
+        return (headerValues.length == 1 ? headerValues[0] : headerValues);
+    } else {
+        return null;
+    }
+}
+```
 
+上述方法调用了"request.getHeaderValues(name)"，可以找到查找 Header 的最根本方法，即 org.apache.tomcat.util.http.ValuesEnumerator#findNext：
 
+```java
+private void findNext() {
+    next=null;
+    for(; pos< size; pos++ ) {
+        MessageBytes n1=headers.getName(pos);
+        if( n1.equalsIgnoreCase( name )) {
+            next=headers.getValue( pos );
+            break;
+        }
+    }
+    pos++;
+}
+```
 
+在上述方法中，name 即为查询的 Header 名称。可以看出这里是忽略大小写的。
 
+- 问题修正
 
+我们使用 HTTP Headers 来接收请求，其构造器代码如下:
 
+```java
+public HttpHeaders() {
+    this(CollectionUtils.toMultiValueMap(new LinkedCaseInsensitiveMap<>(8, Locale.ENGLISH)));
+}
+```
 
+它使用的是 LinkedCaseInsensitiveMap，而不是普通的 LinkedHashMap。所以是可以忽略大小写的，我们不妨这样修正：
 
+```java
+@RequestMapping(path = "/hi2", method = RequestMethod.GET)
+public String hi2(@RequestHeader("MyHeader") String myHeader, 
+                  @RequestHeader HttpHeaders map) {
+    return myHeader + " compare with : " + map.get("MyHeader");
+}
+```
 
+通过这个案例，我们可以看出：在实际使用时，虽然 HTTP 协议规范可以忽略大小写，但不是所有框架提供的接口方法都是可以忽略大小写的。
 
+**案例 3：试图在 Controller 中随意自定义 CONTENT_TYPE 等**
 
+使用 Spring Boot 基于 Tomcat 内置容器的开发中，存在下面这样一段代码去设置两个 Header：
 
+```java
+@RequestMapping(path = "/hi3", method = RequestMethod.GET)
+public String hi3(HttpServletResponse httpServletResponse){
+    httpServletResponse.addHeader("myheader", "myheadervalue");
+    httpServletResponse.addHeader(HttpHeaders.CONTENT_TYPE, "application/json");
+    return "ok";
+}
+```
+
+运行程序后访问 GET http://localhost:8080/hi3，我们会得到如下结果：
+
+```http
+GET http://localhost:8080/hi3
+
+HTTP/1.1 200
+myheader: myheadervalue
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 2
+Date: Wed, 17 Mar 2021 08:59:56 GMT
+Keep-Alive: timeout=60
+Connection: keep-alive
+```
+
+可以看到 myHeader 设置成功了，但是 Content-Type 并没有设置成我们想要的"application/json"，而是"text/plain;charset=UTF-8"。为什么会出现这种错误？
+
+- 案例解析
+
+首先我们来看下在 Spring Boot 使用内嵌 Tomcat 容器时，尝试添加 Header 会执行哪些关键步骤。
+
+第一步，我们可以查看 org.apache.catalina.connector.Response#addHeader 方法，代码如下：
+
+```java
+private void addHeader(String name, String value, Charset charset) {
+    //省略其他非关键代码
+    char cc = name.charAt(0);
+    if (cc == 'C' || cc == 'c') {
+        //判断是不是 Content-Type，如果是不要把这个 Header 添加到 org.apache.coyote.Response
+        if (checkSpecialHeader(name, value))
+            return;
+    }
+    getCoyoteResponse().addHeader(name, value, charset);
+}
+```
+
+第二步，在案例代码返回 ok 后，我们需要对返回结果进行处理，执行方法为 RequestResponseBodyMethodProcessor#handleReturnValue，关键代码如下：
+
+```java
+@Override
+public void handleReturnValue(@Nullable Object returnValue, 
+                              MethodParameter returnType,
+                              ModelAndViewContainer mavContainer, 
+                              NativeWebRequest webRequest)
+    throws IOException, HttpMediaTypeNotAcceptableException, HttpMessageNotWritableException {
+    mavContainer.setRequestHandled(true);
+    ServletServerHttpRequest inputMessage = createInputMessage(webRequest);
+    ServletServerHttpResponse outputMessage = createOutputMessage(webRequest);
+    //对返回值(案例中为“ok”)根据返回类型做编码转化处理
+    writeWithMessageConverters(returnValue, returnType, inputMessage, outputMes
+}
+```
+
+writeWithMessageConverters 会根据返回值及类型做转化，同时也会做一些额外的事情。它的一些关键实现步骤参考下面几步：
+
+1. 决定用哪一种 MediaType 返回
+2. 选择消息转化器并完成转化
+
+最终，本案例选择的是 StringHttpMessageConverter，在最终调用父类方法 AbstractHttpMessageConverter#write 执行转化时，会尝试添加 Content-Type。具体代码参考 AbstractHttpMessageConverter#addDefaultHeaders。
+
+结合案例，参考代码，我们可以看出，我们使用的是 MediaType#TEXT_PLAIN 作为 Content-Type 的 Header，毕竟之前我们添加 Content-Type 这个 Header 并没有成功。最终运行结果也就不出意外了，即"Content-Type: text/plain;charset=UTF-8"。
+
+通过案例分析，我们可以总结出，虽然我们在 Controller 设置了 Content-Type，但是它是一种特殊的 Header，所以在 Spring Boot 基于内嵌 Tomcat 开发时并不一定能设置成功，最终返回的 Content-Type 是根据实际的返回值及类型等多个因素来决定的。
+
+- 问题修正
+
+1. 修改请求中的 Accept 头，约束返回类型
+
+```
+GET http://localhost:8080/hi3
+Accept:application/json
+```
+
+2. 标记返回类型
+
+```java
+@RequestMapping(path = "/hi3", method = RequestMethod.GET, produces = {"application/json"})
+```
+
+上述两种方式，一个修改了 getAcceptableMediaTypes 返回值，一个修改了 getProducibleMediaTypes，这样就可以控制最终协商的结果为 JSON 了。从而影响后续的执行结果
