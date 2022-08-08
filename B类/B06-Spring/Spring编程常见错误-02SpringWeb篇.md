@@ -720,3 +720,338 @@ Accept:application/json
 ```
 
 上述两种方式，一个修改了 getAcceptableMediaTypes 返回值，一个修改了 getProducibleMediaTypes，这样就可以控制最终协商的结果为 JSON 了。从而影响后续的执行结果
+
+# 11 | Spring Web Body 转化常见错误
+
+在 Spring 中，对于 Body 的处理很多是借助第三方编解码器来完成的。例如常见的 JSON 解析，Spring 都是借助于 Jackson、Gson 等常见工具来完成。
+
+**案例 1：No converter found for return value of type**
+
+在直接用 Spring MVC 而非 Spring Boot 来编写 Web 程序时，我们基本都会遇到 "No converter found for return value of type" 这种错误。
+
+例如下面这段代码：
+
+```java
+//定义的数据对象
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class Student {
+    private String name;
+    private Integer age;
+}
+
+//定义的 API 借口
+@RestController
+public class HelloController {
+    @GetMapping("/hi1")
+    public Student hi1() {
+        return new Student("xiaoming", Integer.valueOf(12));
+    }
+}
+```
+
+然后，pom.xml 关键依赖如下：
+
+```xml
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-webmvc</artifactId>
+    <version>5.2.3.RELEASE</version>
+</dependency>
+```
+
+当我们运行起程序，执行测试代码，就会报错如下：
+
+![image-20220808220546766](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208082205006.png)
+
+- 案例解析
+
+当我们的请求到达 Controller 层后，我们获取到了一个对象，即案例中的 new Student("xiaoming", Integer.valueOf(12))，那么这个对象应该怎么返回给客户端呢？
+
+此时就需要一个决策，我们可以先找到这个决策的关键代码所在，参考方法 AbstractMessageConverterMethodProcessor#writeWithMessageConverters：
+
+```java
+HttpServletRequest request = inputMessage.getServletRequest();
+List<MediaType> acceptableTypes = getAcceptableMediaTypes(request);
+List<MediaType> producibleTypes = getProducibleMediaTypes(
+    request, valueType, targetType);
+if (body != null && producibleTypes.isEmpty()) {
+    throw new HttpMessageNotWritableException(
+        "No converter found for return value of type: " + valueType);
+}
+List<MediaType> mediaTypesToUse = new ArrayList<>();
+for (MediaType requestedType : acceptableTypes) {
+    for (MediaType producibleType : producibleTypes) {
+        if (requestedType.isCompatibleWith(producibleType)) {
+            mediaTypesToUse.add(
+                getMostSpecificMediaType(requestedType, producibleType));
+        }
+    }
+}
+```
+
+简要分析下上述代码的基本逻辑：
+
+1. 查看请求的头中是否有 ACCET 头，如果没有则可以使用任何类型；
+2. 查看当前针对返回类型（即 Student 实例）可以采用的编码类型；
+3. 取上面两步获取结果的交集来决定用什么方式返回。
+
+那么当前可采用的编码类型是怎么决策出来的呢？
+
+假设当前没有显式指定返回类型（例如给 GetMapping 指定 produces 属性），那么则会遍历所有已经注册的 HttpMessageConverter 查看是否支持当前类型，从而最终返回所有支持的类型。（AbstractMessageConverterMethodProcessor#getProducibleMediaTypes）
+
+那么这些 MessageConverter 是怎么注册过来的？
+
+在 Spring MVC（非 Spring Boot）启动后，我们都会构建 RequestMappingHandlerAdapter 类型的 Bean 来负责路由和处理请求。具体而言，当我们使用`<mvc:annotation-driven/>`时，我们会通过 AnnotationDrivenBeanDefinitionParser 来构建这个 Bean。而在它的构建过程中，会决策出以后要使用哪些 HttpMessageConverter，相关代码参考 AnnotationDrivenBeanDefinitionParser#getMessageConverters。
+
+这里我们会默认使用一些编解码器，例如 StringHttpMessageConverter，但是像 JSON、XML 等类型，若要加载编解码，则需要 jackson2Present、gsonPresent 等变量为 true。gsonPresent 何时为 true，参考下面的关键代码行：
+
+```java
+gsonPresent = ClassUtils.isPresent("com.google.gson.Gson", classLoader);
+```
+
+由此可见，并没有任何 JSON 相关的编解码器。而针对 Student 类型的返回对象，上面的这些编解码器又不符合要求，所以最终走入了下面的代码行：
+
+```java
+if (body != null && producibleTypes.isEmpty()) {
+    throw new HttpMessageNotWritableException(
+        "No converter found for return value of type: " + valueType);
+}
+```
+
+- 问题修正
+
+```xml
+<dependency>
+    <groupId>com.google.code.gson</groupId>
+    <artifactId>gson</artifactId>
+    <version>2.8.6</version>
+</dependency>
+```
+
+**案例 2：变动地返回 Body**
+
+案例 1 让我们解决了解析问题，那随着不断实践，我们可能还会发现在代码并未改动的情况下，返回结果不再和之前相同了。例如我们看下这段代码：
+
+```java
+@RestController
+public class HelloController {
+    @PostMapping("/hi2")
+    public Student hi2(@RequestBody Student student) {
+        return student;
+    }
+}
+```
+
+我们使用下面的测试请求进行测试：
+
+```http
+POST http://localhost:8080/springmvc3_war/app/hi2
+Content-Type: application/json
+{
+"name": "xiaoming"
+}
+```
+
+得到以下结果：
+
+```json
+{
+    "name": "xiaoming"
+}
+```
+
+但是随着项目的推进，在代码并未改变时，我们可能会返回以下结果：
+
+```json
+{
+    "name": "xiaoming",
+    "age": null
+}
+```
+
+即当 age 取不到值，开始并没有序列化它作为响应 Body 的一部分，后来又序列化成 null 作为 Body 返回了。在什么情况下会如此？
+
+- 案例解析
+
+在后续的代码开发中，我们直接依赖或者间接依赖了新的 JSON 解析器，例如下面这种方式就依赖了 Jackson：
+
+```xml
+<dependency>
+    <groupId>com.fasterxml.jackson.core</groupId>
+    <artifactId>jackson-databind</artifactId>
+    <version>2.9.6</version>
+</dependency>
+```
+
+当存在多个 Jackson 解析器时，我们的 Spring MVC 会使用哪一种呢？
+
+```java
+if (jackson2Present) {
+    Class<?> type = MappingJackson2HttpMessageConverter.class;
+    RootBeanDefinition jacksonConverterDef = createConverterDefinition(type, source);
+    GenericBeanDefinition jacksonFactoryDef = createObjectMapperFactoryDefinition(source);
+    jacksonConverterDef.getConstructorArgumentValues()
+        .addIndexedArgumentValue(0, jacksonFactoryDef);
+    messageConverters.add(jacksonConverterDef);
+} else if (gsonPresent) {
+    messageConverters.add(
+        createConverterDefinition(GsonHttpMessageConverter.class, source));
+}
+```
+
+从上述代码可以看出，Jackson 是优先于 Gson 的。所以我们的程序不知不觉已经从 Gson 编解码切换成了 Jackson。
+
+针对本案例中序列化值为 null 的字段的行为而言，我们可以分别看下它们的行为是否一致。
+
+1. 对于 Gson 而言：
+
+GsonHttpMessageConverter 默认使用 new Gson() 来构建 Gson，它的构造器中指明了相关配置：
+
+```java
+public Gson() {
+    this(Excluder.DEFAULT, FieldNamingPolicy.IDENTITY,
+         Collections.<Type, InstanceCreator<?>>emptyMap(), DEFAULT_SERIALIZE_NULLS,
+         DEFAULT_COMPLEX_MAP_KEYS, DEFAULT_JSON_NON_EXECUTABLE, DEFAULT_ESCAPE_HTML,
+         DEFAULT_PRETTY_PRINT, DEFAULT_LENIENT, DEFAULT_SPECIALIZE_FLOAT_VALUES,
+         LongSerializationPolicy.DEFAULT, null, DateFormat.DEFAULT, DateFormat.DEFAULT,
+         Collections.<TypeAdapterFactory>emptyList(), Collections.<TypeAdapterFactory>emptyList(),
+         Collections.<TypeAdapterFactory>emptyList());
+}
+```
+
+从 DEFAULT_SERIALIZE_NULLS 可以看出，它默认是不序列化 null 的。
+
+> 这个名字怎么看也不像是“默认是不序列化 null”。
+
+2. 对于 Jackson 而言：
+
+MappingJackson2HttpMessageConverter 使用"Jackson2ObjectMapperBuilder.json().build()"来构建 ObjectMapper，它默认只显式指定了下面两个配置：
+
+```
+MapperFeature.DEFAULT_VIEW_INCLUSION
+DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES
+```
+
+Jackson 默认对于 null 的处理是做序列化的。
+
+- 问题修正
+
+这里可以按照以下方式进行修改：
+
+```java
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class Student {
+    private String name;
+    //或直接加在 age 上@JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer age;
+}
+```
+
+上述修改方案虽然看起来简单，但是假设有很多对象如此，万一遗漏了怎么办呢？所以可以从全局角度来修改，修改的关键代码如下：
+
+```
+//ObjectMapper mapper = new ObjectMapper();
+mapper.setSerializationInclusion(Include.NON_NULL);
+```
+
+在非 Spring Boot 程序中，可以按照下面这种方式来修改：
+
+```java
+@RestController
+public class HelloController {
+    public HelloController(RequestMappingHandlerAdapter requestMappingHandlerAdapter) {
+        List<HttpMessageConverter<?>> messageConverters =
+            requestMappingHandlerAdapter.getMessageConverters();
+        for (HttpMessageConverter<?> messageConverter : messageConverters) {
+            if(messageConverter instanceof MappingJackson2HttpMessageConverter ) {
+                (((MappingJackson2HttpMessageConverter)messageConverter).getObjectMapper())
+                .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+            }
+        }
+    }
+    //省略其他非关键代码
+}
+```
+
+我们用自动注入的方式获取到 RequestMappingHandlerAdapter，然后找到 Jackson 解析器，进行配置即可。
+
+**案例 3：Required request body is missing**
+
+为了查询问题方便，在请求过来时，自定义一个 Filter 来统一输出具体的请求内容，关键代码如下：
+
+```java
+public class ReadBodyFilter implements Filter {
+    //省略其他非关键代码
+    @Override
+    public void doFilter(ServletRequest request,
+                         ServletResponse response, FilterChain chain)
+        throws IOException, ServletException {
+        String requestBody = IOUtils.toString(request.getInputStream(), "utf-8");
+        System.out.println("print request body in filter:" + requestBody);
+        chain.doFilter(request, response);
+    }
+}
+```
+
+然后，我们可以把这个 Filter 添加到 web.xml 并配置如下：
+
+```xml
+<filter>
+    <filter-name>myFilter</filter-name>
+    <filter-class>com.puzzles.ReadBodyFilter</filter-class>
+</filter>
+<filter-mapping>
+    <filter-name>myFilter</filter-name>
+    <url-pattern>/app/*</url-pattern>
+</filter-mapping>
+```
+
+再测试下 Controller 层中定义的接口：
+
+```java
+@PostMapping("/hi3")
+public Student hi3(@RequestBody Student student) {
+    return student;
+}
+```
+
+请求的 Body 确实在请求中输出了，但是后续的操作直接报错了，错误提示：Required request body is missing。
+
+- 案例解析
+
+有 Body，但是 Body 本身代表的流已经被前面读取过了。在这种情况下，作为一个普通的流，已经没有数据可以供给后面的转化器来读取了。
+
+查阅请求 Body 转化的相关代码（参考 RequestResponseBodyMethodProcessor#readWithMessageConverters）。
+
+- 问题修正
+
+定义一个 RequestBodyAdviceAdapter 的 Bean：
+
+```java
+@ControllerAdvice
+public class PrintRequestBodyAdviceAdapter extends RequestBodyAdviceAdapter {
+    @Override
+    public boolean supports(
+        MethodParameter methodParameter, Type type, 
+        Class<? extends HttpMessageConverter<?>> aClass) {
+        return true;
+    }
+    @Override
+    public Object afterBodyRead(
+        Object body, HttpInputMessage inputMessage, MethodParameter parameter, 
+        Type targetType, Class<? extends HttpMessageConverter<?>> converterType) {
+        System.out.println("print request body in advice:" + body);
+        return super.afterBodyRead(body, inputMessage, parameter, targetType, converterType);
+    }
+}
+```
+
+那么它是如何工作起来的呢？我们可以查看下面的代码（参考 AbstractMessageConverterMethodArgumentResolver#readWithMessageConverters）。
+
+
+
