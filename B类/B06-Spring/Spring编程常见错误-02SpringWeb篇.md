@@ -1053,5 +1053,175 @@ public class PrintRequestBodyAdviceAdapter extends RequestBodyAdviceAdapter {
 
 那么它是如何工作起来的呢？我们可以查看下面的代码（参考 AbstractMessageConverterMethodArgumentResolver#readWithMessageConverters）。
 
+# 12｜Spring Web 参数验证常见错误
+
+参数检验是我们在 Web 编程时经常使用的技术之一，它帮助我们完成请求的合法性校验，可以有效拦截无效请求，从而达到节省系统资源、保护系统的目的。
+
+**案例 1：对象参数校验失效**
+
+当开发一个学籍管理系统时，我们会提供了一个 API 接口去添加学生的相关信息，其对象定义参考下面的代码：
+
+```java
+import lombok.Data;
+import javax.validation.constraints.Size;
+@Data
+public class Student {
+    @Size(max = 10)
+    private String name;
+    private short age;
+}
+```
+
+这里我们使用了 @Size(max = 10) 给学生的姓名做了约束（最大为 10 字节），以拦截姓名过长的学生信息的添加。定义完对象后，我们再定义一个 Controller 去使用它，使用方法如下：
+
+```java
+@RestController
+@Slf4j
+@Validated
+public class StudentController {
+    @RequestMapping(path = "students", method = RequestMethod.POST)
+    public void addStudent(@RequestBody Student student) {
+        log.info("add new student: {}", student.toString());
+        //省略业务代码
+    }
+}
+```
+
+调用该接口：
+
+```http
+POST http://localhost:8080/students
+Content-Type: application/json
+{
+"name": "this_is_my_name_which_is_too_long",
+"age": 10
+}
+```
+
+会发现，使用上述代码构建的 Web 服务并没有做任何拦截。
+
+- 案例解析
+
+首先，我们来看下 RequestBody 接受对象校验发生的位置和条件。下图基于 Spring Boot 来分析：
+
+![image-20220809205623021](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208092056328.png)
+
+1. InvocableHandlerMethod#invokeForRequest
+
+```java
+public Object invokeForRequest(
+    NativeWebRequest request, @Nullable ModelAndViewContainer mavContainer,
+    Object... providedArgs) throws Exception {
+    //根据请求内容和方法定义获取方法参数实例
+    Object[] args = getMethodArgumentValues(request, mavContainer, providedArgs);
+    if (logger.isTraceEnabled()) {
+        logger.trace("Arguments: " + Arrays.toString(args));
+    }
+    //携带方法参数实例去“反射”调用方法
+    return doInvoke(args);
+}
+```
+
+具体 getMethodArgumentValues() 如何获取方法调用参数，可以参考 addStudent 的方法定义，我们需要从当前的请求（NativeWebRequest ）中构建出 Student 这个方法参数的实例。
+
+2. 如何构建出这个方法参数实例？
+
+Spring 内置了相当多的HandlerMethodArgumentResolver，参考下图：
+
+![image-20220809213245779](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208092132100.png)
+
+当试图构建出一个方法参数时，会遍历所有支持的解析器（Resolver）以找出适合的解析器，查找代码参考 HandlerMethodArgumentResolverComposite#getArgumentResolver。
+
+对于 student 参数而言，它被标记为 @RequestBody，当遍历到 RequestResponseBodyMethodProcessor 时就会匹配上。（参考RequestResponseBodyMethodProcessor#supportsParameter）
+
+3. 执行 HandlerMethodArgumentResolver#resolveArgument 
+
+它首先会根据当前的请求（NativeWebRequest）组装出 Student 对象并对这个对象进行必要的校验，校验的执行参考 AbstractMessageConverterMethodArgumentResolver#validateIfApplicable：
+
+```java
+protected void validateIfApplicable(WebDataBinder binder, MethodParameter parameter) {
+    Annotation[] annotations = parameter.getParameterAnnotations();
+    for (Annotation ann : annotations) {
+        Validated validatedAnn = AnnotationUtils.getAnnotation(ann, Validated.class);
+        //判断是否需要校验
+        if (validatedAnn != null || ann.annotationType().getSimpleName().startsWith("Valid")) {
+            Object hints = (validatedAnn != null ? 
+                            validatedAnn.value() : AnnotationUtils.getValue(ann));
+            Object[] validationHints = (hints instanceof Object[] ? 
+                                        (Object[]) hints : new Object[] {hints});
+            //执行校验
+            binder.validate(validationHints);
+            break;
+        }
+    }
+}
+```
+
+如上述代码所示，要对 student 实例进行校验（执行 binder.validate(validationHints) 方法），必须匹配下面两个条件的其中之一：
+
+```
+1. 标记了 org.springframework.validation.annotation.Validated 注解；
+2. 标记了其他类型的注解，且注解名称以 Valid 关键字开头；
+```
+
+- 问题修正
+
+1. 标记 @Validated
+
+```java
+public void addStudent(@Validated @RequestBody Student student)
+```
+
+2. 标记 @Valid 关键字开头的注解
+
+```java
+public void addStudent(@Valid @RequestBody Student student)
+```
+
+另外，我们也可以自定义一个以 Valid 关键字开头的注解，定义如下：
+
+```java
+@Retention(RetentionPolicy.RUNTIME)
+public @interface ValidCustomized {
+}
+```
+
+定义完成后，将它标记给 student 参数对象，关键代码行如下：
+
+```java
+public void addStudent(@ValidCustomized @RequestBody Student student)
+```
+
+注意 @ValidCustomized 注解要显式标记 @Retention(RetentionPolicy.RUNTIME)，否则校验仍不生效。
+
+不显式标记 RetentionPolicy 时，默认使用的是RetentionPolicy.CLASS，而这种类型的注解信息虽然会被保留在字节码文件（.class）中，但在加载进 JVM 时就会丢失了。所以在运行时，依据这个注解来判断是否校验，肯定会失效。
+
+**案例 2：嵌套校验失效**
+
+```java
+public class Student {
+    @Size(max = 10)
+    private String name;
+    private short age;
+    private Phone phone;
+}
+
+@Data
+class Phone {
+    @Size(max = 10)
+    private String number;
+}
+```
+
+
+
+
+
+
+
+
+
+
+
 
 
