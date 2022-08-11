@@ -1198,6 +1198,8 @@ public void addStudent(@ValidCustomized @RequestBody Student student)
 
 **案例 2：嵌套校验失效**
 
+学生可能还需要一个联系电话信息，所以我们可以定义一个 Phone 对象，然后关联上学生对象，代码如下：
+
 ```java
 public class Student {
     @Size(max = 10)
@@ -1212,6 +1214,140 @@ class Phone {
     private String number;
 }
 ```
+
+当我们使用下面的请求测试，会发现这个校验约束并不生效。
+
+```json
+POST http://localhost:8080/students
+Content-Type: application/json
+{
+"name": "xiaoming",
+"age": 10,
+"phone": {"number":"12306123061230612306"}
+}
+```
+
+- 案例解析
+
+关于 student 本身的 Phone 类型成员是否校验，是在校验过程中`binder.validate(validationHints)`决定的。
+
+在校验执行时，首先会根据 Student 的类型定义找出所有的校验点，然后对 Student 对象实例执行校验，这个逻辑过程可以参考代码 ValidatorImpl#validate：
+
+```java
+@Override
+public final <T> Set<ConstraintViolation<T>> validate(T object, Class<?>... groups) {
+    //省略部分非关键代码
+    Class<T> rootBeanClass = (Class<T>) object.getClass();
+    //获取校验对象类型的“信息”（包含“约束”）
+    BeanMetaData<T> rootBeanMetaData = beanMetaDataManager.getBeanMetaData(rootBeanClass);
+    if ( !rootBeanMetaData.hasConstraints() ) {
+        return Collections.emptySet();
+    }
+    //省略部分非关键代码
+    //执行校验
+    return validateInContext(validationContext, valueContext, validationOrder);
+}
+```
+
+这里语句"beanMetaDataManager.getBeanMetaData(rootBeanClass)"根据 Student 类型组装出 BeanMetaData，BeanMetaData 即包含了需要做的校验（即Constraint）。
+
+在组装 BeanMetaData 过程中，会根据成员字段是否标记了 @Valid 来决定（记录）这个字段以后是否做级联校验，参考代码
+AnnotationMetaDataProvider#getCascadingMetaData：
+
+```java
+private CascadingMetaDataBuilder getCascadingMetaData(
+    Type type, AnnotatedElement annotatedElement,
+    Map<TypeVariable<?>, CascadingMetaDataBuilder> containerElementTypesCascadingMetaData) {
+    return CascadingMetaDataBuilder.annotatedObject(
+        type, 
+        annotatedElement.isAnnotationPresent(Valid.class), 
+        containerElementTypesCascadingMetaData,
+        getGroupConversions(annotatedElement));
+}
+```
+
+在上述代码中"annotatedElement.isAnnotationPresent( Valid.class )"决定了 CascadingMetaDataBuilder#cascading 是否为 true。如果是，则在后续做具体校验时，做级联校验，而级联校验的过程与宿主对象（即 Student）的校验过程大体相同，即先根据对象类型获取定义再来做校验。
+
+- 问题修正
+
+```java
+@Valid
+private Phone phone;
+```
+
+当修正完问题后，我们会发现校验生效了。而如果此时去调试修正后的案例代码，会看到 phone 字段 MetaData 信息中的 cascading 确实为 true 了，参考下图：
+
+![image-20220811214620212](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208112146736.png)
+
+**案例 3：误解校验执行**
+
+之前我们定义的学生对象的姓名要求是小于 10 字节的（即 @Size(max = 10)）。此时我们可能想完善校验，例如，我们希望姓名不能是空，此时你可能很容易想到去修改关键行代码如下：
+
+```java
+@Size(min = 1, max = 10)
+private String name;
+```
+
+然后，我们以下面的 JSON Body 做测试：
+
+```json
+{
+    "name": "",
+    "age": 10,
+    "phone": {"number":"12306"}
+}
+```
+
+测试结果符合我们的预期，但是用下面的 JSON Body（去除 name 字段）做测试呢？
+
+```json
+{
+    "age": 10,
+    "phone": {"number":"12306"}
+}
+```
+
+我们会发现校验失败了。
+
+- 案例解析
+
+其实 @Size 的 Javadoc 已经明确了这种情况，参考下图：
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208112156358.png" alt="image-20220811215626073" style="zoom: 33%;" />
+
+我们也找到了完成 @Size 约束的执行方法，参考 SizeValidatorForCharSequence#isValid 方法：
+
+```java
+public boolean isValid(CharSequence charSequence, ConstraintValidatorContext constraintValidatorContext) {
+    if (charSequence == null) {
+        return true;
+    }
+    int length = charSequence.length();
+    return length >= min && length <= max;
+}
+```
+
+如代码所示，当字符串为 null 时，直接通过了校验，而不会做任何进一步的约束检查。
+
+- 问题修正
+
+```java
+@NotEmpty
+@Size(min = 1, max = 10)
+private String name;
+```
+
+# 13 | Spring Web 过滤器使用常见错误（上）
+
+在 Spring 编程中，我们主要就是配合使用 @ServletComponentScan 和 @WebFilter 这两个注解来构建过滤器。
+
+**案例 1：@WebFilter 过滤器无法被自动注入**
+
+
+
+
+
+**案例 2：Filter 中不小心多次执行 doFilter()**
 
 
 
