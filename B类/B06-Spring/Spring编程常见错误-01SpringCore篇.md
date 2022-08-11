@@ -1672,7 +1672,7 @@ protected void refresh(ApplicationContext applicationContext) {
 
 ```java
 @Component
-public class MyContextRefreshedEventListener implements ApplicationListener<ontextRefreshedEvent> {
+public class MyContextRefreshedEventListener implements ApplicationListener<ContextRefreshedEvent> {
     public void onApplicationEvent(final ContextRefreshedEvent event) {
         log.info("{} received: {}", this.toString(), event);
     }
