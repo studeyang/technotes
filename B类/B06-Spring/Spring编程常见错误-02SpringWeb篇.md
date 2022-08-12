@@ -1343,9 +1343,156 @@ private String name;
 
 **案例 1：@WebFilter 过滤器无法被自动注入**
 
+假设我们要基于 Spring Boot 去开发一个学籍管理系统。为了统计接口耗时，可以实现一个过滤器如下：
 
+```java
+@WebFilter
+@Slf4j
+public class TimeCostFilter implements Filter {
+    public TimeCostFilter() {
+        System.out.println("construct");
+    }
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) 
+        throws IOException, ServletException {
+        log.info("开始计算接口耗时");
+        long start = System.currentTimeMillis();
+        chain.doFilter(request, response);
+        long end = System.currentTimeMillis();
+        long time = end - start;
+        System.out.println("执行时间(ms)：" + time);
+    }
+}
+```
 
+这个过滤器标记了 @WebFilter。所以在启动程序中，我们需要加上扫描注解（即@ServletComponentScan）让其生效，启动程序如下：
 
+```java
+@SpringBootApplication
+@ServletComponentScan
+@Slf4j
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+        log.info("启动成功");
+    }
+}
+```
+
+然后，我们提供了一个 StudentController 接口来供学生注册：
+
+```java
+@Controller
+@Slf4j
+public class StudentController {
+    @PostMapping("/regStudent/{name}")
+    @ResponseBody
+    public String saveUser(String name) throws Exception {
+        System.out.println("用户注册成功");
+        return "success";
+    }
+}
+```
+
+上述程序完成后，你会发现一切按预期执行。但是假设有一天，我们可能需要把 TimeCostFilter 记录的统计数据输出到专业的度量系统（ElasticeSearch/InfluxDB 等）里面去，我们可能会添加这样一个 Service 类：
+
+```java
+@Service
+public class MetricsService {
+    @Autowired
+    public TimeCostFilter timeCostFilter;
+    //省略其他非关键代码
+}
+```
+
+完成后你会发现，Spring Boot 都无法启动了：
+
+```
+***************************
+APPLICATION FAILED TO START
+***************************
+Description:
+Field timeCostFilter in com.spring.puzzle.web.filter.example1.MetricsService required a bean of type 'com.spring.puzzle.web.filter.example1.TimeCostFilter' that could not be found.
+```
+
+- 案例解析
+
+本质上，过滤器被 @WebFilter 修饰后，TimeCostFilter 只会被包装为 FilterRegistrationBean，而 TimeCostFilter 自身，只会作为一个 InnerBean 被实例化，这意味着 TimeCostFilter 实例并不会作为 Bean 注册到 Spring 容器。
+
+![image-20220812211946116](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122119327.png)
+
+所以当我们想自动注入 TimeCostFilter 时，就会失败了。知道这个结论后，我们可以带着两个问题去理清一些关键的逻辑：
+
+1. FilterRegistrationBean 是什么？它是如何被定义的？
+2. TimeCostFilter 是怎么实例化，并和 FilterRegistrationBean 关联起来的？
+
+我们先来看第一个问题：FilterRegistrationBean 是什么？它是如何定义的？
+
+实际上，WebFilter 的全名是 javax.servlet.annotation.WebFilter，很明显，它并不属于 Spring，而是 Servlet 的规范。当 Spring Boot 项目中使用它时，Spring Boot 使用了 org.springframework.boot.web.servlet.FilterRegistrationBean 来包装 @WebFilter 标记的实例。从实现上来说，即 FilterRegistrationBean#Filter 属性就是 @WebFilter 标记的实例。
+
+那么这个 FilterRegistrationBean 是如何定义的呢？我们先看下 @WebFilter 是如何工作起来的。使用 @WebFilter 时，Filter 被加载有两个条件：
+
+1. 声明了 @WebFilter；
+2. 在能被 @ServletComponentScan 扫到的路径之下。
+
+这里我们直接检索对 @WebFilter 的使用，可以发现 WebFilterHandler 类使用了它，直接在 doHandle() 中加入断点，开始调试，执行调用栈如下：
+
+![image-20220812213549257](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122135398.png)
+
+从堆栈上，我们可以看出对 @WebFilter 的处理是在 Spring Boot 启动时，而处理的触发点是 ServletComponentRegisteringPostProcessor 这个类。它继承了 BeanFactoryPostProcessor 接口，实现对 @WebFilter、@WebListener、@WebServlet 的扫描和处理，其中对于 @WebFilter 的处理使用的就是上文中提到的WebFilterHandler。
+
+最终，WebServletHandler 通过父类 ServletComponentHandler 的模版方法模式，处理了所有被 @WebFilter 注解的类，关键代码如下：
+
+```java
+public void doHandle(Map<String, Object> attributes, AnnotatedBeanDefinition beanDefinition,
+                     BeanDefinitionRegistry registry) {
+    BeanDefinitionBuilder builder = BeanDefinitionBuilder
+        .rootBeanDefinition(FilterRegistrationBean.class);
+    builder.addPropertyValue("asyncSupported", attributes.get("asyncSupported"));
+    builder.addPropertyValue("dispatcherTypes", extractDispatcherTypes(attributes));
+    builder.addPropertyValue("filter", beanDefinition);
+    //省略其他非关键代码
+    builder.addPropertyValue("urlPatterns", extractUrlPatterns(attributes));
+    registry.registerBeanDefinition(name, builder.getBeanDefinition());
+}
+```
+
+从这里，我们第一次看到了 FilterRegistrationBean。通过调试上述代码的最后一行，可以看到，最终我们注册的 FilterRegistrationBean，其名字就是我们定义的 WebFilter 的名字：
+
+![image-20220812214151580](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122141771.png)
+
+现在，我们接着看第二个问题：TimeCostFilter 何时被实例化？为什么它没有成为一个普通的 Bean?
+
+关于这点，我们可以在 TimeCostFilter 的构造器中加个断点，然后使用调试的方式快速定位到它的初始化时机，这里我直接给出了调试截图：
+
+![image-20220812214845284](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122148430.png)
+
+在上述的关键调用栈中，结合源码，你可以找出一些关键信息：
+
+1. Tomcat 等容器启动时，才会创建 FilterRegistrationBean；
+2. FilterRegistrationBean 在被创建时（createBean）会创建 TimeCostFilter 来装配自身，TimeCostFilter 是通过 ResolveInnerBean 来创建的；
+3. TimeCostFilter 实例最终是一种 InnerBean，我们可以通过下面的调试视图看到它的一些关键信息：
+
+![image-20220812215418615](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122154800.png)
+
+通过上述分析，可以看出最终 TimeCostFilter 实例是一种 InnerBean，所以自动注入不到也就非常合理了。
+
+- 问题修正
+
+```java
+@Controller
+@Slf4j
+public class StudentController {
+    @Autowired
+    @Qualifier("com.spring.puzzle.filter.TimeCostFilter")
+    FilterRegistrationBean timeCostFilter;
+}
+```
+
+这里的关键点在于：
+
+1. 注入的类型是 FilterRegistrationBean 类型，而不是 TimeCostFilter 类型；
+2. 注入的名称是包含包名的长名称，即 com.spring.puzzle.filter.TimeCostFilter（不能用TimeCostFilter），以便于存在多个过滤器时进行精确匹配。
 
 **案例 2：Filter 中不小心多次执行 doFilter()**
 
