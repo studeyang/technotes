@@ -1496,6 +1496,214 @@ public class StudentController {
 
 **案例 2：Filter 中不小心多次执行 doFilter()**
 
+在上一个案例，我们主要都讨论了使用 @ServletComponentScan + @WebFilter 构建过滤器过程中的一些常见问题。
+
+而在实际生产过程中，如果我们需要构建的过滤器是针对全局路径有效，且没有任何特殊需求（主要是指对 Servlet 3.0 的一些异步特性支持），那么完全可以直接使用 Filter 接口（或者继承 Spring 对 Filter 接口的包装类 OncePerRequestFilter），并使用 @Component 将其包装为 Spring 中的普通 Bean，也是可以达到预期的需求。
+
+StudentController 保持功能不变，可以直接参考之前的代码。另外我们定义一个 DemoFilter 用来模拟问题，这个 Filter 标记了 @Component 且实现了 Filter 接口。
+
+```java
+@Component
+public class DemoFilter implements Filter {
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
+        try {
+            //模拟异常
+            System.out.println("Filter 处理中时发生异常");
+            throw new RuntimeException();
+        } catch (Exception e) {
+            chain.doFilter(request, response);
+        }
+        chain.doFilter(request, response);
+    }
+}
+```
+
+全部代码实现完毕，执行后结果如下：
+
+```
+Filter 处理中时发生异常
+......用户注册成功
+......用户注册成功
+```
+
+这里我们可以看出，业务代码被执行了两次，这并不符合我们的预期。
+
+- 案例解析
+
+以 Tomcat 为例，我们先来看下它的 Filter 实现中最重要的类 ApplicationFilterChain。它采用的是责任链设计模式。责任链核心在于上下文 FilterChain 在不同对象 Filter 间的传递与状态的改变，通过这种链式串联，我们就可以对同一种对象资源实现不同业务场景的处理，达到业务解耦。整个 FilterChain 的结构就像这张图一样：
+
+![image-20220816224711268](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208162247544.png)
+
+这里我们不妨还是带着两个问题去理解 FilterChain：
+
+1. FilterChain 在何处被创建，又是在何处进行初始化调用，从而激活责任链开始链式调用？
+2. FilterChain 为什么能够被链式调用，其内在的调用细节是什么？
+
+我们直接查看负责请求处理的 StandardWrapperValve#invoke()，快速解决第一个问题：
+
+```java
+public final void invoke(Request request, Response response)
+    throws IOException, ServletException {
+    // 省略非关键代码
+    // 创建filterChain
+    ApplicationFilterChain filterChain =
+        ApplicationFilterFactory.createFilterChain(request, wrapper, servlet);
+    // 省略非关键代码
+    try {
+        if ((servlet != null) && (filterChain != null)) {
+            // Swallow output if needed
+            if (context.getSwallowOutput()) {
+                // 省略非关键代码
+                //执行filterChain
+                filterChain.doFilter(request.getRequest(), response.getResponse());
+                // 省略非关键代码
+            }
+            // 省略非关键代码
+        }
+    }
+}
+```
+
+Spring 通过 ApplicationFilterFactory.createFilterChain() 创建 FilterChain，然后调用其 doFilter() 执行责任链。
+
+接下来，我们来一起研究第二个问题，即 FilterChain 能够被链式调用的原因和内部细节。
+
+首先查看 ApplicationFilterFactory.createFilterChain()，来看下 FilterChain 如何被创建，如下所示：
+
+```java
+public static ApplicationFilterChain createFilterChain(
+    ServletRequest request, Wrapper wrapper, Servlet servlet) {
+    // 省略非关键代码
+    ApplicationFilterChain filterChain = null;
+    if (request instanceof Request) {
+        // 省略非关键代码
+        // 创建Chain
+        filterChain = new ApplicationFilterChain();
+        // 省略非关键代码
+    }
+    // 省略非关键代码
+    // Add the relevant path-mapped filters to this filter chain
+    for (int i = 0; i < filterMaps.length; i++) {
+        // 省略非关键代码
+        ApplicationFilterConfig filterConfig = (ApplicationFilterConfig)
+            context.findFilterConfig(filterMaps[i].getFilterName());
+        if (filterConfig == null) {
+            continue;
+        }
+        // 增加filterConfig到Chain
+        filterChain.addFilter(filterConfig);
+    }
+    // 省略非关键代码
+    return filterChain;
+}
+```
+
+它创建 FilterChain，并将所有 Filter 逐一添加到 FilterChain 中。然后我们继续查看 ApplicationFilterChain 类及其 addFilter()：
+
+```java
+// 省略非关键代码
+private ApplicationFilterConfig[] filters = new ApplicationFilterConfig[0];
+private int pos = 0;
+private int n = 0；
+// 省略非关键代码
+void addFilter(ApplicationFilterConfig filterConfig) {
+    for(ApplicationFilterConfig filter:filters) {
+        if(filter==filterConfig) {
+            return;
+        }
+    }
+    if (n == filters.length) {
+        ApplicationFilterConfig[] newFilters = 
+            new ApplicationFilterConfig[n + INCREMENT];
+        System.arraycopy(filters, 0, newFilters, 0, n);
+        filters = newFilters;
+    }
+    filters[n++] = filterConfig;
+}
+```
+
+到这，Spring 就完成了 FilterChain 的创建准备工作。接下来，我们继续看 FilterChain 的执行细节，即 ApplicationFilterChain 的 doFilter()：
+
+```java
+public void doFilter(ServletRequest request, ServletResponse response)
+    throws IOException, ServletException {
+    if( Globals.IS_SECURITY_ENABLED ) {
+        //省略非关键代码
+        internalDoFilter(request,response);
+        //省略非关键代码
+    } else {
+        internalDoFilter(request,response);
+    }
+}
+```
+
+这里逻辑被委派到了当前类的私有方法 internalDoFilter，具体实现如下：
+
+```java
+private void internalDoFilter(ServletRequest request, ServletResponse response) {
+    if (pos < n) {
+        // pos会递增
+        ApplicationFilterConfig filterConfig = filters[pos++];
+        try {
+            Filter filter = filterConfig.getFilter();
+            // 省略非关键代码
+            // 执行filter
+            filter.doFilter(request, response, this);
+            // 省略非关键代码
+        }
+        // 省略非关键代码
+        return;
+    }
+    // 执行真正实际业务
+    servlet.service(request, response);
+}
+```
+
+我们可以归纳下核心知识点：
+
+1. ApplicationFilterChain 的 internalDoFilter() 是过滤器逻辑的核心；
+2. ApplicationFilterChain 的成员变量 Filters 维护了所有用户定义的过滤器；
+3. ApplicationFilterChain 的类成员变量 n 为过滤器总数，变量 pos 是运行过程中已经执行的过滤器个数；
+4. filter.doFilter(request, response, this) 会调用过滤器实现的 doFilter()，注意第三个参数值为 this，即为当前 ApplicationFilterChain 实例 ，这意味着：用户需要在过滤器中显式调用一次 javax.servlet.FilterChain#doFilter，才能完成整个链路；
+5. pos < n 意味着执行完所有的过滤器，才能通过 servlet.service(request, response) 去执行真正的业务。
+
+从下面这张调用栈的截图中，可以看到，经历了一个很长的看似循环的调用栈，我们终于从internalDoFilter() 执行到了 Controller 层的 saveUser()。这个过程就不再一一细讲了。
+
+![image-20220816223301964](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208162233201.png)
+
+DemoFilter 代码中的 doFilter() 在捕获异常的部分执行了一次，随后在 try 外面又执行了一次，因而当抛出异常的时候，doFilter() 明显会被执行两次，相对应的
+servlet.service(request, response) 方法以及对应的 Controller 处理方法也被执行了两次。
+
+- 问题修正
+
+只需要删掉重复的 filterChain.doFilter(request, response) 就可以了。
+
+```java
+@Component
+public class DemoFilter implements Filter {
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
+        try {
+            //模拟异常
+            System.out.println("Filter 处理中时发生异常");
+            throw new RuntimeException();
+        } catch (Exception e) {
+            // chain.doFilter(request, response);
+        }
+        chain.doFilter(request, response);
+    }
+}
+```
+
+在使用过滤器的时候，一定要注意，不管怎么调用，不能多次调用 FilterChain#doFilter()。
+
+
+
+
+
+
+
+
+
 
 
 
