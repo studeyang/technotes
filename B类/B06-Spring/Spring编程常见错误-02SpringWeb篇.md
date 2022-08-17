@@ -1696,15 +1696,169 @@ public class DemoFilter implements Filter {
 
 在使用过滤器的时候，一定要注意，不管怎么调用，不能多次调用 FilterChain#doFilter()。
 
+# 14 | Spring Web 过滤器使用常见错误（下）
 
+这节课我们来学习下容器启动时过滤器初始化以及排序注册等相关逻辑。
 
+**案例 1：@WebFilter 过滤器使用 @Order 无效**
 
+我们还是基于 Spring Boot 去开发学籍管理系统，启动程序的代码如下：
 
+```java
+@SpringBootApplication
+@ServletComponentScan
+@Slf4j
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+        log.info("启动成功");
+    }
+}
+```
 
+实现的 Controller 代码如下：
 
+```java
+@Controller
+@Slf4j
+public class StudentController {
+    @PostMapping("/regStudent/{name)}")
+    @ResponseBody
+    public String saveUser(String name) throws Exception {
+        System.out.println("......用户注册成功");
+        return "success";
+    }
+}
+```
 
+现在，我们来实现两个新的过滤器，代码如下：
 
+AuthFilter：例如，限制特定 IP 地址段（例如校园网内）的用户方可注册为新用户。
 
+```java
+@WebFilter
+@Slf4j
+@Order(2)
+public class AuthFilter implements Filter {
+    @SneakyThrows
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
+        if(isPassAuth()) {
+            System.out.println("通过授权");
+            chain.doFilter(request, response);
+        } else {
+            System.out.println("未通过授权");
+            ((HttpServletResponse)response).sendError(401);
+        }
+    }
+    private boolean isPassAuth() throws InterruptedException {
+        System.out.println("执行检查权限");
+        Thread.sleep(1000);
+        return true;
+    }
+}
+```
+
+TimeCostFilter：计算注册学生的执行耗时，需要包括授权过程。
+
+```java
+@WebFilter
+@Slf4j
+@Order(1)
+public class TimeCostFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) 
+        throws IOException, ServletException {
+        System.out.println("#开始计算接口耗时");
+        long start = System.currentTimeMillis();
+        chain.doFilter(request, response);
+        long end = System.currentTimeMillis();
+        long time = end - start;
+        System.out.println("#执行时间(ms)：" + time);
+    }
+}
+```
+
+在上述代码中，我们使用了 @Order，期望 TimeCostFilter 先被执行，因为 TimeCostFilter 设计的初衷是统计这个接口的性能，所以是需要统计 AuthFilter 执行的授权过程的。
+
+全部代码实现完毕，执行结果如下：
+
+```
+执行检查权限
+通过授权
+#开始计算接口耗时
+......用户注册成功
+#执行时间(ms)：33
+```
+
+从结果来看，执行时间并不包含授权过程，所以这并不符合我们的预期。
+
+- 案例解析
+
+```java
+class WebFilterHandler extends ServletComponentHandler {
+    WebFilterHandler() {
+        super(WebFilter.class);
+    }
+    @Override
+    public void doHandle(Map<String, Object> attributes, AnnotatedBeanDefinition beanDefinition,
+                         BeanDefinitionRegistry registry) {
+        BeanDefinitionBuilder builder = 
+            BeanDefinitionBuilder.rootBeanDefinition(FilterRegistrationBean.class);
+        builder.addPropertyValue("asyncSupported", attributes.get("asyncSupported"));
+        builder.addPropertyValue("dispatcherTypes", extractDispatcherTypes(attributes));
+        builder.addPropertyValue("filter", beanDefinition);
+        builder.addPropertyValue("initParameters", extractInitParameters(attributes));
+        String name = determineName(attributes, beanDefinition);
+        builder.addPropertyValue("name", name);
+        builder.addPropertyValue("servletNames", attributes.get("servletNames"));
+        builder.addPropertyValue("urlPatterns", extractUrlPatterns(attributes));
+        registry.registerBeanDefinition(name, builder.getBeanDefinition());
+    }
+    // 省略非关键代码
+```
+
+所有被 @WebFilter 注解的类，最终都会被包装为 FilterRegistrationBean 类的 BeanDefinition。虽然 FilterRegistrationBean 也拥有 Ordered 接口，但此处却并没有填充值，因为这里所有的属性都是从 @WebFilter 对应的属性获取的，而 @WebFilter 本身没有指定可以辅助排序的属性。
+
+过滤器的执行顺序是由下面这个串联决定的：
+
+```
+RegistrationBean 中 order 属性的值 ->
+ServletContextInitializerBeans 类成员变量 sortedList 中元素的顺序 ->
+ServletWebServerApplicationContext 中 selfInitialize() 遍历
+FilterRegistrationBean 的顺序 ->
+addFilterMapBefore() 调用的顺序 ->
+filterMaps 内元素的顺序 ->
+过滤器的执行顺序
+```
+
+RegistrationBean 中 order 属性的值最终可以决定过滤器的执行顺序。但是可惜的是：当使用 @WebFilter 时，构建的 FilterRegistrationBean 并没有依据 @Order 的值去设置 order 属性，所以 @Order 失效了。
+
+- 问题修正
+
+实现自己的 FilterRegistrationBean 来配置添加过滤器，不再使用 @WebFilter。具体代码如下：
+
+```java
+@Configuration
+public class FilterConfiguration {
+    @Bean
+    public FilterRegistrationBean authFilter() {
+        FilterRegistrationBean registration = new FilterRegistrationBean();
+        registration.setFilter(new AuthFilter());
+        registration.addUrlPatterns("/*");
+        registration.setOrder(2);
+        return registration;
+    }
+    @Bean
+    public FilterRegistrationBean timeCostFilter() {
+        FilterRegistrationBean registration = new FilterRegistrationBean();
+        registration.setFilter(new TimeCostFilter());
+        registration.addUrlPatterns("/*");
+        registration.setOrder(1);
+        return registration;
+    }
+}
+```
 
 
 
