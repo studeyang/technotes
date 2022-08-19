@@ -1860,9 +1860,240 @@ public class FilterConfiguration {
 }
 ```
 
+**案例 2：过滤器被多次执行**
 
+我们能否在两个过滤器中增加 @Component，从而让 @Order 生效呢？代码如下： 
 
+```java
+@WebFilter
+@Slf4j
+@Order(2)
+@Component
+public class AuthFilter implements Filter {
+    @SneakyThrows
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
+        if (isPassAuth()) {
+            System.out.println("通过授权");
+            chain.doFilter(request, response);
+        } else {
+            System.out.println("未通过授权");
+            ((HttpServletResponse)response).sendError(401);
+        }
+    }
+    private boolean isPassAuth() throws InterruptedException {
+        System.out.println("执行检查权限");
+        Thread.sleep(1000);
+        return true;
+    }
+}
+```
 
+TimeCostFilter 类如下：
+
+```java
+@WebFilter
+@Slf4j
+@Order(1)
+@Component
+public class TimeCostFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
+        System.out.println("#开始计算接口耗时");
+        long start = System.currentTimeMillis();
+        chain.doFilter(request, response);
+        long end = System.currentTimeMillis();
+        long time = end - start;
+        System.out.println("#执行时间(ms)：" + time);
+    }
+}
+```
+
+最终执行结果如下：
+
+```
+#开始计算接口耗时
+执行检查权限
+通过授权
+执行检查权限
+通过授权
+#开始计算接口耗时
+......用户注册成功
+#执行时间(ms)：73
+#执行时间(ms)：2075
+```
+
+通过 Order 的值，我们已经可以随意调整 Filter 的执行顺序，但是我们会惊奇地发现，过滤器本身被执行了 2 次。
+
+- 案例解析
+
+从案例 1 中我们已经得知被 @WebFilter 的过滤器，会在 WebServletHandler 类中被重新包装为 FilterRegistrationBean 类的 BeanDefinition，而并非是 Filter 类型。
+
+而当我们在自定义过滤器中增加 @Component 时，理论上 Spring 会根据当前类再次包装一个新的过滤器，因而 doFIlter() 被执行两次。我们可以从源码中寻找真相（ServletContextInitializerBeans 的构造方法）。
+
+所以当过滤器同时被 @WebFilter 和 @Component 修饰时，会导致两个 FilterRegistrationBean 实例的产生。但不同的是：
+
+@WebFilter 会让 addServletContextInitializerBeans() 实例化，并注册所有动态生成的 FilterRegistrationBean 类型的过滤器；
+
+@Component 会让 addAdaptableBeans() 实例化所有实现 Filter 接口的类，然后再逐一包装为 FilterRegistrationBean 类型的过滤器。
+
+- 问题修正
+
+```java
+//@WebFilter
+@Slf4j
+@Order(1)
+@Component
+public class TimeCostFilter implements Filter {
+    //省略非关键代码
+}
+```
+
+# 15 | Spring Security 常见错误
+
+在 Spring 中，对于 Security 的处理基本都是借助于过滤器来协助完成的。
+
+**案例 1：遗忘 PasswordEncoder**
+
+当我们第一次尝试使用 Spring Security 时，我们经常会忘记定义一个 PasswordEncoder。因为这在 Spring Security 旧版本中是允许的。而一旦使用了新版本，则必须要提供一个 PasswordEncoder。这里我们可以先写一个反例来感受下：
+
+首先我们在 Spring Boot 项目中直接开启 Spring Security：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+```
+
+然后我们配置下安全策略，如下：
+
+```java
+@Configuration
+public class MyWebSecurityConfig extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.inMemoryAuthentication().withUser("admin").password("pass").roles("ADMIN");
+    }
+
+    // 配置 URL 对应的访问权限
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests()
+            .antMatchers("/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated()
+            .and()
+            .formLogin().loginProcessingUrl("/login").permitAll()
+            .and().csrf().disable();
+    }
+}
+```
+
+当我们发送一个请求时（例如 http://localhost:8080/admin）就会报错，具体错误堆栈信息如下：
+
+![image-20220819215740710](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208192157030.png)
+
+那么为什么缺少它就会报错，它的作用又在哪？
+
+- 案例解析
+
+我们可以反思下，为什么需要一个 PasswordEncoder?
+
+为了安全，我们一般都会将密码加密存储起来。那么当用户输入密码时，我们需要根据存储密码的加密算法来比较用户输入的密码和存储的密码是否一致。
+
+我们再从源码上看下 "no PasswordEncoder" 异常是如何被抛出的？当我们不指定 PasswordEncoder 去启动我们的案例程序时，我们实际指定了一个默认的 PasswordEncoder。
+
+```java
+public DaoAuthenticationProvider() {
+    setPasswordEncoder(PasswordEncoderFactories.createDelegatingPasswordEncoder());
+}
+```
+
+PasswordEncoderFactories.createDelegatingPasswordEncoder() 的实现如下：
+
+```java
+public static PasswordEncoder createDelegatingPasswordEncoder() {
+    String encodingId = "bcrypt";
+    Map<String, PasswordEncoder> encoders = new HashMap<>();
+    encoders.put(encodingId, new BCryptPasswordEncoder());
+    encoders.put("ldap", new LdapShaPasswordEncoder());
+    encoders.put("MD4", new Md4PasswordEncoder());
+    encoders.put("MD5", new MessageDigestPasswordEncoder("MD5"));
+    encoders.put("noop", NoOpPasswordEncoder.getInstance());
+    encoders.put("pbkdf2", new Pbkdf2PasswordEncoder());
+    encoders.put("scrypt", new SCryptPasswordEncoder());
+    encoders.put("SHA-1", new MessageDigestPasswordEncoder("SHA-1"));
+    encoders.put("SHA-256", new MessageDigestPasswordEncoder("SHA-256"));
+    encoders.put("sha256", new StandardPasswordEncoder());
+    encoders.put("argon2", new Argon2PasswordEncoder());
+    return new DelegatingPasswordEncoder(encodingId, encoders);
+}
+```
+
+当我们校验用户时，我们会通过下面的代码来匹配（参考 DelegatingPasswordEncoder#matches）。
+
+假设没有 id，则使用默认的 UnmappedIdPasswordEncoder。我们来看下它的实现：
+
+```java
+private class UnmappedIdPasswordEncoder implements PasswordEncoder {
+    @Override
+    public String encode(CharSequence rawPassword) {
+        throw new UnsupportedOperationException("encode is not supported");
+    }
+    @Override
+    public boolean matches(CharSequence rawPassword, String prefixEncodedPassword) {
+        String id = extractId(prefixEncodedPassword);
+        throw new IllegalArgumentException("There is no PasswordEncoder mapped for the id \"" + id + "\"");
+                                           }
+}
+```
+
+prefixEncodedPassword 其实就是存储的密码，在我们的案例中由下面代码行中的 password() 指定：
+
+```java
+auth.inMemoryAuthentication().withUser("admin").password("pass").roles("ADMIN");
+```
+
+这里我们不妨测试下，修改下上述代码行，给密码指定一个加密方式，看看之前的异常还存在与否：
+
+```java
+auth.inMemoryAuthentication().withUser("admin").password("{MD5}pass").roles("ADMIN");
+```
+
+此时，以调试方式运行程序，你会发现，这个时候已经有了 id，且取出了合适的 PasswordEncoder。
+
+- 问题修正
+
+自定义一个 PasswordEncoder。
+
+```java
+@Configuration
+public class MyWebSecurityConfig extends WebSecurityConfigurerAdapter {
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new PasswordEncoder() {
+            @Override
+            public String encode(CharSequence charSequence) {
+                return charSequence.toString();
+            }
+
+            @Override
+            public boolean matches(CharSequence charSequence, String s) {
+                return Objects.equals(charSequence.toString(), s);
+            }
+        };
+    }
+}
+```
+
+另外还有一种解决问题的方式，就是在存储的密码上做文章。具体到我们案例，可以采用下面的修正方式：
+
+```java
+auth.inMemoryAuthentication().withUser("admin").password("{noop}pass").roles("ADMIN");
+```
+
+不过，这种修正方式比较麻烦，毕竟每个密码都加个前缀也不合适。所以综合比较来看，还是第一种修正方式更普适。
 
 
 
