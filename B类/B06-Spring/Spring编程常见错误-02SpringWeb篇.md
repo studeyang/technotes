@@ -2095,6 +2095,245 @@ auth.inMemoryAuthentication().withUser("admin").password("{noop}pass").roles("AD
 
 不过，这种修正方式比较麻烦，毕竟每个密码都加个前缀也不合适。所以综合比较来看，还是第一种修正方式更普适。
 
+**案例 2：ROLE_ 前缀与角色**
+
+我们再来看一个 Spring Security 中关于权限角色的案例，ROLE_ 前缀加还是不加？
+
+这里我先提供一个接口，这个接口需要管理的操作权限：
+
+```java
+@RestController
+public class HelloWorldController {
+    @RequestMapping(path = "admin", method = RequestMethod.GET)
+    public String admin() {
+        return "admin operation";
+    }
+}
+```
+
+然后我们使用 Spring Security 默认的内置授权来创建一个授权配置类：
+
+```java
+@Configuration
+public class MyWebSecurityConfig extends WebSecurityConfigurerAdapter {
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        //同案例1，这里省略掉
+    }
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.inMemoryAuthentication()
+            .withUser("fujian").password("pass").roles("USER")
+            .and()
+            .withUser("admin1").password("pass").roles("ADMIN")
+            .and()
+            .withUser(new UserDetails() {
+                @Override
+                public Collection<? extends GrantedAuthority> getAuthorities() {
+                    return Arrays.asList(new SimpleGrantedAuthority("ADMIN"));
+                }
+                //省略其他非关键“实现”方法
+                public String getUsername() {
+                    return "admin2";
+                }
+            });
+    }
+    // 配置 URL 对应的访问权限
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests()
+            .antMatchers("/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated()
+            .and()
+            .formLogin().loginProcessingUrl("/login").permitAll()
+            .and().csrf().disable();
+    }
+}
+```
+
+通过上述代码，我们添加了 3 个用户：
+
+1. 用户 fujian：角色为 USER;
+2. 用户 admin1：角色为 ADMIN;
+3. 用户 admin2：角色为 ADMIN;
+
+然后我们从浏览器访问我们的接口 http://localhost:8080/admin，使用上述 3 个用户登录，你会发现用户 admin1 可以登录，而 admin2 设置了同样的角色却不可以登陆，并且提示下面的错误：
+
+![image-20220821174312029](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208211743396.png)
+
+如何理解这个现象？
+
+- 案例解析
+
+对比 admin1 和 admin2 用户的添加，你会发现，这仅仅是两种添加内置用户的风格而已。但是为什么前者可以正常工作，后者却不可以？本质就在于 Role 的设置风格，可参考下面的这两段关键代码：
+
+```java
+//admin1 的添加
+.withUser("admin").password("pass").roles("ADMIN")
+//admin2 的添加
+.withUser(new UserDetails() {
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return Arrays.asList(new SimpleGrantedAuthority("ADMIN"));
+    }
+    @Override
+    public String getUsername() {
+        return "admin2";
+    }
+    //省略其他非关键代码
+});
+```
+
+我们先来查看下 admin1 的添加最后对 Role 的处理（参考 User.UserBuilder#roles）：
+
+```java
+public UserBuilder roles(String... roles) {
+    List<GrantedAuthority> authorities = new ArrayList<>(roles.length);
+    for (String role : roles) {
+        Assert.isTrue(!role.startsWith("ROLE_"), 
+                      () -> role + " cannot start with ROLE_ (it is automatically added)");
+        //添加“ROLE_”前缀
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+    }
+    return authorities(authorities);
+}
+public UserBuilder authorities(Collection<? extends GrantedAuthority> authorities) {
+    this.authorities = new ArrayList<>(authorities);
+    return this;
+}
+```
+
+可以看出，当 admin1 添加 ADMIN 角色时，实际添加进去的是 ROLE_ADMIN。
+
+我们再来看下 admin2 的角色设置，最终设置的方法其实就是 User#withUserDetails：
+
+```java
+public static UserBuilder withUserDetails(UserDetails userDetails) {
+    return withUsername(userDetails.getUsername())
+        //省略非关键代码
+        .authorities(userDetails.getAuthorities())
+        .credentialsExpired(!userDetails.isCredentialsNonExpired())
+        .disabled(!userDetails.isEnabled());
+}
+public UserBuilder authorities(Collection<? extends GrantedAuthority> authorities) {
+    this.authorities = new ArrayList<>(authorities);
+    return this;
+}
+```
+
+所以，admin2 的添加，最终设置进的 Role 就是 ADMIN。
+
+通过上述两种方式设置的相同 Role（即 ADMIN），最后存储的 Role 却不相同，分别为 ROLE_ADMIN 和 ADMIN。那么为什么只有 ROLE_ADMIN 这种用户才能通过授权呢？
+
+对于案例的代码，最终是通过 "UsernamePasswordAuthenticationFilter" 来完成授权的。而且从调用栈信息可以大致看出，授权的关键其实就是查找用户，然后校验权限。查找用户的方法可参考 InMemoryUserDetailsManager#loadUserByUsername，即根据用户名查找已添加的用户：
+
+```java
+public UserDetails loadUserByUsername(String username)
+    throws UsernameNotFoundException {
+    UserDetails user = users.get(username.toLowerCase());
+    if (user == null) {
+        throw new UsernameNotFoundException(username);
+    }
+    return new User(user.getUsername(), user.getPassword(), user.isEnabled(),
+                    user.isAccountNonExpired(), user.isCredentialsNonExpired(),
+                    user.isAccountNonLocked(), user.getAuthorities());
+}
+```
+
+完成账号是否过期、是否锁定等检查后，我们会把这个用户转化为下面的 Token（即 UsernamePasswordAuthenticationToken）供后续使用。
+
+最终在判断角色时，我们会通过 UsernamePasswordAuthenticationToken 的父类方法 AbstractAuthenticationToken#getAuthorities 来取到上述截图中的 ADMIN。而判断是否具备某个角色时，使用的关键方法是 SecurityExpressionRoot#hasAnyAuthorityName：
+
+```java
+private boolean hasAnyAuthorityName(String prefix, String... roles) {
+    //通过 AbstractAuthenticationToken#getAuthorities 获取“role”
+    Set<String> roleSet = getAuthoritySet();
+    for (String role : roles) {
+        String defaultedRole = getRoleWithDefaultPrefix(prefix, role);
+        if (roleSet.contains(defaultedRole)) {
+            return true;
+        }
+    }
+    return false;
+}
+//尝试添加“prefix”,即“ROLE_”
+private static String getRoleWithDefaultPrefix(String defaultRolePrefix, String role) {
+    if (role == null) {
+        return role;
+    }
+    if (defaultRolePrefix == null || defaultRolePrefix.length() == 0) {
+        return role;
+    }
+    if (role.startsWith(defaultRolePrefix)) {
+        return role;
+    }
+    return defaultRolePrefix + role;
+}
+```
+
+在上述代码中，prefix 是 ROLE_（默认值，即
+SecurityExpressionRoot#defaultRolePrefix），Roles 是待匹配的角色 ROLE_ADMIN，产生的 defaultedRole 是 ROLE_ADMIN，而我们的 role-set 是从 UsernamePasswordAuthenticationToken 中获取到 ADMIN，所以最终判断的结果是 false。
+
+最终这个结果反映给上层来决定是否通过授权，可参考 WebExpressionVoter#vote：
+
+```java
+public int vote(Authentication authentication, FilterInvocation fi,
+                Collection<ConfigAttribute> attributes) {
+    //省略非关键代码
+    return ExpressionUtils.evaluateAsBoolean(weca.getAuthorizeExpression(), ctx) ?
+        ACCESS_GRANTED : ACCESS_DENIED;
+}
+```
+
+很明显，当是否含有某个角色（表达式 Expression：hasRole('ROLE_ADMIN')）的判断结果为 false 时，返回的结果是 ACCESS_DENIED。
+
+- 问题修正
+
+针对这个案例，有了源码的剖析，可以看出：ROLE_ 前缀在 Spring Security 前缀中非常重要。而要解决这个问题，也非常简单，我们直接在添加 admin2 时，给角色添加上ROLE_ 前缀即可：
+
+```java
+//admin2 的添加
+.withUser(new UserDetails() {
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return Arrays.asList(new SimpleGrantedAuthority("ROLE_ADMIN"));
+    }
+    @Override
+    public String getUsername() {
+        return "admin2";
+    }
+    //省略其他非关键代码
+})
+```
+
+# 16｜Spring Exception 常见错误
+
+今天，我们来学习 Spring 的异常处理机制。
+
+**案例 1：小心过滤器异常**
+
+我们沿用之前在事务处理中用到的学生注册的案例。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
