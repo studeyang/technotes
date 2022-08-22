@@ -2308,31 +2308,267 @@ public int vote(Authentication authentication, FilterInvocation fi,
 
 # 16｜Spring Exception 常见错误
 
+![下载](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208222055966.jpeg)
+
 今天，我们来学习 Spring 的异常处理机制。
 
 **案例 1：小心过滤器异常**
 
 我们沿用之前在事务处理中用到的学生注册的案例。
 
+```java
+@Controller
+@Slf4j
+public class StudentController {
+    public StudentController() {
+        System.out.println("construct");
+    }
+    @PostMapping("/regStudent/{name}")
+    @ResponseBody
+    public String saveUser(String name) throws Exception {
+        System.out.println("......用户注册成功");
+        return "success";
+    }
+}
+```
 
+为了保证安全，这里需要给请求加一个保护，通过验证 Token 的方式来验证请求的合法性。当 Token 校验失败时，就会抛出一个自定义的 NotAllowException，交由 Spring 处理：
 
+```java
+@WebFilter
+@Component
+public class PermissionFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
+        HttpServletRequest httpServletRequest = (HttpServletRequest) request;
+        String token = httpServletRequest.getHeader("token");
+        if (!"111111".equals(token)) {
+            System.out.println("throw NotAllowException");
+            throw new NotAllowException();
+        }
+        chain.doFilter(request, response);
+    }
+}
+```
 
+同时，新增了一个 RestControllerAdvice 来处理这个异常，处理方式也很简单，就是返回一个 403 的 resultCode：
 
+```java
+@RestControllerAdvice
+public class NotAllowExceptionHandler {
+    @ExceptionHandler(NotAllowException.class)
+    @ResponseBody
+    public String handle() {
+        System.out.println("403");
+        return "{\"resultCode\": 403}";
+    }
+}
+```
 
+为了验证一下失败的情况，我们模拟了一个请求，在 HTTP 请求头里加上一个 Token，值为 111，这样就会引发错误了。然而，在控制台上，我们只看到了下面这样的输出，这其实就说明了 NotAllowExceptionHandler 并没有生效。
 
+```
+throw NotAllowException
+```
 
+这其实就说明了 NotAllowExceptionHandler 并没有生效。
 
+- 案例解析
 
+我们不妨对 Spring 的异常处理过程先做一个了解，过滤器执行流程图如下。
 
+![image-20220822210156725](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208222101071.png)
 
+从这张图中可以看出，当所有的过滤器被执行完毕以后，Spring 才会进入 Servlet 相关的处理。而 DispatcherServlet 才是整个 Servlet 处理的核心，正是在这里，Spring 处理了请求和处理器之间的对应关系，以及这个案例我们所关注的问题——统一异常处理。
 
+说到这里，我们已经了解到过滤器内异常无法被统一处理的大致原因，就是因为异常处理发生在上图的红色区域，即 DispatcherServlet 中的 doDispatch()，而此时，过滤器已经全部执行完毕了。
 
+下面我们将深入分析 Spring Web 对异常统一处理的逻辑，深刻理解其内部原理。首先我们来了解下 ControllerAdvice 是如何被 Spring 加载并对外暴露的。
 
+在 Spring Web 的核心配置类 WebMvcConfigurationSupport 中，被 @Bean 修饰的
+handlerExceptionResolver()，会调用 addDefaultHandlerExceptionResolvers() 来添加默认的异常解析器。
 
+```java
+@Bean
+public HandlerExceptionResolver handlerExceptionResolver(
+    @Qualifier("mvcContentNegotiationManager") ContentNegotiationManager contentNegotiationManager) {
+    List<HandlerExceptionResolver> exceptionResolvers = new ArrayList<>();
+    configureHandlerExceptionResolvers(exceptionResolvers);
+    if (exceptionResolvers.isEmpty()) {
+        addDefaultHandlerExceptionResolvers(exceptionResolvers, contentNegotiation);
+    }
+    extendHandlerExceptionResolvers(exceptionResolvers);
+    HandlerExceptionResolverComposite composite = new HandlerExceptionResolverComposite();
+    composite.setOrder(0);
+    composite.setExceptionResolvers(exceptionResolvers);
+    return composite;
+}
+```
 
+![image-20220822212932275](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208222129637.png)
 
+最终 Spring 实例化了 ExceptionHandlerExceptionResolver 类。该类实现了 InitializingBean 接口，并覆写了 afterPropertiesSet()。
 
+```java
+public void afterPropertiesSet() {
+    // Do this first, it may add ResponseBodyAdvice beans
+    initExceptionHandlerAdviceCache();
+    //省略非关键代码
+}
+```
 
+在 initExceptionHandlerAdviceCache() 中完成了所有 ControllerAdvice 中的 ExceptionHandler 的初始化。具体操作，就是查找所有 @ControllerAdvice 注解的 Bean，把它们放到成员变量 exceptionHandlerAdviceCache 中。
+
+```java
+private void initExceptionHandlerAdviceCache() {
+    //省略非关键代码
+    List<ControllerAdviceBean> adviceBeans = 
+        ControllerAdviceBean.findAnnotatedBeans(getApplicationContext());
+    for (ControllerAdviceBean adviceBean : adviceBeans) {
+        Class<?> beanType = adviceBean.getBeanType();
+        if (beanType == null) {
+            throw new IllegalStateException("Unresolvable type for ControllerAdviceBean: " + adviceBean);
+        }
+        ExceptionHandlerMethodResolver resolver = new ExceptionHandlerMethodResolver(beanType);
+        if (resolver.hasExceptionMappings()) {
+            this.exceptionHandlerAdviceCache.put(adviceBean, resolver);
+        }
+        //省略非关键代码
+    }
+}
+```
+
+当第一次请求发生时，DispatcherServlet 中的 initHandlerExceptionResolvers() 将获取所有注册到 Spring 的 HandlerExceptionResolver 类型的实例，这些 HandlerExceptionResolver 类型的实例会被写入到类成员变量 handlerExceptionResolvers 中。
+
+```java
+private void initHandlerExceptionResolvers(ApplicationContext context) {
+    this.handlerExceptionResolvers = null;
+    if (this.detectAllHandlerExceptionResolvers) {
+        // Find all HandlerExceptionResolvers in the ApplicationContext, including ancestor contexts.
+        Map<String, HandlerExceptionResolver> matchingBeans = BeanFactoryUtils
+            .beansOfTypeIncludingAncestors(context, HandlerExceptionResolver.class, true, false);
+        if (!matchingBeans.isEmpty()) {
+            this.handlerExceptionResolvers = new ArrayList<>(matchingBeans.values());
+            // We keep HandlerExceptionResolvers in sorted order.
+            AnnotationAwareOrderComparator.sort(this.handlerExceptionResolvers);
+        }
+        //省略非关键代码
+    }
+}
+```
+
+接着我们再来了解下 ControllerAdvice 是如何被 Spring 消费并处理异常的。下文贴出的是核心类 DispatcherServlet 中的核心方法 doDispatch() 的部分代码：
+
+```java
+protected void doDispatch(HttpServletRequest request, HttpServletResponse response) 
+    throws Exception {
+    //省略非关键代码
+    try {
+        ModelAndView mv = null;
+        Exception dispatchException = null;
+        try {
+            //省略非关键代码
+            //查找当前请求对应的 handler，并执行
+            //省略非关键代码
+        } catch (Exception ex) {
+            dispatchException = ex;
+        }
+        catch (Throwable err) {
+            dispatchException = new NestedServletException("Handler dispatch fail", err);
+        }
+        processDispatchResult(processedRequest, response, mappedHandler, mv, dispatchException);
+    }
+    //省略非关键代码
+}
+```
+
+Spring 在执行用户请求时，当在“查找”和“执行”请求对应的 handler 过程中发生异常，就会把异常赋值给 dispatchException，再交给 processDispatchResult() 进行处理。
+
+```java
+private void processDispatchResult(
+    HttpServletRequest request, HttpServletResponse response,
+    @Nullable HandlerExecutionChain mappedHandler, @Nullable ModelAndView mv,
+    @Nullable Exception exception) throws Exception {
+    boolean errorView = false;
+    if (exception != null) {
+        if (exception instanceof ModelAndViewDefiningException) {
+            mv = ((ModelAndViewDefiningException) exception).getModelAndView();
+        } else {
+            Object handler = (mappedHandler != null ? mappedHandler.getHandler() : null);
+            mv = processHandlerException(request, response, handler, exception);
+            errorView = (mv != null);
+        }
+    }
+    //省略非关键代码
+}
+```
+
+进一步处理后，即当 Exception 不为 null 时，继续交给 processHandlerException 处理。
+
+```java
+protected ModelAndView processHandlerException(
+    HttpServletRequest request, HttpServletResponse response,
+    @Nullable Object handler, Exception ex) throws Exception {
+    //省略非关键代码
+    ModelAndView exMv = null;
+    if (this.handlerExceptionResolvers != null) {
+        for (HandlerExceptionResolver resolver : this.handlerExceptionResolvers) {
+            exMv = resolver.resolveException(request, response, handler, ex);
+            if (exMv != null) {
+                break;
+            }
+        }
+    }
+    //省略非关键代码
+}
+```
+
+然后，processHandlerException 会从类成员变量 handlerExceptionResolvers 中获取有效的异常解析器，对异常进行解析。
+
+显然，这里的 handlerExceptionResolvers 一定包含我们声明的NotAllowExceptionHandler#NotAllowException 的异常处理器的ExceptionHandlerExceptionResolver 包装类。
+
+- 问题修正
+
+为了利用 Spring MVC 的异常处理机制，我们需要对 Filter 做一些改造。手动捕获异常，并将异常 HandlerExceptionResolver 进行解析处理。
+
+我们可以这样修改 PermissionFilter，注入 HandlerExceptionResolver：
+
+```java
+@Autowired
+@Qualifier("handlerExceptionResolver")
+private HandlerExceptionResolver resolver;
+```
+
+然后，在 doFilter 里捕获异常并交给 HandlerExceptionResolver 处理：
+
+```java
+public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) 
+    throws IOException, ServletException {
+    HttpServletRequest httpServletRequest = (HttpServletRequest) request;
+    HttpServletResponse httpServletResponse = (HttpServletResponse) respon
+        String token = httpServletRequest.getHeader("token");
+    if (!"111111".equals(token)) {
+        System.out.println("throw NotAllowException");
+        resolver.resolveException(httpServletRequest, httpServletResponse, 
+                                  null, new NotAllowException());
+        return;
+    }
+    chain.doFilter(request, response);
+}
+```
+
+当我们尝试用错误的 Token 请求，控制台得到了以下信息：
+
+```
+throw NotAllowException
+403
+```
+
+返回的 JSON 是：
+
+```json
+{"resultCode": 403}
+```
 
 
 
