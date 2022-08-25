@@ -2570,7 +2570,134 @@ throw NotAllowException
 {"resultCode": 403}
 ```
 
+**案例 2：特殊的 404 异常**
 
+为了防止一些异常的访问，我们需要记录所有 404 状态的访问记录，并返回一个我们的自定义结果。于是我们添加了一个 ExceptionHandlerController，它被声明成@RestControllerAdvice 来全局捕获 Spring MVC 中抛出的异常。
+
+```java
+@RestControllerAdvice
+public class MyExceptionHandler {
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ExceptionHandler(Exception.class)
+    @ResponseBody
+    public String handle404() {
+        System.out.println("404");
+        return "{\"resultCode\": 404}";
+    }
+}
+```
+
+我们尝试发送一个错误的 URL 请求，得到了以下结果：
+
+```json
+{"timestamp":"2021-05-19T22:24:01.559+0000","status":404,"error":"Not Found","message":"No message available","path":"/regStudent1"}
+```
+
+很显然，这个结果不是我们想要的，看起来应该是 Spring 默认的返回结果。那是什么原因导致 Spring 没有使用我们定义的异常处理器呢？
+
+- 案例解析
+
+我们可以从异常处理的核心处理代码开始分析，DispatcherServlet 中的 doDispatch() 核心代码如下：
+
+```java
+protected void doDispatch(HttpServletRequest request, HttpServletResponse response) {
+    //省略非关键代码
+    mappedHandler = getHandler(processedRequest);
+    if (mappedHandler == null) {
+        noHandlerFound(processedRequest, response);
+        return;
+    }
+    //省略非关键代码
+}
+```
+
+首先调用 getHandler() 获取当前请求的处理器，如果获取不到，则调用 noHandlerFound()：
+
+```java
+protected void noHandlerFound(HttpServletRequest request, HttpServletResponse response) 
+    throws Exception {
+    if (this.throwExceptionIfNoHandlerFound) {
+        throw new NoHandlerFoundException(
+            request.getMethod(), getRequestUri(request),
+            new ServletServerHttpRequest(request).getHeaders());
+    } else {
+        response.sendError(HttpServletResponse.SC_NOT_FOUND);
+    }
+}
+```
+
+在 Spring Web 的 WebMvcAutoConfiguration 类中，其默认添加的两个 ResourceHandler，一个是用来处理请求路径 /webjars/\*\*，而另一个是 /\*\*。
+
+即便当前请求没有定义任何对应的请求处理器，getHandler() 也一定会获取到一个 Handler 来处理当前请求，因为第二个匹配 /** 路径的 ResourceHandler 决定了任何请求路径都会被其处理。mappedHandler == null 判断条件永远不会成立。
+
+通过 WebMvcAutoConfiguration 类中的 addResourceHandlers() 这个方法，我们可以知道当前有哪些 ResourceHandler 的集合被注册到了 Spring 容器中：
+
+```java
+public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    if (!this.resourceProperties.isAddMappings()) {
+        logger.debug("Default resource handling disabled");
+        return;
+    }
+    Duration cachePeriod = this.resourceProperties.getCache().getPeriod();
+    CacheControl cacheControl = this.resourceProperties.getCache()
+        .getCachecontrol().toHttpCacheControl();
+    if (!registry.hasMappingForPattern("/webjars/**")) {
+        customizeResourceHandlerRegistration(registry.addResourceHandler("/webjars/**")
+            .addResourceLocations("classpath:/META-INF/resources/webjars/")
+            .setCachePeriod(getSeconds(cachePeriod)).setCacheControl(cacheControl));
+    }
+    String staticPathPattern = this.mvcProperties.getStaticPathPattern();
+    if (!registry.hasMappingForPattern(staticPathPattern)) {
+        customizeResourceHandlerRegistration(registry.addResourceHandler(staticPathPattern)
+            .addResourceLocations(getResourceLocations(this.resourceProperties.getStaticLocations()))
+            .setCachePeriod(getSeconds(cachePeriod)).setCacheControl(cacheControl));
+    }
+}
+```
+
+此处添加了两个 ResourceHandler，一个是用来处理请求路径 /webjars/\*\*， 而另一个是 /*\*。这里你可以注意一下方法最开始的判断语句，如果 this.resourceProperties.isAddMappings() 为 false，那么会直接返回，后续的两个 ResourceHandler 也不会被添加。
+
+```java
+if (!this.resourceProperties.isAddMappings()) {
+    logger.debug("Default resource handling disabled");
+    return;
+}
+```
+
+- 问题修正
+
+如果 this.resourceProperties.isAddMappings() 为 false，那么此处直接返回，后续的两个 ResourceHandler 也不会被添加。
+
+```java
+public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    if (!this.resourceProperties.isAddMappings()) {
+        logger.debug("Default resource handling disabled");
+        return;
+    }
+    //省略非关键代码
+}
+```
+
+其调用 ResourceProperties 中的 isAddMappings() 的代码如下：
+
+```java
+public boolean isAddMappings() {
+    return this.addMappings;
+}
+```
+
+到这，答案也就呼之欲出了，增加两个配置文件如下：
+
+```
+spring.resources.add-mappings=false
+spring.mvc.throwExceptionIfNoHandlerFound=true
+```
+
+修改 MyExceptionHandler 的 @ExceptionHandler 为 NoHandlerFoundException 即可：
+
+```java
+@ExceptionHandler(NoHandlerFoundException.class)
+```
 
 
 
