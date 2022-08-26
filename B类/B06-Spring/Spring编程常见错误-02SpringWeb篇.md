@@ -2699,7 +2699,3 @@ spring.mvc.throwExceptionIfNoHandlerFound=true
 @ExceptionHandler(NoHandlerFoundException.class)
 ```
 
-
-
-
-
