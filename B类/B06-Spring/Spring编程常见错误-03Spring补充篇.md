@@ -149,7 +149,7 @@ basic.request {
 
 例如，假设我们的数据备份是 3 份，待写入的数据分别存储在 A、B、C 三个节点上。那么常见的搭配是 R（读）和 W（写）的一致性都是 LOCAL_QURAM，这样可以保证能及时读到写入的数据；而假设在这种情况下，我们读写都是用 LOCAL_ONE，那么则可能发生这样的情况，即用户写入一个节点 A 就返回了，但是用户 B 立马读的节点是 C，且由于是 LOCAL_ONE 一致性，则读完 C 就可以立马返回。此时，就会出现数据读取可能落空的情况。
 
-![image-20220826221957720](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208262219855.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208262219855.png" alt="image-20220826221957720" style="zoom:50%;" />
 
 那么考虑一个问题，为什么 Cassandra driver 默认是使用 LOCAL_ONE 呢？
 
@@ -182,7 +182,167 @@ public DriverConfigLoaderBuilderCustomizer driverConfigLoaderBuilderCustomizer()
 
 这里我们将一致性级别从 LOCAL_ONE 改成了 LOCAL_QUARM，更符合我们的实际产品部署和应用情况。
 
+**案例 3：冗余的 Session**
 
+有时候，我们使用 Spring Data 做连接时，会比较在意我们的内存占用。例如我们使用 Spring Data Cassandra 操作 Cassandra 时，可能会发现类似这样的问题：
+
+![image-20220827211645980](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208272116147.png)
+
+Spring Data Cassandra 在连接 Cassandra 之后，会获取 Cassandra 的 Metadata 信息，这个内存占用量是比较大的，因为它存储了数据的 Token Range 等信息。如上图所示，在我们的应用中，占用 40M 以上已经不少了，但问题是为什么有 4 个占用 40 多 M 呢？难道不是只建立一个连接么？
+
+- 案例解析
+
+这里我们可以先写一个例子，直接展示下问题的原因，然后再来看看我们的问题到底出现在什么地方！现在我们定义一个 MyService 类，当它构造时，会输出它的名称信息：
+
+```java
+public class MyService {
+    public MyService(String name) {
+        System.err.println(name);
+    }
+}
+```
+
+然后我们定义两个 Configuration 类，同时让它们是继承关系，其中父 Configuration 命名如下：
+
+```java
+@Configuration
+public class BaseConfig {
+    @Bean
+    public MyService service() {
+        return new MyService("myservice defined from base config");
+    }
+}
+```
+
+子 Configuration 命名如下：
+
+```java
+@Configuration
+public class Config extends BaseConfig {
+    @Bean
+    public MyService service(){
+        return new MyService("myservice defined from config");
+    }
+}
+```
+
+子类的 service() 实现覆盖了父类对应的方法。最后，我们书写一个启动程序：
+
+```java
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+```
+
+为了让程序启动，我们不能将 BaseConfig 和 Config 都放到 Application 的扫描范围。我们可以按如下结构组织代码：
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208272121708.png" alt="image-20220827212137637" style="zoom:50%;" />
+
+最终我们会发现，当程序启动时，我们只有一个 MyService 的 Bean 产生，输出日志如下：
+
+```
+myservice defined from config
+```
+
+这里可以看出，如果我们的子类标识 Bean 的方法正好覆盖了对应的父类，那么只能利用子类的方法产生一个 Bean。但是假设我们不小心在子类实现时，没有意识到父类方法的存在，定义如下呢？
+
+```java
+@Configuration
+public class Config extends BaseConfig {
+    @Bean
+    public MyService service2() {
+        return new MyService("myservice defined from config");
+    }
+}
+```
+
+经过上述的不小心修改，再次运行程序，你会发现有 2 个 MyService 的 Bean 产生：
+
+```
+myservice defined from config
+myservice defined from base config
+```
+
+说到这里你可能想到一个造成内存翻倍的原因。我们去查看案例程序的代码，可能会发现存在这样的问题：
+
+```java
+@Configuration
+@EnableCassandraRepositories
+public class CassandraConfig extends AbstractCassandraConfiguration {
+    @Bean
+    @Primary
+    public CqlSessionFactoryBean session() {
+        log.info("init session");
+        CqlSessionFactoryBean cqlSessionFactoryBean = new CqlSessionFactoryBean();
+        //省略其他非关键代码
+        return cqlSessionFactoryBean;
+    }
+    //省略其他非关键代码
+}
+```
+
+CassandraConfig 继承于 AbstractSessionConfiguration，它已经定义了一个CqlSessionFactoryBean，代码如下：
+
+```java
+@Configuration
+public abstract class AbstractSessionConfiguration implements BeanFactoryAware {
+    @Bean
+    public CqlSessionFactoryBean cassandraSession() {
+        CqlSessionFactoryBean bean = new CqlSessionFactoryBean();
+        bean.setContactPoints(getContactPoints());
+        //省略其他非关键代码
+        return bean;
+    }
+    //省略其他非关键代码
+}
+```
+
+而比较这两段的 CqlSessionFactoryBean 的定义方法，你会发现它们的方法名是不同的：
+
+```
+cassandraSession()
+session()
+```
+
+- 案例修正
+
+我们可以把原始案例代码修改如下：
+
+```java
+@Configuration
+@EnableCassandraRepositories
+public class CassandraConfig extends AbstractCassandraConfiguration {
+    @Bean
+    @Primary
+    public CqlSessionFactoryBean cassandraSession() {
+        //省略其他非关键代码
+    }
+    //省略其他非关键代码
+}
+```
+
+不过你可能会有一个疑问，这里不就是翻倍了么？但也不至于四倍啊。
+
+实际上，这是因为使用 Spring Data Redis 会创建两个 Session （systemSession 和 session），它们都会获取 metadata。具体可参考代码 CqlSessionFactoryBean#afterPropertiesSet：
+
+```java
+@Override
+public void afterPropertiesSet() {
+    CqlSessionBuilder sessionBuilder = buildBuilder();
+    // system session 的创建
+    this.systemSession = buildSystemSession(sessionBuilder);
+    initializeCluster(this.systemSession);
+    // normal session 的创建
+    this.session = buildSession(sessionBuilder);
+    executeCql(getStartupScripts().stream(), this.session);
+    performSchemaAction();
+    this.systemSession.refreshSchema();
+    this.session.refreshSchema();
+}
+```
 
 
 
