@@ -344,6 +344,268 @@ public void afterPropertiesSet() {
 }
 ```
 
+# 19 | Spring 事务常见错误（上）
+
+Spring 事务管理包含两种配置方式，第一种是使用 XML 进行模糊匹配，绑定事务管理；第二种是使用注解，这种方式可以对每个需要进行事务处理的方法进行单独配置，你只需要添加上 @Transactional，然后在注解内添加属性配置即可。
+
+在正式开始讲解事务之前，我们先搭建一个简单的 Spring 数据库的环境。
+
+1. 数据库配置文件 jdbc.properties
+
+```properties
+jdbc.driver=com.mysql.cj.jdbc.Driver
+jdbc.url=jdbc:mysql://localhost:3306/spring?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false
+jdbc.username=root
+jdbc.password=pass
+```
+
+2. JDBC 的配置类
+
+```java
+public class JdbcConfig {
+    @Value("${jdbc.driver}")
+    private String driver;
+    @Value("${jdbc.url}")
+    private String url;
+    @Value("${jdbc.username}")
+    private String username;
+    @Value("${jdbc.password}")
+    private String password;
+    @Bean(name = "jdbcTemplate")
+    public JdbcTemplate createJdbcTemplate(DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+    @Bean(name = "dataSource")
+    public DataSource createDataSource() {
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setDriverClassName(driver);
+        ds.setUrl(url);
+        ds.setUsername(username);
+        ds.setPassword(password);
+        return ds;
+    }
+    @Bean(name = "transactionManager")
+    public PlatformTransactionManager createTransactionManager(DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
+}
+```
+
+3. 应用配置类
+
+```java
+@Configuration
+@ComponentScan
+@Import({JdbcConfig.class})
+@PropertySource("classpath:jdbc.properties")
+@MapperScan("com.spring.puzzle.others.transaction.example1")
+@EnableTransactionManagement
+@EnableAutoConfiguration(exclude={DataSourceAutoConfiguration.class})
+@EnableAspectJAutoProxy(proxyTargetClass = true, exposeProxy = true)
+public class AppConfig {
+    public static void main(String[] args) throws Exception {
+        ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class);
+    }
+}
+```
+
+完成了上述基础配置和代码后，我们开始进行案例的讲解。
+
+**案例 1：unchecked 异常与事务回滚**
+
+在系统中，我们需要增加一个学生管理的功能，每一位新生入学后，都会往数据库里存入学生的信息。我们引入了一个学生类 Student 和与之相关的 Mapper。
+
+```java
+public class Student implements Serializable {
+    private Integer id;
+    private String realname;
+}
+```
+
+对应的 Mapper 类定义如下：
+
+```java
+@Mapper
+public interface StudentMapper {
+    @Insert("INSERT INTO `student`(`realname`) VALUES (#{realname})")
+    void saveStudent(Student student);
+}
+```
+
+对应数据库表的 Schema 如下：
+
+```sql
+CREATE TABLE `student` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `realname` varchar(255) DEFAULT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+```
+
+业务类 StudentService，其中包括一个保存的方法 saveStudent。
+
+```java
+@Service
+public class StudentService {
+    @Autowired
+    private StudentMapper studentMapper;
+    @Transactional
+    public void saveStudent(String realname) throws Exception {
+        Student student = new Student();
+        student.setRealname(realname);
+        studentMapper.saveStudent(student);
+        if (student.getRealname().equals("小明")) {
+            throw new Exception("该学生已存在");
+        }
+    }
+}
+```
+
+然后使用下面的代码来测试一下，保存一个叫小明的学生，看会不会触发事务的回滚。
+
+```java
+public class AppConfig {
+    public static void main(String[] args) throws Exception {
+        ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class);
+        StudentService studentService = (StudentService) context.getBean("studentService");
+        studentService.saveStudent("小明");
+    }
+}
+```
+
+执行结果中，异常被抛出，但是检查数据库，你会发现数据库里插入了一条新的记录。
+
+- 案例解析
+
+我们通过 debug 沿着 saveStudent 继续往下跟，得到了一个这样的调用栈：
+
+![image-20220828214520385](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208282145613.png)
+
+从这个调用栈中我们看到了熟悉的 CglibAopProxy，另外事务本质上也是一种特殊的切面，在创建的过程中，被 CglibAopProxy 代理。事务处理的拦截器是 TransactionInterceptor，它支撑着整个事务功能的架构，我们来分析下这个拦截器是如何实现事务特性的。
+
+首先，TransactionInterceptor 继承类 TransactionAspectSupport，实现了接口 MethodInterceptor。
+
+```java
+protected Object invokeWithinTransaction(
+    Method method, @Nullable Class<?> targetClass,
+    final InvocationCallback invocation) throws Throwable {
+    //省略非关键代码
+    Object retVal;
+    try {
+        retVal = invocation.proceedWithInvocation();
+    } catch (Throwable ex) {
+        completeTransactionAfterThrowing(txInfo, ex);
+        throw ex;
+    } finally {
+        cleanupTransactionInfo(txInfo);
+    }
+    //省略非关键代码
+}
+```
+
+在 completeTransactionAfterThrowing 的代码中，有这样一个方法 rollbackOn()，这是事务的回滚的关键判断条件。当这个条件满足时，会触发 rollback 操作，事务回滚。
+
+```java
+protected void completeTransactionAfterThrowing(
+    @Nullable TransactionInfo txInfo, Throwable ex) {
+    //省略非关键代码
+    //判断是否需要回滚
+    if (txInfo.transactionAttribute != null 
+        && txInfo.transactionAttribute.rollbackOn(ex)) {
+        try {
+            //执行回滚
+            txInfo.getTransactionManager().rollback(txInfo.getTransactionStatus());
+        } catch (TransactionSystemException ex2) {
+            ex2.initApplicationException(ex);
+            throw ex2;
+        } catch (RuntimeException | Error ex2) {
+            throw ex2;
+        }
+    }
+    //省略非关键代码
+}
+```
+
+rollbackOn() 其实包括了两个层级，具体可参考如下代码：
+
+```java
+public boolean rollbackOn(Throwable ex) {
+    // 层级 1：根据"rollbackRules"及当前捕获异常来判断是否需要回滚
+    RollbackRuleAttribute winner = null;
+    int deepest = Integer.MAX_VALUE;
+    if (this.rollbackRules != null) {
+        for (RollbackRuleAttribute rule : this.rollbackRules) {
+            // 当前捕获的异常可能是回滚“异常”的继承体系中的“一员”
+            int depth = rule.getDepth(ex);
+            if (depth >= 0 && depth < deepest) {
+                deepest = depth;
+                winner = rule;
+            }
+        }
+    }
+    // 层级 2：调用父类的 rollbackOn 方法来决策是否需要 rollback
+    if (winner == null) {
+        return super.rollbackOn(ex);
+    }
+    return !(winner instanceof NoRollbackRuleAttribute);
+}
+```
+
+在父类的 rollbackOn() 中，我们发现了一个重要的线索，只有在异常类型为 RuntimeException 或者 Error 的时候才会返回 true。
+
+```java
+public boolean rollbackOn(Throwable ex) {
+    return (ex instanceof RuntimeException || ex instanceof Error);
+}
+```
+
+- 问题修正
+
+只需要把抛出的异常类型改成 RuntimeException 就可以了。于是这部分代码就可以修改如下：
+
+```java
+@Service
+public class StudentService {
+    @Autowired
+    private StudentMapper studentMapper;
+    @Transactional
+    public void saveStudent(String realname) throws Exception {
+        Student student = new Student();
+        student.setRealname(realname);
+        studentMapper.saveStudent(student);
+        if (student.getRealname().equals("小明")) {
+            throw new RuntimeException("该用户已存在");
+        }
+    }
+}
+```
+
+但是这种修改方法看起来不够优美，毕竟我们的异常有时候是固定死不能随意修改的。所以结合前面的案例分析，我们还有一个更好的修改方式。
+
+```java
+@Transactional(rollbackFor = Exception.class)
+```
+
+**案例 2：试图给 private 方法添加事务**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
