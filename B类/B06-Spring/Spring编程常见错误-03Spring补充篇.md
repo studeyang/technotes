@@ -588,23 +588,111 @@ public class StudentService {
 
 **案例 2：试图给 private 方法添加事务**
 
+```java
+@Service
+public class StudentService {
+    @Autowired
+    private StudentMapper studentMapper;
+    @Autowired
+    private StudentService studentService;
+    
+    public void saveStudent(String realname) throws Exception {
+        Student student = new Student();
+        student.setRealname(realname);
+        studentService.doSaveStudent(student);
+    }
+    @Transactional
+    private void doSaveStudent(Student student) throws Exception {
+        studentMapper.saveStudent(student);
+        if (student.getRealname().equals("小明")) {
+            throw new RuntimeException("该用户已存在");
+        }
+    }
+}
+```
 
+执行的时候，传入参数“小明”，结果是异常正常抛出，事务却没有回滚。
 
+- 案例解析
 
+当 Bean 初始化之后，会开始尝试代理操作，这个过程是从 AbstractAutoProxyCreator 里的 postProcessAfterInitialization 方法开始处理的。
 
+我们一路往下找，直到到了 AopUtils 的 canApply 方法。这个方法就是针对切面定义里的条件，确定这个方法是否可以被应用创建成代理。其中有一段 methodMatcher.matches(method, targetClass) 是用来判断这个方法是否符合这样的条件。
 
+从 matches() 调用到了 AbstractFallbackTransactionAttributeSource 的 getTransactionAttribute：
 
+```java
+public boolean matches(Method method, Class<?> targetClass) {
+    //省略非关键代码
+    TransactionAttributeSource tas = getTransactionAttributeSource();
+    return (tas == null || tas.getTransactionAttribute(method, targetClass) != null);
+}
+```
 
+其中，getTransactionAttribute 这个方法是用来获取注解中的事务属性，根据属性确定事务采用什么样的策略。
 
+接着调用到 computeTransactionAttribute 这个方法，其主要功能是根据方法和类的类型确定是否返回事务属性，执行代码如下：
 
+```java
+protected TransactionAttribute computeTransactionAttribute(
+    Method method, @Nullable Class<?> targetClass) {
+    //省略非关键代码
+    if (allowPublicMethodsOnly() && !Modifier.isPublic(method.getModifiers())) {
+        return null;
+    }
+    //省略非关键代码
+}
+```
 
+这里有这样一个判断 allowPublicMethodsOnly() && !Modifier.isPublic(method.getModifiers()) ，当这个判断结果为 true 的时候返回 null，也就意味着这个方法不会被代理，从而导致事务的注解不会生效。我们可以分别看一下这两个条件。
 
+条件 1：allowPublicMethodsOnly()
 
+```java
+protected boolean allowPublicMethodsOnly() {
+    return this.publicMethodsOnly;
+}
+```
 
+publicMethodsOnly 属性默认为 true。
 
+条件 2：Modifier.isPublic()
 
+```java
+// PUBLIC:1，PRIVATE:2，PROTECTED:4
+public static boolean isPublic(int mod) {
+    return (mod & PUBLIC) != 0;
+}
+```
 
+综合上述两个条件，只有当注解为事务的方法被声明为 public 的时候，才会被 Spring 处理。
 
+- 问题修正
+
+案例中的 StudentService，它含有一个自动装配（Autowired）了自身（StudentService）的实例来完成代理方法的调用。这个问题我们在之前 Spring AOP 的代码解析中重点强调过。
+
+```java
+@Service
+public class StudentService {
+    @Autowired
+    private StudentMapper studentMapper;
+    @Autowired
+    private StudentService studentService;
+    
+    public void saveStudent(String realname) throws Exception {
+        Student student = new Student();
+        student.setRealname(realname);
+        studentService.doSaveStudent(student);
+    }
+    @Transactional
+    public void doSaveStudent(Student student) throws Exception {
+        studentMapper.saveStudent(student);
+        if (student.getRealname().equals("小明")) {
+            throw new RuntimeException("该用户已存在");
+        }
+    }
+}
+```
 
 
 
