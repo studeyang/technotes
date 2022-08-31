@@ -694,6 +694,287 @@ public class StudentService {
 }
 ```
 
+# 20 | Spring 事务常见错误（下）
+
+我们继续讨论事务中的另外两个问题，一个是关于事务的传播机制，另一个是关于多数据源的切换问题。
+
+**案例 1：嵌套事务回滚错误**
+
+我们增加了一个新的业务类 CourseService，用于实现相关业务逻辑。分别调用了保存学生与课程的关联关系，并给课程注册人数 +1。
+
+```java
+@Service
+public class CourseService {
+    @Autowired
+    private CourseMapper courseMapper;
+    @Autowired
+    private StudentCourseMapper studentCourseMapper;
+    //注意这个方法标记了“Transactional”
+    @Transactional(rollbackFor = Exception.class)
+    public void regCourse(int studentId) throws Exception {
+        studentCourseMapper.saveStudentCourse(studentId, 1);
+        courseMapper.addCourseNumber(1);
+    }
+}
+```
+
+我们在之前的 StudentService.saveStudent() 中调用了 regCourse()，实现了完整的业务逻辑。我们希望的结果是，当注册课程发生错误时，只回滚注册课程部分，保证学生信息依然正常。
+
+```java
+@Service
+public class StudentService {
+    //省略非关键代码
+    @Transactional(rollbackFor = Exception.class)
+    public void saveStudent(String realname) throws Exception {
+        Student student = new Student();
+        student.setRealname(realname);
+        studentService.doSaveStudent(student);
+        try {
+            courseService.regCourse(student.getId());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    //省略非关键代码
+}
+```
+
+为了验证异常是否符合预期，我们在 regCourse() 里抛出了一个注册失败的异常：
+
+```java
+@Transactional(rollbackFor = Exception.class)
+public void regCourse(int studentId) throws Exception {
+    studentCourseMapper.saveStudentCourse(studentId, 1);
+    courseMapper.addCourseNumber(1);
+    throw new Exception("注册失败");
+}
+```
+
+最后的结果是，学生和选课的信息都被回滚了，显然这并不符合我们的预期。
+
+- 案例解析
+
+我们先把整个事务的结构梳理一下，整个业务是包含了 2 层事务，外层的 saveStudent() 的事务和内层的 regCourse() 事务。
+
+在 Spring 声明式的事务处理中，有一个属性 propagation，表示一个带事务的方法调用了另一个带事务的方法，被调用的方法它怎么处理自己事务和调用方法事务之间的关系。
+
+propagation 有 7 种配置：REQUIRED、SUPPORTS、MANDATORY、REQUIRES_NEW、NOT_SUPPORTED、NEVER、NESTED。默认是 REQUIRED，它的含义是：如果本来有事务，则加入该事务，如果没有事务，则创建新的事务。
+
+我们再来看下 Spring 事务处理的核心，其关键实现参考 TransactionAspectSupport.invokeWithinTransaction()：
+
+```java
+protected Object invokeWithinTransaction(Method method, @Nullable Class<?> targetClass,
+                                         final InvocationCallback invocation) throws Throwable {
+    TransactionAttributeSource tas = getTransactionAttributeSource();
+    final TransactionAttribute txAttr = 
+        (tas != null ? tas.getTransactionAttribute(method, targetClass) : null);
+    final PlatformTransactionManager tm = determineTransactionManager(txAttr);
+    final String joinpointIdentification = methodIdentification(method, targetClass, txAttr);
+    if (txAttr == null || !(tm instanceof CallbackPreferringPlatformTransactionManager)) {
+        // 是否需要创建一个事务
+        TransactionInfo txInfo = createTransactionIfNecessary(tm, txAttr, joinpointIndentification);
+        Object retVal = null;
+        try {
+            // 调用具体的业务方法
+            retVal = invocation.proceedWithInvocation();
+        } catch (Throwable ex) {
+            // 当发生异常时进行处理
+            completeTransactionAfterThrowing(txInfo, ex);
+            throw ex;
+        } finally {
+            cleanupTransactionInfo(txInfo);
+        }
+        // 正常返回时提交事务
+        commitTransactionAfterReturning(txInfo);
+        return retVal;
+    }
+    //......省略非关键代码.....
+}
+```
+
+整个方法完成了事务的一整套处理逻辑，如下：
+
+1. 检查是否需要创建事务；
+2. 调用具体的业务方法进行处理；
+3. 提交事务；
+4. 处理异常。
+
+当前案例是两个事务嵌套的场景，外层事务 doSaveStudent() 和内层事务 regCourse()，每个事务都会调用到这个方法。所以，这个方法会被调用两次。下面我们来具体来看下内层事务对异常的处理。
+
+当捕获了异常，会调用 TransactionAspectSupport.completeTransactionAfterThrowing() 进行异常处理：
+
+```java
+protected void completeTransactionAfterThrowing(@Nullable TransactionInfo txInfo, Throwable ex) {
+    if (txInfo != null && txInfo.getTransactionStatus() != null) {
+        if (txInfo.transactionAttribute != null && txInfo.transactionAttribute.rollbackOn(ex)) {
+            try {
+                txInfo.getTransactionManager().rollback(txInfo.getTransactionStatus());
+            } catch (TransactionSystemException ex2) {
+                logger.error("Application exception overridden by rollback exception", ex);
+                ex2.initApplicationException(ex);
+                throw ex2;
+            } catch (RuntimeException | Error ex2) {
+                logger.error("Application exception overridden by rollback exception", ex);
+                throw ex2;
+            }
+        }
+        //......省略非关键代码.....
+    }
+}
+```
+
+在这个方法里，我们对异常类型做了一些检查，当符合声明中的定义后，执行了具体的 rollback 操作，这个操作是通过 TransactionManager.rollback() 完成的：
+
+```java
+public final void rollback(TransactionStatus status) throws TransactionException {
+    if (status.isCompleted()) {
+        throw new IllegalTransactionStateException(
+            "Transaction is already completed - do not call commit or rollback more than once per transaction");
+    }
+    DefaultTransactionStatus defStatus = (DefaultTransactionStatus) status;
+    processRollback(defStatus, false);
+}
+```
+
+而 rollback() 是在 AbstractPlatformTransactionManager 中实现的，继续调用了 processRollback()：
+
+```java
+private void processRollback(DefaultTransactionStatus status, boolean unexpected) {
+    try {
+        boolean unexpectedRollback = unexpected;
+        if (status.hasSavepoint()) { // 有保存点
+            status.rollbackToHeldSavepoint();
+        } else if (status.isNewTransaction()) { // 是否为一个新的事务
+            doRollback(status);
+        } else { // 处于一个更大的事务中
+            if (status.hasTransaction()) { // 分支1
+                if (status.isLocalRollbackOnly() || isGlobalRollbackOnParticipationFailure()) {
+                    doSetRollbackOnly(status);
+                }
+            }
+            if (!isFailEarlyOnGlobalRollbackOnly()) {
+                unexpectedRollback = false;
+            }
+        }
+        // 省略非关键代码
+        if (unexpectedRollback) {
+            throw new UnexpectedRollbackException(
+                "Transaction rolled back because it has been marked as rollback-only");
+        }
+    } finally {
+        cleanupAfterCompletion(status);
+    }
+}
+```
+
+这个方法里区分了三种不同类型的情况：
+
+1. 是否有保存点；
+2. 是否为一个新的事务；
+3. 是否处于一个更大的事务中。
+
+在这里，因为我们用的是默认的传播类型 REQUIRED，嵌套的事务并没有开启一个新的事务，所以在这种情况下，当前事务是处于一个更大的事务中，所以会走到情况 3 分支 1 的代码块下。
+
+这里有两个判断条件来确定是否设置为仅回滚：
+
+```java
+if (status.isLocalRollbackOnly() || isGlobalRollbackOnParticipationFailure())
+```
+
+isLocalRollbackOnly 在当前的情况下是 false，所以是否分设置为仅回滚就由 isGlobalRollbackOnParticipationFailure() 这个方法来决定了，其默认值为 true， 即是否回滚交由外层事务统一决定 。
+
+显然这里的条件得到了满足，从而执行 doSetRollbackOnly：
+
+```java
+protected void doSetRollbackOnly(DefaultTransactionStatus status) {
+    DataSourceTransactionObject txObject = (DataSourceTransactionObject) status.getTransaction();
+    txObject.setRollbackOnly();
+}
+```
+
+以及最终调用到的 DataSourceTransactionObject 中的 setRollbackOnly()：
+
+```java
+public void setRollbackOnly() {
+    getConnectionHolder().setRollbackOnly();
+}
+```
+
+接下来，我们来看外层事务。因为在外层事务中，我们自己的代码捕获了内层抛出来的异常，所以这个异常不会继续往上抛，最后的事务会在 TransactionAspectSupport.invokeWithinTransaction() 中的 commitTransactionAfterReturning() 中进行处理：
+
+```java
+protected void commitTransactionAfterReturning(@Nullable TransactionInfo txInfo) {
+    if (txInfo != null && txInfo.getTransactionStatus() != null) {
+        txInfo.getTransactionManager().commit(txInfo.getTransactionStatus());
+    }
+}
+```
+
+在这个方法里我们执行了 commit 操作，代码如下：
+
+```java
+public final void commit(TransactionStatus status) throws TransactionException {
+    //......省略非关键代码.....
+    if (!shouldCommitOnGlobalRollbackOnly() && defStatus.isGlobalRollbackOnly()) {
+        processRollback(defStatus, true);
+        return;
+    }
+    processCommit(defStatus);
+}
+```
+
+当满足了 shouldCommitOnGlobalRollbackOnly() 和 defStatus.isGlobalRollbackOnly()，就会回滚，否则会继续提交事务。其中 shouldCommitOnGlobalRollbackOnly() 的作用为，如果发现了事务被标记了全局回滚，并且在发生了全局回滚的情况下，判断是否应该提交事务，这个方法的默认实现是返回了 false，这里我们不需要关注它，继续查看 isGlobalRollbackOnly() 的实现：
+
+```java
+public boolean isGlobalRollbackOnly() {
+    return ((this.transaction instanceof SmartTransactionObject) && 
+            ((SmartTransactionObject) this.transaction).isRollbackOnly());
+}
+```
+
+这个方法最终进入了 DataSourceTransactionObject 类中的 isRollbackOnly()：
+
+```java
+public boolean isRollbackOnly() {
+    return getConnectionHolder().isRollbackOnly();
+}
+```
+
+我们再次回顾一下之前的内部事务处理结果，其最终调用到的是 DataSourceTransactionObject 中的 setRollbackOnly()：
+
+```java
+public void setRollbackOnly() {
+    getConnectionHolder().setRollbackOnly();
+}
+```
+
+isRollbackOnly() 和 setRollbackOnly() 这两个方法的执行本质都是对 ConnectionHolder 中 rollbackOnly 属性标志位的存取，而 ConnectionHolder 则存在于 DefaultTransactionStatus 类实例的 transaction 属性之中。
+
+至此，答案基本浮出水面了：外层事务是否回滚的关键，最终取决于 DataSourceTransactionObject 类中的 isRollbackOnly()，而该方法的返回值，正是我们在内层异常的时候设置的。
+
+- 问题修正
+
+我们只需要对传播属性进行修改，把类型改成 REQUIRES_NEW 就可以了。
+
+```java
+@Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
+public void regCourse(int studentId) throws Exception {
+    studentCourseMapper.saveStudentCourse(studentId, 1);
+    courseMapper.addCourseNumber(1);
+    throw new Exception("注册失败");
+}
+```
+
+简单解释下这个过程：
+
+当子事务声明为 Propagation.REQUIRES_NEW 时，在 TransactionAspectSupport.invokeWithinTransaction() 中调用 createTransactionIfNecessary() 就会创建一个新的事务，独立于外层事务。
+
+而在 AbstractPlatformTransactionManager.processRollback() 进行 rollback 处理时，因为 status.isNewTransaction() 会因为它处于一个新的事务中而返回 true，所以它走入到了另一个分支，执行了 doRollback() 操作，让这个子事务单独回滚，不会影响到主事务。
+
+**案例 2：多数据源间切换之谜**
+
+
+
 
 
 
