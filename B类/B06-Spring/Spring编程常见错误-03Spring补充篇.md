@@ -973,9 +973,277 @@ public void regCourse(int studentId) throws Exception {
 
 **案例 2：多数据源间切换之谜**
 
+假设现在每个学生在注册的时候，需要给他们发一张校园卡，并给校园卡里充入 50 元钱。但是这个校园卡管理系统是一个第三方系统，使用的是另一套数据库，这样我们就需要在一个事务中同时操作两个数据库。
 
+Card 的业务类如下，里面实现了卡与学生 ID 关联，以及充入 50 元的操作：
 
+```java
+@Service
+public class CardService {
+    @Autowired
+    private CardMapper cardMapper;
+    
+    @Transactional
+    public void createCard(int studentId) throws Exception {
+        Card card = new Card();
+        card.setStudentId(studentId);
+        card.setBalance(50);
+        cardMapper.saveCard(card);
+    }
+}
+```
 
+- 案例解析
+
+学生注册和发卡都要在一个事务里完成，但是我们都默认只会连一个数据源，之前我们一直连的都是学生信息这个数据源，在这里，我们还需要对校园卡的数据源进行操作。于是，我们需要在一个事务里完成对两个数据源的操作，该如何实现这样的功能呢？
+
+在 Spring 里有这样一个抽象类 AbstractRoutingDataSource，这个类相当于 DataSource 的路由中介，在运行时根据某种 key 值来动态切换到所需的 DataSource 上。通过实现这个类就可以实现我们期望的动态数据源切换。
+
+```java
+public abstract class AbstractRoutingDataSource 
+    extends AbstractDataSource implements InitializingBean {
+    
+    @Nullable
+    private Map<Object, Object> targetDataSources;
+    
+    @Nullable
+    private Object defaultTargetDataSource;
+    
+    private boolean lenientFallback = true;
+    
+    private DataSourceLookup dataSourceLookup = new JndiDataSourceLookup();
+    
+    @Nullable
+    private Map<Object, DataSource> resolvedDataSources;
+    
+    @Nullable
+    private DataSource resolvedDefaultDataSource;
+    
+    //省略非关键代码
+}
+```
+
+这里强调一下，这个类里有这么几个关键属性：
+
+1. targetDataSources 保存了 key 和数据库连接的映射关系；
+2. defaultTargetDataSource 标识默认的连接；
+3. resolvedDataSources 存储数据库标识和数据源的映射关系。
+
+获取数据库连接的是 getConnection()，它调用了 determineTargetDataSource() 来创建连接：
+
+```java
+protected DataSource determineTargetDataSource() {
+    Assert.notNull(this.resolvedDataSources, "DataSource router not initialized");
+    Object lookupKey = determineCurrentLookupKey();
+    DataSource dataSource = this.resolvedDataSources.get(lookupKey);
+    if (dataSource == null && (this.lenientFallback || lookupKey == null)) {
+        dataSource = this.resolvedDefaultDataSource;
+    }
+    if (dataSource == null) {
+        throw new IllegalStateException(
+            "Cannot determine target DataSource for lookup key [" + lookupKey + "]");
+    }
+    return dataSource;
+}
+```
+
+determineTargetDataSource() 是整个部分的核心，它的作用就是动态切换数据源。有多少个数据源，就存多少个数据源在 targetDataSources 中。
+
+而选择哪个数据源又是由 determineCurrentLookupKey() 来决定的，此方法是抽象方法，需要我们继承 AbstractRoutingDataSource 抽象类来重写此方法。
+
+```java
+protected abstract Object determineCurrentLookupKey();
+```
+
+这样看来，这个方法的实现就得由我们完成了。接下来我们将会完成一系列相关的代码，解决这个问题。
+
+- 问题修正
+
+首先，我们创建一个 MyDataSource 类，继承了 AbstractRoutingDataSource，并覆写了 determineCurrentLookupKey()：
+
+```java
+public class MyDataSource extends AbstractRoutingDataSource {
+    private static final ThreadLocal<String> key = new ThreadLocal<String>();
+    
+    @Override
+    protected Object determineCurrentLookupKey() {
+        return key.get();
+    }
+    
+    public static void setDataSource(String dataSource) {
+        key.set(dataSource);
+    }
+    
+    public static String getDatasource() {
+        return key.get();
+    }
+    
+    public static void clearDataSource() {
+        key.remove();
+    }
+}
+```
+
+其次，我们需要修改 JdbcConfig。这里定义了  dataSourceCore 和 dataSourceCard 两个数据源。
+
+```java
+public class JdbcConfig {
+    //省略非关键代码
+    @Value("${card.driver}")
+    private String cardDriver;
+    
+    @Value("${card.url}")
+    private String cardUrl;
+    
+    @Value("${card.username}")
+    private String cardUsername;
+    
+    @Value("${card.password}")
+    private String cardPassword;
+    
+    @Autowired
+    @Qualifier("dataSourceCard")
+    private DataSource dataSourceCard;
+    
+    @Autowired
+    @Qualifier("dataSourceCore")
+    private DataSource dataSourceCore;
+    
+    //省略非关键代码
+    @Bean(name = "dataSourceCore")
+    public DataSource createCoreDataSource() {
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setDriverClassName(driver);
+        ds.setUrl(url);
+        ds.setUsername(username);
+        ds.setPassword(password);
+        return ds;
+    }
+    
+    @Bean(name = "dataSourceCard")
+    public DataSource createCardDataSource() {
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setDriverClassName(cardDriver);
+        ds.setUrl(cardUrl);
+        ds.setUsername(cardUsername);
+        ds.setPassword(cardPassword);
+        return ds;
+    }
+    
+    @Bean(name = "dataSource")
+    public MyDataSource createDataSource() {
+        MyDataSource myDataSource = new MyDataSource();
+        Map<Object, Object> map = new HashMap<>();
+        map.put("core", dataSourceCore);
+        map.put("card", dataSourceCard);
+        myDataSource.setTargetDataSources(map);
+        myDataSource.setDefaultTargetDataSource(dataSourceCore);
+        return myDataSource;
+    }
+    //省略非关键代码
+}
+```
+
+最后还剩下一个问题，setDataSource 这个方法什么时候执行呢？
+
+我们可以用 Spring AOP 来设置，把配置的数据源类型都设置成注解标签。我们定义了一个新的注解 @DataSource，，可以直接加在 Service() 上，实现数据库切换：
+
+```java
+@Documented
+@Target({ElementType.TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface DataSource {
+    String value();
+    String core = "core";
+    String card = "card";
+}
+```
+
+另外，我们还需要写一个 Spring AOP 来对相应的服务方法进行拦截，完成数据源的切换操作。特别要注意的是，这里要加上一个 @Order(1) 标记它的初始化顺序。这个 Order 值一定要比事务的 AOP 切面的值小，这样可以获得更高的优先级，否则自动切换数据源将会失效。
+
+```java
+@Aspect
+@Service
+@Order(1)
+public class DataSourceSwitch {
+    @Around("execution(* com.spring.puzzle.others.transaction.example3.CardService.*(..))")
+    public void around(ProceedingJoinPoint point) throws Throwable {
+        Signature signature = point.getSignature();
+        MethodSignature methodSignature = (MethodSignature) signature;
+        Method method = methodSignature.getMethod();
+        if (method.isAnnotationPresent(DataSource.class)) {
+            DataSource dataSource = method.getAnnotation(DataSource.class);
+            MyDataSource.setDataSource(dataSource.value());
+            System.out.println("数据源切换至：" + MyDataSource.getDatasource());
+        }
+        point.proceed();
+        MyDataSource.clearDataSource();
+        System.out.println("数据源已移除！");
+    }
+}
+```
+
+最后，我们实现了 Card 的发卡逻辑，在方法前声明了切换数据库：
+
+```java
+@Service
+public class CardService {
+    @Autowired
+    private CardMapper cardMapper;
+    
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @DataSource(DataSource.card)
+    public void createCard(int studentId) throws Exception {
+        Card card = new Card();
+        card.setStudentId(studentId);
+        card.setBalance(50);
+        cardMapper.saveCard(card);
+    }
+}
+```
+
+并在 saveStudent() 里调用了发卡逻辑：
+
+```java
+@Transactional(rollbackFor = Exception.class)
+public void saveStudent(String realname) throws Exception {
+    Student student = new Student();
+    student.setRealname(realname);
+    studentService.doSaveStudent(student);
+    try {
+        courseService.regCourse(student.getId());
+        cardService.createCard(student.getId());
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}
+```
+
+执行一下，一切正常，两个库的数据都可以正常保存了。
+
+最后我们重新过一遍流程。在创建了事务以后，会通过 DataSourceTransactionManager.doBegin() 获取相应的数据库连接：
+
+```java
+protected void doBegin(Object transaction, TransactionDefinition definition) {
+    DataSourceTransactionObject txObject = (DataSourceTransactionObject) transaction;
+    Connection con = null;
+    try {
+        if (!txObject.hasConnectionHolder() ||
+            txObject.getConnectionHolder().isSynchronizedWithTransaction()) {
+            Connection newCon = obtainDataSource().getConnection();
+            txObject.setConnectionHolder(new ConnectionHolder(newCon), true);
+        }
+        //省略非关键代码
+}
+```
+
+这里的 obtainDataSource().getConnection() 调用到了 AbstractRoutingDataSource.getConnection()，这就与我们实现的功能顺利会师了。
+
+```java
+public Connection getConnection() throws SQLException {
+    return determineTargetDataSource().getConnection();
+}
+```
 
 
 
