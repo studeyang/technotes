@@ -62,15 +62,9 @@ Spring 大观园中有一棵参天大树，它得以茁壮成长，主要因为�
 
 第二部分 Spring 的 IoC 容器
 
-# 第2章 IoC 的基本概念
+# 第2章 如何实现简单的 IoC 容器
 
-> 本章内容
->
-> - 我们的理念是：让别人为你服务
-> - 手语，呼喊，还是心有灵犀
-> - IoC 的附加值 
-
-**2.1 我们的理念是：让别人为你服务**
+**2.1 需要什么东西就让别人送过来**
 
 为了更好地阐述 IoC 模式的概念，我们引入以下简单场景。
 
@@ -114,7 +108,7 @@ public FXNewsProvider() {
 
 ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/使用IoC前后的差别.png)
 
-**2.2 手语，呼喊，还是心有灵犀**
+**2.2 别人怎么送过来？**
 
 在 IoC 模式中，被注入对象又是通过哪些方式来通知 IoC Service Provider 为其提供适当服务的呢？ 
 
@@ -172,12 +166,7 @@ FXNewsProvider 为了让 IoC Service Provider 为其注入所依赖的IFXNewsLis
 
 接口注入方式最早并且使用最多的是在一个叫做 Avalon 的项目中，相对于前两种依赖注入方式，接口注入比较死板和烦琐。如果需要注入依赖对象，被注入对象就必须声明和实现另外的接口。这就好像你同样在酒吧点啤酒，为了让服务生理解你的意思，你就必须戴上一顶啤酒杯式的帽子，看起来有点多此一举。
 
-# 第3章 掌管大局的 IoC Service Provider
-
-> 本章内容
->
-> - IoC Service Provider 的职责
-> - 运筹帷幄的秘密——IoC Service Provider 如何管理对象间的依赖关系 
+# 第3章 IoC 可以用来做什么？
 
 虽然业务对象可以通过 IoC 方式声明相应的依赖，但是最终仍然需要通过某种角色或者服务将这些相互依赖的对象绑定到一起，而 IoC Service Provider 就对应 IoC 场景中的这一角色。IoC Service Provider 在这里是一个抽象出来的概念，它可以指代任何将 IoC 场景中的业务对象绑定到一起的实现方式。
 
@@ -188,7 +177,7 @@ IoC Service Provider 的职责相对来说比较简单，主要有两个：业�
 - 业务对象的构建管理。IoC Service Provider 需要将对象的构建逻辑从客户端对象那里剥离出来，以免这部分逻辑污染业务对象的实现。
 - 业务对象间的依赖绑定。IoC Service Provider 通过结合之前构建和管理的所有业务对象，以及各个业务对象间可以识别的依赖关系，将这些对象所依赖的对象注入绑定，从而保证每个业务对象在使用的时候，可以处于就绪状态。
 
-**3.2 运筹帷幄的秘密——IoC Service Provider 如何管理对象间的依赖关系**
+**3.2 IoC Service Provider 如何管理对象间的依赖关系**
 
 - 3.2.1 直接编码方式
 
@@ -263,14 +252,7 @@ IoC Service Provider 的职责相对来说比较简单，主要有两个：业�
 
   当然， 注解最终也要通过代码处理来确定最终的注入关系，从这点儿来说，注解方式可以算作编码方式的一种特殊情况。 
 
-# 第4章 Spring 的 IoC 容器之 BeanFactory
-
-> 本章内容
->
-> - 拥有 BeanFactory 之后的生活
-> - BeanFactory 的对象注册与依赖绑定方式
-> - BeanFactory 的 XML 之旅 
-> - 容器背后的秘密 
+# 第4章 使用 BeanFactory 获取 IoC 里的 Bean
 
 Spring 的 IoC 容器是一个提供 IoC 支持的轻量级容器，除了基本的 IoC 支持，它作为轻量级容器还提供了 IoC 之外的支持。
 
@@ -325,6 +307,8 @@ newsProvider.getAndPersistNews();
 - 4.2.1 直接编码方式
 
   > 其实，把编码方式单独提出来称作一种方式并不十分恰当。因为不管什么方式，最终都需要编码才能“落实”所有信息并付诸使用。不过，通过这些代码，起码可以让我们更加清楚 BeanFactory 在底层是如何运作的。  
+
+  ![image-20220425223912013](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202204252239169.png)
 
   下面来看一下我们的FX新闻系统相关类是如何注册并绑定的。
 
@@ -393,7 +377,7 @@ newsProvider.getAndPersistNews();
 
 **4.3 BeanFactory 的 XML 之旅**
 
-> 这一部分内容比较多且偏实战，需单独学习。
+> XML 的方式现在很少用了。
 
 - 4.3.1 \<beans\>和\<bean\>
 - 4.3.2 孤孤单单一个Bean
@@ -403,9 +387,9 @@ newsProvider.getAndPersistNews();
 - 4.3.6 工厂方法与 FactoryBean
 - 4.3.7 偷梁换柱之术
 
-**4.4 容器背后的秘密**
+**4.4 容器启动的秘密**
 
-- 4.4.1 “战略性观望”
+- 4.4.1 容器的初始化概览
 
   Spring 的 IoC 容器实现以上功能的过程，基本上可以按照类似的流程划分为两个阶段，即容器启动阶段和 Bean 实例化阶段。
 
