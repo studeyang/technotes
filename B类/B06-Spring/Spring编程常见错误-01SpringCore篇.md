@@ -14,24 +14,19 @@ Spring 补充篇：作为补充，这部分我会重点介绍 Spring 测试、Sp
 
 **案例 1：隐式扫描不到 Bean 的定义**
 
-我们使用下面的包结构和
-相关代码来完成一个简易的 Web 版 HelloWorld：
+我们使用下面的包结构和相关代码来完成一个简易的 Web 版 HelloWorld：
 
 ![image-20220714223154397](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207142231438.png)
 
-假设有一天，当我们需要添加多个类似的 Controller，同时又希望用更清晰的包层
-次和结构来管理时，我们可能会去单独建立一个独立于 application 包之外的 Controller
-包，并调整类的位置。调整后结构示意如下：
+假设有一天，当我们需要添加多个类似的 Controller，同时又希望用更清晰的包层次和结构来管理时，我们可能会去单独建立一个独立于 application 包之外的 Controller 包，并调整类的位置。调整后结构示意如下：
 
 ![image-20220714223245190](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207142232226.png)
 
-我们会发现这个 Web 应用失
-效了，即不能识别出 HelloWorldController 了。
+我们会发现这个 Web 应用失效了，即不能识别出 HelloWorldController 了。
 
 - 案例解析
 
-在我们的案例中，我们直接使用的是 SpringBootApplication 注解定义的
-ComponentScan，它的 basePackages 没有指定，所以默认为空。此时扫描的是什么包？这里不妨带着这个问题去调试下（调试位置参考 ComponentScanAnnotationParser#parse 方法），调试视图如下：
+在我们的案例中，我们直接使用的是 SpringBootApplication 注解定义的 ComponentScan，它的 basePackages 没有指定，所以默认为空。此时扫描的是什么包？这里不妨带着这个问题去调试下（调试位置参考 ComponentScanAnnotationParser#parse 方法），调试视图如下：
 
 ![image-20220714223643124](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207142236157.png)
 
@@ -75,8 +70,7 @@ Parameter 0 of constructor in com.spring.puzzle.class1.example2.ServiceImpl requ
 
 - 案例解析
 
-当创建一个 Bean 时，调用的方法是
-AbstractAutowireCapableBeanFactory#createBeanInstance。它主要包含两大基本步骤：寻找构造器和通过反射调用构造器创建实例。
+当创建一个 Bean 时，调用的方法是 AbstractAutowireCapableBeanFactory#createBeanInstance。它主要包含两大基本步骤：寻找构造器和通过反射调用构造器创建实例。
 
 对于这个案例，最核心的代码执行，你可以参考下面的代码片段：
 
@@ -128,11 +122,11 @@ public class HelloWorldController {
     @RequestMapping(path = "hi", method = RequestMethod.GET)
     public String hi() {
         return "helloworld, service is : " + serviceImpl;
-    };
+    }
 }
 ```
 
-结果，我们会发现，不管我们访问多少次http://localhost:8080/hi，访问的结果都是不变的，如下：
+结果，我们会发现，不管我们访问多少次 http://localhost:8080/hi，访问的结果都是不变的，如下：
 
 ```
 helloworld, service is :
@@ -143,8 +137,7 @@ com.spring.puzzle.class1.example3.error.ServiceImpl@4908af
 
 当一个属性成员 serviceImpl 声明为 @Autowired 后，那么在创建 HelloWorldController 这个 Bean 时，会先使用构造器反射出实例，然后来装配各个标记为 @Autowired 的属性成员（装配方法参考 AbstractAutowireCapableBeanFactory#populateBean）。
 
-具体到执行过程，它会使用很多 BeanPostProcessor 来做完成工作，其中一种是
-AutowiredAnnotationBeanPostProcessor，它会通过 DefaultListableBeanFactory#findAutowireCandidates 寻找到 ServiceImpl 类型的 Bean，然后设置给对应的属性（即 serviceImpl 成员）。
+具体到执行过程，它会使用很多 BeanPostProcessor 来做完成工作，其中一种是 AutowiredAnnotationBeanPostProcessor，它会通过 DefaultListableBeanFactory#findAutowireCandidates 寻找到 ServiceImpl 类型的 Bean，然后设置给对应的属性（即 serviceImpl 成员）。
 
 待我们寻找到要自动注入的 Bean 后，即可通过反射设置给对应的 field。这个 field 的执行只发生了一次，所以后续就固定起来了，它并不会因为 ServiceImpl 标记了 SCOPE_PROTOTYPE 而改变。
 
@@ -266,7 +259,7 @@ public class CassandraDataService implements DataService{
 首先，我们先来了解下 @Autowired 发生的位置和核心过程。当一个 Bean 被构建时，核心包括两个基本步骤：
 
 1. 执行 AbstractAutowireCapableBeanFactory#createBeanInstance 方法：通过构造器反射构造出这个 Bean，在此案例中相当于构建出 StudentController 的实例；
-2. 执行 AbstractAutowireCapableBeanFactory#populate 方法：填充（即设置）这个 Bean，在本案例中，相当于设置 StudentController 实例中被 @Autowired 标记的 dataService 属性成员。
+2. 执行 AbstractAutowireCapableBeanFactory#populateBean 方法：填充（即设置）这个 Bean，在本案例中，相当于设置 StudentController 实例中被 @Autowired 标记的 dataService 属性成员。
 
 在步骤 2 中，“填充”过程的关键就是执行各种 BeanPostProcessor 处理器，关键代码如下：
 
@@ -283,8 +276,7 @@ protected void populateBean(String beanName, RootBeanDefinition mbd, @Nullable B
 }
 ```
 
-在上述代码执行过程中，因为 StudentController 含有标记为 Autowired 的成员属性 dataService，所以会使用到 AutowiredAnnotationBeanPostProcessor（BeanPostProcessor 中的一种）来完成“装配”过程：找出合适的 DataService 的 bean 并设置给
-StudentController#dataService。如果深究这个装配过程，又可以细分为两个步骤：
+在上述代码执行过程中，因为 StudentController 含有标记为 Autowired 的成员属性 dataService，所以会使用到AutowiredAnnotationBeanPostProcessor（BeanPostProcessor 中的一种）来完成“装配”过程：找出合适的 DataService 的 bean 并设置给StudentController#dataService。如果深究这个装配过程，又可以细分为两个步骤：
 
 1. 寻找出所有需要依赖注入的字段和方法，参考 AutowiredAnnotationBeanPostProcessor#postProcessProperties 中的代码行：
 
@@ -296,34 +288,29 @@ InjectionMetadata metadata = findAutowiringMetadata(beanName, bean.getClass(), p
 
 ```java
 @Override
-protected void inject(Object bean, @Nullable String beanName, @Nullable PropertyValues pvs)
-    throws Throwable {
-  Field field = (Field) this.member;
-  Object value;
-  //省略非关键代码
-  try {
+protected void inject(Object bean, @Nullable String beanName, @Nullable PropertyValues pvs) throws Throwable {
+    Field field = (Field) this.member;
+    Object value;
+    //省略非关键代码
     DependencyDescriptor desc = new DependencyDescriptor(field, this.required);
     //寻找“依赖”，desc为"dataService"的DependencyDescriptor
     value = beanFactory.resolveDependency(desc, beanName, autowiredBeanNames, typeConverter);
-  }
-  //省略非关键代码
-  if (value != null) {
-    ReflectionUtils.makeAccessible(field);
-    //装配“依赖”
-    field.set(bean, value);
-  }
-}    
+    //省略非关键代码
+    if (value != null) {
+        ReflectionUtils.makeAccessible(field);
+        //装配“依赖”
+        field.set(bean, value);
+    }
+}
 ```
 
 当我们根据 DataService 这个类型来找出依赖时，我们会找出 2 个依赖，分别为 CassandraDataService 和 OracleDataService。在这样的情况下，如果同时满足以下两个条件则会抛出本案例的错误：
 
-1. 调用 determineAutowireCandidate 方法来选出优先级最高的依赖，但是发现并没有优先级可依据。具体选择过程可参考
-   DefaultListableBeanFactory#determineAutowireCandidate。
+1. 调用 determineAutowireCandidate 方法来选出优先级最高的依赖，但是发现并没有优先级可依据。具体选择过程可参考DefaultListableBeanFactory#determineAutowireCandidate。
+   
+> 优先级的决策是先根据 @Primary 来决策，其次是 @Priority 决策，最后是根据 Bean 名字的严格匹配来决策。如果这些帮助决策优先级的注解都没有被使用，名字也不精确匹配，则返回 null，告知无法决策出哪种最合适。
 
-   > 优先级的决策是先根据 @Primary 来决策，其次是 @Priority 决策，最后是根据 Bean 名字的严格匹配来决策。如果这些帮助决策优先级的注解都没有被使用，名字也不精确匹配，则返回 null，告知无法决策出哪种最合适。
-
-2. @Autowired 要求是必须注入的（即 required 保持默认值为 true），或者注解的属性类型并不是可以接受多个 Bean 的类型，例如数组、Map、集合。这点可以参考
-   DefaultListableBeanFactory#indicatesMultipleBeans 的实现。
+2. @Autowired 要求是必须注入的（即 required 保持默认值为 true），或者注解的属性类型并不是可以接受多个 Bean 的类型，例如数组、Map、集合。这点可以参考 DefaultListableBeanFactory#indicatesMultipleBeans 的实现。
 
 - 问题修正
 
@@ -352,13 +339,21 @@ DataService oracleDataService;
 第三，还可以采用 @Qualifier 来显式指定引用的是那种服务，例如采用下面的方式：
 
 ```java
-@Autowired()
+@Autowired
 @Qualifier("cassandraDataService")
 DataService dataService;
 ```
 
-这种方式之所以能解决问题，在于它能让寻找出的 Bean 只有一个（即精确匹配），所以压根不会出现后面的决策过程，可以参考
-DefaultListableBeanFactory#doResolveDependency。
+这种方式之所以能解决问题，在于它能让寻找出的 Bean 只有一个（即精确匹配），所以压根不会出现后面的决策过程，可以参考 DefaultListableBeanFactory#doResolveDependency。
+
+```java
+public Object doResolveDependency(DependencyDescriptor descriptor, String beanName,
+		Set<String> autowiredBeanNames, TypeConverter typeConverter) throws BeansException {
+    //...
+    Object value = getAutowireCandidateResolver().getSuggestedValue(descriptor);
+    //...
+}
+```
 
 **案例 2：显式引用 Bean 时首字母忽略大小写**
 
@@ -373,17 +368,7 @@ DataService dataService;
 运行程序，我们会报错如下：
 
 ```
-Exception encountered during context initialization - cancelling refresh attempt: 
-org.springframework.beans.factory.UnsatisfiedDependencyException: Error
-creating bean with name 'studentController': Unsatisfied dependency expressed
-through field 'dataService'; nested exception is
-org.springframework.beans.factory.NoSuchBeanDefinitionException: No
-qualifying bean of type 'com.spring.puzzle.class2.example2.DataService'
-available: expected at least 1 bean which qualifies as autowire candidate.
-Dependency annotations:
-{@org.springframework.beans.factory.annotation.Autowired(required=true),
-@org.springframework.beans.factory.annotation.Qualifier(value=CassandraData
-Service)}
+Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'studentController': Unsatisfied dependency expressed through field 'dataService'; nested exception is org.springframework.beans.factory.NoSuchBeanDefinitionException: No qualifying bean of type 'com.spring.puzzle.class2.example2.DataService' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {@org.springframework.beans.factory.annotation.Autowired(required=true), @org.springframework.beans.factory.annotation.Qualifier(value=CassandraDataService)}
 ```
 
 这里我们很容易得出一个结论：对于 Bean 的名字，如果没有显式指明，就应该是类名，不过首字母应该小写。但是这个轻松得出的结论成立么？
@@ -407,15 +392,15 @@ BeanNameGenerator#generateBeanName 即用来产生 Bean 的名字。因为 DataS
 ```java
 @Override
 public String generateBeanName(BeanDefinition definition, BeanDefinitionRegistry registry) {
-  if (definition instanceof AnnotatedBeanDefinition) {
-    String beanName = determineBeanNameFromAnnotation((AnnotatedBeanDefiniti
-    if (StringUtils.hasText(beanName)) {
-    // Explicit bean name found.
-      return beanName;
+    if (definition instanceof AnnotatedBeanDefinition) {
+        String beanName = determineBeanNameFromAnnotation((AnnotatedBeanDefinition) definition);
+        if (StringUtils.hasText(beanName)) {
+            // Explicit bean name found.
+            return beanName;
+        }
     }
-  }
-  // Fallback: generate a unique default bean name.
-  return buildDefaultBeanName(definition, registry);
+    // Fallback: generate a unique default bean name.
+    return buildDefaultBeanName(definition, registry);
 }
 ```
 
@@ -423,10 +408,10 @@ public String generateBeanName(BeanDefinition definition, BeanDefinitionRegistry
 
 ```java
 protected String buildDefaultBeanName(BeanDefinition definition) {
-  String beanClassName = definition.getBeanClassName();
-  Assert.state(beanClassName != null, "No bean class name set");
-  String shortClassName = ClassUtils.getShortName(beanClassName);
-  return Introspector.decapitalize(shortClassName);
+    String beanClassName = definition.getBeanClassName();
+    Assert.state(beanClassName != null, "No bean class name set");
+    String shortClassName = ClassUtils.getShortName(beanClassName);
+    return Introspector.decapitalize(shortClassName);
 }
 ```
 
@@ -582,7 +567,7 @@ DataService innerClassDataService;
 private Student student;
 
 @Bean
-public Student student(){
+public Student student() {
   Student student = createStudent(1, "xie");
   return student;
 }
@@ -627,7 +612,7 @@ public class ValueTestController {
   private String password;
     
   @RequestMapping(path = "user", method = RequestMethod.GET)
-  public String getUser(){
+  public String getUser() {
     return username + ":" + password;
   }
 }
@@ -651,8 +636,7 @@ public Object doResolveDependency(DependencyDescriptor descriptor, @Nullable Str
     if (value instanceof String) {
       //解析Value值
       String strVal = resolveEmbeddedValue((String) value);
-      BeanDefinition bd = (beanName != null && containsBean(beanName) ? 
-                           getMergedBeanDefinition(beanName) : null);
+      BeanDefinition bd = (beanName != null && containsBean(beanName) ? getMergedBeanDefinition(beanName) : null);
       value = evaluateBeanDefinitionString(strVal, bd);
     }
     //转化Value解析的结果到装配的类型
@@ -759,7 +743,7 @@ public class StudentController {
 
 ```java
 @Bean
-public List<Student> students(){
+public List<Student> students() {
   Student student3 = createStudent(3, "liu");
   Student student4 = createStudent(4, "fu");
   return Arrays.asList(student3, student4);
@@ -774,8 +758,7 @@ public List<Student> students(){
 
 1. 获取集合类型的元素类型
 
-针对本案例，目标类型定义为 List<Student> students，所以元素类型为 Student，获取
-的具体方法参考代码行：
+针对本案例，目标类型定义为 `List<Student> students`，所以元素类型为 Student，获取的具体方法参考代码行：
 
 ```java
 Class<?> elementType = descriptor.getResolvableType().asCollection().resolveGeneric();
@@ -1091,11 +1074,11 @@ Pay with alipay ...
 
 我们可以从源码中找到真相。首先来设置个断点，调试看看 this 对应的对象是什么样的：
 
-![image-20220722220732765](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207222207979.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207222207979.png" alt="image-20220722220732765" style="zoom:50%;" />
 
 可以看到，this 对应的就是一个普通的 ElectricService 对象，并没有什么特别的地方。再看看在 Controller 层中自动装配的 ElectricService 对象是什么样：
 
-![image-20220722220804301](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207222208453.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207222208453.png" alt="image-20220722220804301" style="zoom:50%;" />
 
 可以看到，这是一个被 Spring 增强过的 Bean。而 this 对应的对象只是一个普通的对象，并没有做任何额外的增强。
 
@@ -1235,7 +1218,7 @@ String payNum = dminUserService.user.getPayNum();
 
 我们先 debug 一下，来看看加入 AOP 后调用的对象是什么样子。
 
-![image-20220725213318634](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252133846.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252133846.png" alt="image-20220725213318634" style="zoom:50%;" />
 
 可以看出，加入 AOP 后，我们的对象已经是一个代理对象了，并且属性 adminUser 确实为 null。
 
@@ -1595,7 +1578,7 @@ public class AopConfig {
 
 Spring 事件的设计比较简单。说白了，就是监听器设计模式在 Spring 中的一种实现，参考下图：
 
-![image-20220727220050768](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207272200105.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207272200105.png" alt="image-20220727220050768" style="zoom:50%;" />
 
 从图中我们可以看出，Spring 事件包含以下三大组件。
 
