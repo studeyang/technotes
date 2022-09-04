@@ -1245,5 +1245,196 @@ public Connection getConnection() throws SQLException {
 }
 ```
 
+# 21 | Spring Rest Template 常见错误
+
+**案例 1：参数类型是 MultiValueMap**
+
+首先，我们先来完成一个 API 接口，代码示例如下：
+
+```java
+@RestController
+public class HelloWorldController {
+    @RequestMapping(path = "hi", method = RequestMethod.POST)
+    public String hi(@RequestParam("para1") String para1, @RequestParam("para2") String para2) {
+        return "helloworld:" + para1 + "," + para2;
+    }
+}
+```
+
+这里我们想完成的功能是接受一个 Form 表单请求，读取表单定义的两个参数 para1 和 para2，然后作为响应返回给客户端。
+
+定义完这个接口后，我们使用 RestTemplate 来发送一个这样的表单请求，代码示例如下：
+
+```java
+RestTemplate template = new RestTemplate();
+Map<String, Object> paramMap = new HashMap<String, Object>();
+paramMap.put("para1", "001");
+paramMap.put("para2", "002");
+
+String url = "http://localhost:8080/hi";
+String result = template.postForObject(url, paramMap, String.class);
+System.out.println(result);
+```
+
+测试后你会发现事与愿违，返回提示 400 错误。具体而言，就是缺少 para1 表单参数。
+
+- 案例解析
+
+使用 Wireshark 抓包工具抓出来的 Http 请求如下：
+
+![image-20220904205741767](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042057099.png)
+
+从上图可以看出，我们实际上是将定义的表单数据以 JSON 请求体（Body）的形式提交过去了，所以我们的接口处理自然取不到任何表单参数。
+
+那么为什么会以 JSON 请求体来提交数据呢？这里我们不妨扫一眼 RestTemplate 中执行上述代码时的关键几处代码调用。首先，我们看下上述代码的调用栈：
+
+![image-20220904205905906](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042059206.png)
+
+我们最终使用的是 Jackson 工具来对表单进行了序列化。使用到 JSON 的关键之处在于其中的关键调用
+RestTemplate.HttpEntityRequestCallback#doWithRequest。
+
+这个方法实际上功能很简单：根据当前要提交的 Body 内容，遍历当前支持的所有编解码器，如果找到合适的编解码器，就使用它来完成 Body 的转化。这里我们不妨看下 JSON 的编解码器对是否合适的判断，参考 AbstractJackson2HttpMessageConverter#canWrite：
+
+![image-20220904210035376](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042100732.png)
+
+可以看出，当我们使用的 Body 是一个 HashMap 时，是可以完成 JSON 序列化的。所以在后续将这个表单序列化为请求 Body 也就不奇怪了。
+
+但是这里你可能会有一个疑问，为什么适应表单处理的编解码器不行呢？这里我们不妨继续看下对应的编解码器判断是否支持的实现，即 FormHttpMessageConverter#canWrite：
+
+```java
+public boolean canWrite(Class<?> clazz, @Nullable MediaType mediaType) {
+    if (!MultiValueMap.class.isAssignableFrom(clazz)) {
+        return false;
+    }
+    if (mediaType == null || MediaType.ALL.equals(mediaType)) {
+        return true;
+    }
+    for (MediaType supportedMediaType : getSupportedMediaTypes()) {
+        if (supportedMediaType.isCompatibleWith(mediaType)) {
+            return true;
+        }
+    }
+    return false;
+}
+```
+
+从上述代码可以看出，实际上，只有当我们发送的 Body 是 MultiValueMap 才能使用表单来提交。
+
+- 问题修正
+
+把案例中的 HashMap 换成一个 MultiValueMap 类型来存储表单数据即可。修正代码示例如下：
+
+```java
+//错误：
+//Map<String, Object> paramMap = new HashMap<String, Object>();
+//paramMap.put("para1", "001");
+//paramMap.put("para2", "002");
+//修正代码：
+MultiValueMap<String, Object> paramMap = new LinkedMultiValueMap<String, Object>();
+paramMap.add("para1", "001");
+paramMap.add("para2", "002");
+```
+
+最终你会发现，当完成上述修改后，表单数据最终使用下面的代码进行了编码，参考 FormHttpMessageConverter#write：
+
+```java
+public void write(MultiValueMap<String, ?> map, @Nullable MediaType contentType, 
+    HttpOutputMessage outMessage) throws IOException, HttpMessageNotWritableException {
+    if (isMultipart(map, contentType)) {
+        writeMultipart((MultiValueMap<String, Object>) map, contentType, outputMessage);
+    } else {
+        writeForm((MultiValueMap<String, Object>) map, contentType, outputMessage);
+    }
+}
+```
+
+发送出的数据截图如下：
+
+![image-20220904210831488](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042108775.png)
+
+**案例 2：当 URL 中含有特殊字符**
+
+接下来，我们再来看一个关于 RestTemplate 使用的问题。我们还是使用之前类型的接口定义，不过稍微简化一下，代码示例如下：
+
+```java
+@RestController
+public class HelloWorldController {
+    @RequestMapping(path = "hi", method = RequestMethod.GET)
+    public String hi(@RequestParam("para1") String para1) {
+        return "helloworld:" + para1;
+    }
+}
+```
+
+然后我们使用下面的 RestTemplate 相关代码来测试一下：
+
+```java
+String url = "http://localhost:8080/hi?para1=1#2";
+HttpEntity<?> entity = new HttpEntity<>(null);
+RestTemplate restTemplate = new RestTemplate();
+HttpEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+System.out.println(response.getBody());
+```
+
+但是实际上结果却是：
+
+```
+helloworld:1
+```
+
+- 案例解析
+
+我们使用调试方式去查看解析后的 URL，截图如下：
+
+![image-20220904212018518](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042120810.png)
+
+可以看出，para1 丢掉的 #2 实际是以 Fragment 的方式被记录下来了。
+
+这里顺便科普下什么是 Fragment，这得追溯到 URL 的格式定义：
+
+```http
+protocol://hostname[:port]/path/[?query]#fragment
+```
+
+\# 开始，字符串，用于指定网络资源中的片断。例如一个网页中有多个名词解释，可使用 Fragment 直接定位到某一名词的解释。
+
+接着我们看下 URL 解析的调用栈，示例如下：
+
+![image-20220904212228047](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042122381.png)
+
+参考上述调用栈，解析 URL 的关键点在于 UriComponentsBuilder#fromUriString 实现。Query 和 Fragment 都有所处理。最终它们根据 URI_PATTERN 各自找到了相应的值 (1 和 2)，虽然这并不符合我们的原始预期。
+
+- 问题修正
+
+```java
+String url = "http://localhost:8080/hi?para1=1#2";
+UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url);
+URI uri = builder.build().encode().toUri();
+HttpEntity<?> entity = new HttpEntity<>(null);
+RestTemplate restTemplate = new RestTemplate();
+HttpEntity<String> response = restTemplate.exchange(uri, HttpMethod.GET,entity, String.class);
+System.out.println(response.getBody());
+```
+
+最终测试结果符合预期：
+
+```
+helloworld:1#2
+```
+
+与之前的案例代码进行比较，你会发现 URL 的组装方式发生了改变。但最终可以获取到我们预期的效果，调试视图参考如下：
+
+![image-20220904212538746](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042125043.png)
+
+如果你想了解更多的话，还可以参考 UriComponentsBuilder#fromHttpUrl，并与之前使用的 UriComponentsBuilder#fromUriString 进行比较。
+
+可以看出，这里只解析了 Query 并没有去尝试解析 Fragment，所以最终获取到的结果符合预期。
+
+
+
+
+
+
+
 
 
