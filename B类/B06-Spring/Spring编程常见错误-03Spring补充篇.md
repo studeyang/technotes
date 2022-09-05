@@ -1430,11 +1430,486 @@ helloworld:1#2
 
 可以看出，这里只解析了 Query 并没有去尝试解析 Fragment，所以最终获取到的结果符合预期。
 
+**案例 3：小心多次 URL Encoder**
 
+这里我们沿用之前的接口：
 
+```java
+@RestController
+public class HelloWorldController {
+    @RequestMapping(path = "hi", method = RequestMethod.GET)
+    public String hi(@RequestParam("para1") String para1) {
+        return "helloworld:" + para1;
+    }
+}
+```
 
+然后我们可以换一种使用方式来访问这个接口，示例如下：
 
+```java
+RestTemplate restTemplate = new RestTemplate();
 
+UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl("http://localhost:8080/hi");
+builder.queryParam("para1", "开发测试 001");
+String url = builder.toUriString();
+
+ResponseEntity<String> forEntity = restTemplate.getForEntity(url, String.class);
+System.out.println(forEntity.getBody());
+```
+
+我们期待的结果是"helloworld: 开发测试 001"，但是运行上述代码后，你会发现结果却是：
+
+```
+helloworld:%E5%BC%80%E5%8F%91%E6%B5%8B%E8%AF%95001
+```
+
+- 案例解析
+
+要了解这个案例，我们就需要对上述代码中关于 URL 的处理有个简单的了解。首先我们看下案例中的代码调用：
+
+```java
+String url = builder.toUriString();
+```
+
+它执行的方式是 UriComponentsBuilder#toUriString：
+
+```java
+public String toUriString() {
+    return this.uriVariables.isEmpty() ?
+        build().encode().toUriString() :
+        buildInternal(EncodingHint.ENCODE_TEMPLATE).toUriString();
+}
+```
+
+可以看出，它最终执行了 URL Encode：
+
+```java
+public final UriComponents encode() {
+    return encode(StandardCharsets.UTF_8);
+}
+```
+
+而当我们把 URL 转化成 String，再通过下面的语句来发送请求时：
+
+```java
+//url 是一个 string
+restTemplate.getForEntity(url, String.class);
+```
+
+我们会发现，它会再进行一次编码：
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052053774.png" alt="image-20220905205317344" style="zoom:67%;" />
+
+另外，我们还可以分别查看下两次编码后的结果，示例如下：
+
+1 次编码后：
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052050650.png" alt="image-20220905205000217" style="zoom: 50%;" />
+
+2 次编码后：
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052050346.png" alt="image-20220905205014916" style="zoom:50%;" />
+
+- 问题修正
+
+```java
+RestTemplate restTemplate = new RestTemplate();
+
+UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl("http://localhost:8080/hi");
+builder.queryParam("para1", "开发测试 001");
+URI url = builder.encode().build().toUri();
+
+ResponseEntity<String> forEntity = restTemplate.getForEntity(url, String.class);
+System.out.println(forEntity.getBody());
+```
+
+这种修正方式就是避免多次转化而发生多次编码。
+
+# 22 | Spring Test 常见错误
+
+**案例 1：资源文件扫描不到**
+
+首先，我们来写一个 HelloWorld 版的 Spring Boot 程序以做测试备用。
+
+```java
+@RestController
+public class HelloController {
+    @Autowired
+    HelloWorldService helloWorldService;
+    
+    @RequestMapping(path = "hi", method = RequestMethod.GET)
+    public String hi() throws Exception{
+        return helloWorldService.toString();
+    }
+}
+```
+
+而对于 HelloWorldService 这个 Bean 的定义，我们这里使用配置文件的方式进行。
+
+定义一个 spring.xml，在这个 XML 中定义 HelloWorldServic 的 Bean，并把这个 spring.xml 文件放置在 /src/main/resources 中：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans 
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <bean id="helloWorldService" class="com.spring.puzzle.others.test.example1.HelloWorldService">
+    </bean>
+</beans>
+```
+
+再定义一个 Configuration 引入上述定义 XML，具体实现方式如下：
+
+```java
+@Configuration
+@ImportResource(locations = {"spring.xml"})
+public class Config {
+}
+```
+
+完成上述步骤后，我们就可以使用 main() 启动起来。
+
+接下来，我们来写一个测试：
+
+```java
+@SpringBootTest()
+class ApplicationTests {
+    @Autowired
+    public HelloController helloController;
+    
+    @Test
+    public void testController() throws Exception {
+        String response = helloController.hi();
+        Assert.notNull(response, "not null");
+    }
+}
+```
+
+当我们运行上述测试的时候，会发现测试失败了，报错如下：
+
+![image-20220905211018459](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052110791.png)
+
+为什么单独运行应用程序没有问题，但是运行测试就不行了呢？
+
+- 案例解析
+
+我们先从调试的角度来对比下启动程序和测试加载 spring.xml 的不同之处。
+
+1. 启动程序加载 spring.xml
+
+![image-20220905211119648](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052111988.png)
+
+可以看出，它最终以 ClassPathResource 形式来加载，这个资源的情况如下：
+
+![image-20220905211136488](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052111827.png)
+
+而具体到加载实现，它使用的是 ClassPathResource#getInputStream 来加载 spring.xml 文件：
+
+![image-20220905211158435](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052111781.png)
+
+从上述调用及代码实现，可以看出最终是可以加载成功的。
+
+2. 测试加载 spring.xml
+
+![image-20220905211248372](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052112761.png)
+
+可以看出它是按 ServletContextResource 来加载的，这个资源的情况如下：
+
+![image-20220905211302446](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052113785.png)
+
+具体到实现，它最终使用的是 MockServletContext#getResourceAsStream 来加载文件：
+
+```java
+@Nullable
+public InputStream getResourceAsStream(String path) {
+    String resourceLocation = this.getResourceLocation(path);
+    Resource resource = null;
+    try {
+        resource = this.resourceLoader.getResource(resourceLocation);
+        return !resource.exists() ? null : resource.getInputStream();
+    } catch (IOException | InvalidPathException var5) {
+        if (this.logger.isWarnEnabled()) {
+            this.logger.warn("Could not open InputStream for resource " + 
+                             (resource != null ? resource : resourceLocation), var5);
+        }
+        return null;
+    }
+}
+```
+
+你可以继续跟踪它的加载位置相关代码，即 getResourceLocation()：
+
+```java
+protected String getResourceLocation(String path) {
+    if (!path.startsWith("/")) {
+        path = "/" + path;
+    }
+    //加上前缀：/src/main/resources
+    String resourceLocation = this.getResourceBasePathLocation(path);
+    if (this.exists(resourceLocation)) {
+        return resourceLocation;
+    } else {
+        //{"classpath:META-INF/resources", "classpath:resources", "classpath:static", "classpath:public"};
+        String[] var3 = SPRING_BOOT_RESOURCE_LOCATIONS;
+        int var4 = var3.length;
+        for(int var5 = 0; var5 < var4; ++var5) {
+            String prefix = var3[var5];
+            resourceLocation = prefix + path;
+            if (this.exists(resourceLocation)) {
+                return resourceLocation;
+            }
+        }
+        return super.getResourceLocation(path);
+    }
+}
+```
+
+你会发现，它尝试从下面的一些位置进行加载：
+
+```
+classpath:META-INF/resources
+classpath:resources
+classpath:static
+classpath:public
+src/main/webapp
+```
+
+你还会发现，这些目录都没有 spring.xml。或许你认为源文件 src/main/resource 下面不是有一个 spring.xml 么？
+
+当程序运行起来后，src/main/resource 下的文件最终是不带什么 resource 的。关于这点，你可以直接查看编译后的目录（本地编译后是 target\classes 目录），示例如下：
+
+![image-20220905211813030](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052118390.png)
+
+所以，最终我们在所有的目录中都找不到 spring.xml，并且会报错提示加载不了文件。报错的地方位于 ServletContextResource#getInputStream 中：
+
+```java
+@Override
+public InputStream getInputStream() throws IOException {
+    InputStream is = this.servletContext.getResourceAsStream(this.path);
+    if (is == null) {
+        throw new FileNotFoundException("Could not open " + getDescription());
+    }
+    return is;
+}
+```
+
+- 问题修正
+
+这里我们可以采用两种方式。
+
+1. 在加载目录上放置 spring.xml
+
+我们可以建立一个 src/main/webapp，然后把 spring.xml 复制一份进去就可以了。也可以在 /src/main/resources 下面再建立一个 resources 目录，然后放置进去也可以。
+
+2. 在 @ImportResource 使用 classpath 加载方式
+
+```java
+@Configuration
+//@ImportResource(locations = {"spring.xml"})
+@ImportResource(locations = {"classpath:spring.xml"})
+public class Config {
+}
+```
+
+这里，我们可以通过 Spring 的官方文档简单了解下不同加载方式的区别，参考 https://docs.spring.io/spring-framework/docs/2.5.x/reference/resources.html
+
+![image-20220905212225522](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052122892.png)
+
+很明显，我们一般都不会使用本案例的方式（即 locations = {"spring.xml"}），毕竟它已经依赖于使用的 ApplicationContext。
+
+**案例 2：容易出错的 Mock**
+
+有时候，我们会发现 Spring Test 运行起来非常缓慢，寻根溯源之后，你会发现主要是因为很多测试都启动了 Spring Context，示例如下：
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052125196.png" alt="image-20220905212542829" style="zoom: 33%;" />
+
+那么为什么有的测试会多次启动 Spring Context？在具体解析这个问题之前，我们先模拟写一个案例来复现这个问题。
+
+我们先在 Spring Boot 程序中写几个被测试类：
+
+```java
+@Service
+public class ServiceOne {
+}
+@Service
+public class ServiceTwo {
+}
+```
+
+然后分别写出对应的测试类：
+
+```java
+@SpringBootTest()
+class ServiceOneTests {
+    @MockBean
+    ServiceOne serviceOne;
+    
+    @Test
+    public void test() {
+        System.out.println(serviceOne);
+    }
+}
+
+@SpringBootTest()
+class ServiceTwoTests {
+    @MockBean
+    ServiceTwo serviceTwo;
+    
+    @Test
+    public void test() {
+        System.out.println(serviceTwo);
+    }
+}
+```
+
+在上述测试类中，我们都使用了 @MockBean。写完这些程序，批量运行测试，你会发现 Spring Context 果然会被运行多次。
+
+- 案例解析
+
+当我们运行一个测试的时候，正常情况是不会重新创建一个 Spring Context 的。这是因为 Spring Test 使用了 Context 的缓存以避免重复创建 Context。那么这个缓存是怎么维护的呢？我们可以通过 DefaultCacheAwareContextLoaderDelegate#loadContext 来看下 Context 的获取和缓存逻辑：
+
+```java
+public ApplicationContext loadContext(MergedContextConfiguration mergedContextConfiguration) {
+    synchronized(this.contextCache) {
+        ApplicationContext context = this.contextCache.get(mergedContextConfiguration);
+        if (context == null) {
+            try {
+                context = this.loadContextInternal(mergedContextConfiguration);
+                //省略非关键代码
+                this.contextCache.put(mergedContextConfiguration, context);
+            } catch (Exception var6) {
+                //省略非关键代码
+            }
+        } else if (logger.isDebugEnabled()) {
+            //省略非关键代码
+        }
+        this.contextCache.logStatistics();
+        return context;
+    }
+}
+```
+
+从上述代码可以看出，缓存的 Key 是 MergedContextConfiguration。所以一个测试要不要启动一个新的 Context，就取决于根据这个测试 Class 构建的 MergedContextConfiguration 是否相同。而是否相同取决于它的 hashCode() 实现：
+
+```java
+public int hashCode() {
+    int result = Arrays.hashCode(this.locations);
+    result = 31 * result + Arrays.hashCode(this.classes);
+    result = 31 * result + this.contextInitializerClasses.hashCode();
+    result = 31 * result + Arrays.hashCode(this.activeProfiles);
+    result = 31 * result + Arrays.hashCode(this.propertySourceLocations);
+    result = 31 * result + Arrays.hashCode(this.propertySourceProperties);
+    result = 31 * result + this.contextCustomizers.hashCode();
+    result = 31 * result + (this.parent != null ? this.parent.hashCode() : 0);
+    result = 31 * result + nullSafeClassName(this.contextLoader).hashCode();
+    return result;
+}
+```
+
+从上述方法，你可以看出只要上述元素中的任何一个不同都会导致一个 Context 会重新创建出来。关于这个缓存机制和 Key 的关键因素你可以参考 Spring 的官方文档，也有所提。
+
+https://docs.spring.io/springframework/docs/current/reference/html/testing.html#testcontext-ctxmanagement-caching
+
+现在回到本案例，为什么会创建一个新的 Context 而不是复用？根源在于两个测试的 contextCustomizers 这个元素的不同。如果你不信的话，你可以调试并对比下。
+
+ServiceOneTests 的 MergedContextConfiguration 示例如下：
+
+![image-20220905214110658](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052141075.png)
+
+ServiceTwoTests 的 MergedContextConfiguration 示例如下：
+
+![image-20220905214130656](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052141034.png)
+
+而追溯到 ContextCustomizer 的创建，我们可以具体来看下。
+
+当我们运行一个测试（testClass）时，我们会使用 MockitoContextCustomizerFactory#createContextCustomizer 来创建一个 ContextCustomizer，代码示例如下：
+
+```java
+class MockitoContextCustomizerFactory implements ContextCustomizerFactory {
+    MockitoContextCustomizerFactory() {
+    }
+    public ContextCustomizer createContextCustomizer(
+        Class<?> testClass, List<ContextConfigurationAttributes> configAttributes) {
+        DefinitionsParser parser = new DefinitionsParser();
+        parser.parse(testClass);
+        return new MockitoContextCustomizer(parser.getDefinitions());
+    }
+}
+```
+
+创建的过程是由 DefinitionsParser 来解析这个测试 Class（例如案例中的ServiceOneTests）。解析的过程参考 DefinitionsParser#parse：
+
+```java
+void parse(Class<?> source) {
+    this.parseElement(source);
+    ReflectionUtils.doWithFields(source, this::parseElement);
+}
+
+private void parseElement(AnnotatedElement element) {
+    MergedAnnotations annotations = MergedAnnotations.from(element, SearchStrategy.SUPERCLASS);
+    //MockBean 处理
+    annotations.stream(MockBean.class).map(MergedAnnotation::synthesize)
+        .forEach((annotation) -> {
+            this.parseMockBeanAnnotation(annotation, element);
+        });
+    //SpyBean 处理
+    annotations.stream(SpyBean.class).map(MergedAnnotation::synthesize)
+        .forEach((annotation) -> {
+            this.parseSpyBeanAnnotation(annotation, element);
+        });
+}
+
+private void parseMockBeanAnnotation(MockBean annotation, AnnotatedElement element) {
+    Set<ResolvableType> typesToMock = this.getOrDeduceTypes(element, annotation.value());
+    //省略非关键代码
+    Iterator var4 = typesToMock.iterator();
+    while(var4.hasNext()) {
+        ResolvableType typeToMock = (ResolvableType)var4.next();
+        MockDefinition definition = new MockDefinition(
+            annotation.name(), typeToMock, annotation.extraInterfaces(), 
+            annotation.answer(), annotation.serializable(), annotation.reset(),
+            QualifierDefinition.forElement(element));
+        //添加到 DefinitionsParser#definitions
+        this.addDefinition(element, definition, "mock");
+    }
+}
+```
+
+如果这个测试 Class 中包含了 MockBean 或者 SpyBean 标记的情况，则将对应标记的情况转化为 MockDefinition，最终添加到 ContextCustomizer 中。
+
+也就是说，Spring Context 重新创建的根本原因还是在于使用了 @MockBean 且不同，从而导致构建的 MergedContextConfiguration 不同，而 MergedContextConfiguration 正是作为 Cache 的 Key，Key 不同，Context 不能被复用，所以被重新创建了。
+
+- 问题修正
+
+到这，你会发现其实这种缓慢的根源是使用了 @MockBean 带来的一个正常现象。但是假设你非要去提速下，你也可以尝试使用下面的方式来解决，即把相关的 MockBean 都定义到一个地方去。例如针对本案例，修正方案如下：
+
+```java
+public class ServiceTests {
+    @MockBean
+    ServiceOne serviceOne;
+    @MockBean
+    ServiceTwo serviceTwo;
+}
+
+@SpringBootTest()
+class ServiceOneTests extends ServiceTests {
+    @Test
+    public void test() {
+        System.out.println(serviceOne);
+    }
+}
+
+@SpringBootTest()
+class ServiceTwoTests extends ServiceTests {
+    @Test
+    public void test() {
+        System.out.println(serviceTwo);
+    }
+}
+```
+
+重新运行测试，你会发现 Context 只会被创建一次，速度也有所提升了。
 
 
 
