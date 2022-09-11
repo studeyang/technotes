@@ -4,7 +4,7 @@
 
 **简单功能一再出现 Bug**
 
-![image-20220908223516980](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082235680.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082235680.png" alt="image-20220908223516980" style="zoom:50%;" />
 
 问题出现的根源：
 
@@ -13,23 +13,23 @@
 
 而 React 始终整体"刷新"页面，无需关心细节。
 
-![image-20220908223910543](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082239581.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082239581.png" alt="image-20220908223910543" style="zoom:50%;" />
 
 **React 解决了 UI 细节问题**
 
 数据模型如何解决?
 
-![image-20220908224039515](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082240552.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082240552.png" alt="image-20220908224039515" style="zoom:50%;" />
 
-![image-20220908224051081](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082240114.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082240114.png" alt="image-20220908224051081" style="zoom:50%;" />
 
 ## 02 以组件方式考虑 UI 的构建
 
-![image-20220908224244516](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082242549.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082242549.png" alt="image-20220908224244516" style="zoom: 50%;" />
 
 **理解 React 组件**
 
-![image-20220908224309056](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082243090.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082243090.png" alt="image-20220908224309056" style="zoom:50%;" />
 
 1. React 组件一般不提供方法，而是某种状态机；
 2. React 组件可以理解为一个纯函数；
@@ -37,7 +37,7 @@
 
 **受控组件 vs 非受控组件**
 
-![image-20220908224517076](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082245112.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082245112.png" alt="image-20220908224517076" style="zoom:50%;" />
 
 **何时创建组件：单一职责原则**
 
@@ -53,15 +53,15 @@
 
 **JSX：在 JavaScript 代码中直接写 HTML 标记**
 
-![image-20220908224801367](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082248405.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082248405.png" alt="image-20220908224801367" style="zoom:50%;" />
 
 JSX 的本质：动态创建组件的语法糖
 
-![image-20220908224841967](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082248006.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082248006.png" alt="image-20220908224841967" style="zoom:50%;" />
 
-![image-20220908224917142](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082249187.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082249187.png" alt="image-20220908224917142" style="zoom:50%;" />
 
-![image-20220908225122129](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082251172.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209082251172.png" alt="image-20220908225122129" style="zoom:50%;" />
 
 **JSX 优点**
 
@@ -74,6 +74,54 @@ JSX 的本质：动态创建组件的语法糖
 1. React 认为小写的 tag 是原生 DOM 节点，如 div；
 2. 大写字母开头为自定义组件；
 3. JSX 标记可以直接使用属性语法，例如<menu.Item />；
+
+## 04 React 组件的生命周期及其使用场景
+
+![image-20220909215141778](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209092151874.png)
+
+**constructor**
+
+**getDerivedStateFromProps**
+
+**componnentDidMount**
+
+**componentWillUnmount**
+
+**getSnapshotBeforeUpdate**
+
+**componentDidUpdate**
+
+**shouldComponentUpdate**
+
+## 05 理解 Virtual DOM 的工作原理，理解 key 属性的作用
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
