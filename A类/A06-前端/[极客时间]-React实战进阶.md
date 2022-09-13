@@ -81,19 +81,93 @@ JSX 的本质：动态创建组件的语法糖
 
 **constructor**
 
+1. 用于初始化内部状态，很少使用；
+2. 唯一可以直接修改 state 的地方；
+
 **getDerivedStateFromProps**
+
+1. 当 state 需要从 props 初始化时使用；
+2. 尽量不要使用：维护两者状态一致性会增加复杂度；
+3. 每次 render 都会调用；
+4. 典型场景：表单控件获取默认值；
 
 **componnentDidMount**
 
+1. UI 渲染完成后调用；
+2. 只执行一次；
+3. 典型场景：获取外部资源；
+
 **componentWillUnmount**
+
+1. 组件移除时被调用；
+2. 典型场景：资源释放；
 
 **getSnapshotBeforeUpdate**
 
+1. 在页面 render 之前调用，state 已更新；
+2. 典型场景：获取 render 之前的 DOM 状态；
+
 **componentDidUpdate**
+
+1. 每次 UI 更新时被调用；
+2. 典型场景：页面需要根据 props 变化重新获取数据；
 
 **shouldComponentUpdate**
 
+1. 决定 Virtual DOM 是否要重绘；
+2. 一般可以由 PureComponent 自动实现；
+3. 典型场景：性能优化；
+
 ## 05 理解 Virtual DOM 的工作原理，理解 key 属性的作用
+
+**虚拟 DOM 是如何工作的**
+
+![image-20220913213158407](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132131511.png)
+
+![image-20220913213213061](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132132133.png)
+
+**虚拟 DOM 的两个假设**
+
+1. 组件的 DOM 结构是相对稳定的；
+2. 类型相同的兄弟节点可以被唯一标识；；
+
+## 06 组件设计模式：高阶组件和函数作为组件
+
+**高阶组件（HOC）**
+
+![image-20220913214546027](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132145072.png)
+
+**函数作为子组件**
+
+![image-20220913214614979](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132146021.png)
+
+## 07 理解 Context API 的使用场景
+
+**React 16.3 新特性：Context API**
+
+![image-20220913215704819](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132157874.png)
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132157257.png" alt="image-20220913215739193" style="zoom:50%;" />
+
+## 08 使用脚手架工具创建 React 应用
+
+**为什么需要脚手架工具**
+
+![image-20220913220824166](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132208214.png)
+
+![image-20220913220838858](/Users/yanglulu/Library/Application Support/typora-user-images/image-20220913220838858.png)
+
+**create-react-app**
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132209745.png" alt="image-20220913220937677" style="zoom:50%;" />
+
+**Rekit**
+
+![image-20220913220949148](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132209194.png)
+
+**Online: Codesandbox.io**
+
+![image-20220913221003809](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132210852.png)
 
 
 
