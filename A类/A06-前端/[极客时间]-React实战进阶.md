@@ -122,9 +122,9 @@ JSX 的本质：动态创建组件的语法糖
 
 **虚拟 DOM 是如何工作的**
 
-![image-20220913213158407](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132131511.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132131511.png" alt="image-20220913213158407" style="zoom:50%;" />
 
-![image-20220913213213061](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132132133.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132132133.png" alt="image-20220913213213061" style="zoom:50%;" />
 
 **虚拟 DOM 的两个假设**
 
@@ -135,7 +135,7 @@ JSX 的本质：动态创建组件的语法糖
 
 **高阶组件（HOC）**
 
-![image-20220913214546027](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132145072.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132145072.png" alt="image-20220913214546027" style="zoom:50%;" />
 
 **函数作为子组件**
 
@@ -145,7 +145,7 @@ JSX 的本质：动态创建组件的语法糖
 
 **React 16.3 新特性：Context API**
 
-![image-20220913215704819](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132157874.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132157874.png" alt="image-20220913215704819" style="zoom:33%;" />
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132157257.png" alt="image-20220913215739193" style="zoom:50%;" />
 
@@ -153,7 +153,7 @@ JSX 的本质：动态创建组件的语法糖
 
 **为什么需要脚手架工具**
 
-![image-20220913220824166](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132208214.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132208214.png" alt="image-20220913220824166" style="zoom:33%;" />
 
 ![image-20220913220838858](/Users/yanglulu/Library/Application Support/typora-user-images/image-20220913220838858.png)
 
@@ -163,21 +163,79 @@ JSX 的本质：动态创建组件的语法糖
 
 **Rekit**
 
-![image-20220913220949148](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132209194.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132209194.png" alt="image-20220913220949148" style="zoom:50%;" />
 
 **Online: Codesandbox.io**
 
-![image-20220913221003809](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132210852.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132210852.png" alt="image-20220913221003809" style="zoom:50%;" />
 
+## 09 打包和部署
 
+**为什么需要打包？**
 
+1. 编译 ES6 语法特性，编译 JSX；
+2. 整合资源，例如图片，Less/Sass；
+3. 优化代码体积；
 
+**使用 Webpack 进行打包**
 
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142143497.png" alt="image-20220914214348372" style="zoom:50%;" />
 
+**打包注意事项**
 
+1. 设置 nodejs 环境为 production；
+2. 禁用开发时专用代码，比如 logger；
+3. 设置应用根路径；
 
+# 第二章 React 生态圈
 
+## 10 Redux(1) 前端为何需要状态管理库
 
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142153903.png" alt="image-20220914215354842" style="zoom:50%;" />
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142154760.png" alt="image-20220914215409714" style="zoom:50%;" />
+
+**Redux 特性：Single Source of Truth**
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142154626.png" alt="image-20220914215438570" style="zoom:50%;" />
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142154272.png" alt="image-20220914215450202" style="zoom: 33%;" />
+
+**Redux 特性：可预测性**
+
+state + action = new state
+
+**Redux 特性：纯函数更新 Store**
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142203319.png" alt="image-20220914220313218" style="zoom:67%;" />
+
+## 11 Redux(2) 深入理解 Store, Action, Reducer
+
+**理解 Store**
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142220223.png" alt="image-20220914222000175" style="zoom:50%;" />
+
+**理解 Action**
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142220263.png" alt="image-20220914222024193" style="zoom: 50%;" />
+
+**理解 Reducer**
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142207597.png" alt="image-20220914220730529" style="zoom:50%;" />
+
+**理解 combineReducers**
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142221802.png" alt="image-20220914222136747" style="zoom: 50%;" />
+
+**理解 bindActionCreators**
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142222232.png" alt="image-20220914222220164" style="zoom:50%;" />
+
+**理解 bindActionCreators**
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209142222327.png" alt="image-20220914222249268" style="zoom:50%;" />
+
+## 12 Redux(3) 在React中使用Redux
 
 
 
