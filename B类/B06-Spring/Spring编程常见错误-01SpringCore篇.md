@@ -10,7 +10,7 @@ Spring Web 篇：大多项目使用 Spring 还是为了进行 Web 开发，所�
 
 Spring 补充篇：作为补充，这部分我会重点介绍 Spring 测试、Spring 事务、Spring Data 相关问题。最后，我还会为你系统总结下 Spring 使用中发生问题的根本原因。
 
-# 01｜Spring Bean定义常见错误
+# 01｜Spring Bean 定义常见错误
 
 **案例 1：隐式扫描不到 Bean 的定义**
 
@@ -191,7 +191,7 @@ public class HelloWorldController {
 
 我们的方法调用最终并没有走入案例代码实现的 return null 语句，而是通过 BeanFactory 来获取 Bean。所以从这点也可以看出，其实在我们的 getServiceImpl 方法实现中，随便怎么写都行，这不太重要。
 
-# 02｜Spring Bean依赖注入常见错误（上）
+# 02｜Spring Bean 依赖注入常见错误（上）
 
 这节课我们来聊聊 Spring @Autowired。
 
@@ -835,7 +835,7 @@ public Student student4() {
 }
 ```
 
-# 04｜Spring Bean生命周期常见错误
+# 04｜Spring Bean 生命周期常见错误
 
 这节课我们来聊一聊 Spring Bean 的初始化过程及销毁过程中的一些问题。
 
@@ -1211,7 +1211,7 @@ public class AopConfig {
 添加这段代码后，我们执行 charge() 操作，发现不仅没有相关日志，而且在执行下面这一行代码的时候直接抛出了 NullPointerException：
 
 ```java
-String payNum = dminUserService.user.getPayNum();
+String payNum = adminUserService.user.getPayNum();
 ```
 
 - 案例解析
@@ -1287,7 +1287,7 @@ protected Object createProxyClassAndInstance(Enhancer enhancer, Callback[] callb
 
 这里我们可以了解到，Spring 会默认尝试使用 objenesis 方式实例化对象，如果失败则再次尝试使用常规方式实例化对象。现在，我们可以进一步查看 objenesis 方式实例化对象的流程。
 
-![image-20220725215756940](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252157098.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252157098.png" alt="image-20220725215756940" style="zoom:50%;" />
 
 参照上述截图所示调用栈，objenesis 方式最后使用了 JDK 的 ReflectionFactory.newConstructorForSerialization() 完成了代理对象的实例化。这种方式创建出来的对象是不会初始化类成员变量的。
 
@@ -1332,6 +1332,7 @@ protected Object createProxyClassAndInstance(Enhancer enhancer, Callback[] callb
         // 省略非关键代码
         ((Factory) proxyInstance).setCallbacks(callbacks);
         return proxyInstance;
+    }
 }
 ```
 
@@ -1339,13 +1340,13 @@ protected Object createProxyClassAndInstance(Enhancer enhancer, Callback[] callb
 
 说到这里，我们已经解决了问题。但其实你改变一个属性，也可以让产生的代理对象的属性值不为 null。例如修改启动参数 spring.objenesis.ignore 如下：
 
-![image-20220725220616162](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252206387.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252206387.png" alt="image-20220725220616162" style="zoom:50%;" />
 
 此时再调试程序，你会发现 adminUser 已经不为 null 了：
 
-![image-20220725220635292](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252206494.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207252206494.png" alt="image-20220725220635292" style="zoom:50%;" />
 
-# 06｜Spring AOP常见错误（下）
+# 06｜Spring AOP 常见错误（下）
 
 当一个系统采用的切面越来越多时，因为执行顺序而导致的问题便会逐步暴露出来，下面我们就重点看一下。
 
@@ -1516,7 +1517,7 @@ public class ElectricService {
 public class AopConfig {
     @Before("execution(* com.spring.puzzle.class5.example2.ElectricService.charge())")
     public void logBeforeMethod(JoinPoint pjp) throws Throwable {
-        System.out.println("step into ->"+pjp.getSignature());
+        System.out.println("step into ->" + pjp.getSignature());
     }
     
     @Before("execution(* com.spring.puzzle.class5.example2.ElectricService.charge())")
@@ -1574,7 +1575,7 @@ public class AopConfig {
 
 我们可以将原来的 validateAuthority() 改为 checkAuthority()，这种情况下，对增强 （Advisor）的排序，其实最后就是在比较字符 l 和 字符 c。显然易见，checkAuthority() 的排序会靠前，从而被优先执行，最终问题得以解决。
 
-# 07｜Spring事件常见错误
+# 07｜Spring 事件常见错误
 
 Spring 事件的设计比较简单。说白了，就是监听器设计模式在 Spring 中的一种实现，参考下图：
 
@@ -1592,7 +1593,7 @@ Spring 事件的设计比较简单。说白了，就是监听器设计模式在 
    >
    > ```java
    > public interface ApplicationListener<E extends ApplicationEvent> extends EventListener {
-   >     void onApplicationEvent(E event);
+   >      void onApplicationEvent(E event);
    > }
    > ```
 
@@ -1669,8 +1670,7 @@ ContextRefreshedEvent 的抛出可以参考方法 AbstractApplicationContext#fin
 ```java
 @Slf4j
 @Component
-public class MyApplicationEnvironmentPreparedEventListener implements 
-    ApplicationContext<ApplicationEnvironmentPreparedEvent> {
+public class MyApplicationEnvironmentPreparedEventListener implements ApplicationContext<ApplicationEnvironmentPreparedEvent> {
     public void onApplicationEvent(final ApplicationEnvironmentPreparedEvent event) {
         log.info("{} received: {}", this.toString(), event);
     }
@@ -1682,8 +1682,7 @@ public class MyApplicationEnvironmentPreparedEventListener implements
 ```java
 @Override
 public void environmentPrepared(ConfigurableEnvironment environment) {
-    this.initialMulticaster
-        .multicastEvent(new ApplicationEnvironmentPreparedEvent(this.application));
+    this.initialMulticaster.multicastEvent(new ApplicationEnvironmentPreparedEvent(this.application));
 }
 ```
 
@@ -1719,7 +1718,7 @@ this.initialMulticaster.addApplicationListener(listener);
 
 继续查看代码，我们会发现这个事件的监听器就存储在 SpringApplication#Listeners 中，调试下就可以找出所有的监听器，截图如下：
 
-![image-20220727224007359](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207272240582.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202207272240582.png" alt="image-20220727224007359" style="zoom:50%;" />
 
 从中我们可以发现并不存在我们定义的 MyApplicationEnvironmentPreparedEventListener，这是为何？
 
@@ -1731,12 +1730,12 @@ setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class)
 
 最终是从 META-INF/spring.factories 文件中获取 listener 的：
 
-```
+```properties
 org.springframework.context.ApplicationListener=\
-org.springframework.boot.ClearCachesApplicationListener,\
-org.springframework.boot.builder.ParentContextCloserApplicationListener,\
-org.springframework.boot.cloud.CloudFoundryVcapEnvironmentPostProcessor,\
-//省略其他监听器
+  org.springframework.boot.ClearCachesApplicationListener,\
+  org.springframework.boot.builder.ParentContextCloserApplicationListener,\
+  org.springframework.boot.cloud.CloudFoundryVcapEnvironmentPostProcessor,\
+  //省略其他监听器
 ```
 
 我们定义的监听器并没有被放置在 META-INF/spring.factories 中，实际上，我们的监听器监听的体系是另外一套，其关键组件如下：
@@ -1756,10 +1755,8 @@ org.springframework.boot.cloud.CloudFoundryVcapEnvironmentPostProcessor,\
 @SpringBootApplication
 public class Application {
     public static void main(String[] args) {
-        MyApplicationEnvironmentPreparedEventListener listener 
-            = new MyApplicationEnvironmentPreparedEventListener();
-        SpringApplication springApplication = new SpringApplicationBuilder(Application.class)
-            .listeners(listener).build();
+        MyApplicationEnvironmentPreparedEventListener listener = new MyApplicationEnvironmentPreparedEventListener();
+        SpringApplication springApplication = new SpringApplicationBuilder(Application.class).listeners(listener).build();
         springApplication.run(args);
     }
 }
@@ -1767,9 +1764,9 @@ public class Application {
 
 2. 使用 META-INF/spring.factories，即在 /src/main/resources 下面新建目录 META-INF，然后新建一个对应的 spring.factories 文件：
 
-```
+```properties
 org.springframework.context.ApplicationListener=\
-com.spring.puzzle.listener.example2.MyApplicationEnvironmentPreparedEventListener
+  com.spring.puzzle.listener.example2.MyApplicationEnvironmentPreparedEventListener
 ```
 
 **案例 3：部分事件监听器失效**
@@ -1838,11 +1835,11 @@ public void multicastEvent(final ApplicationEvent event, @Nullable ResolvableTyp
     ResolvableType type = (eventType != null ? eventType : resolveDefaultEventType(event));
     Executor executor = getTaskExecutor();
     for (ApplicationListener<?> listener : getApplicationListeners(event, type) {
-         if (executor != null) {
-             executor.execute(() -> invokeListener(listener, event));
-         } else {
-             invokeListener(listener, event);
-         }
+        if (executor != null) {
+            executor.execute(() -> invokeListener(listener, event));
+        } else {
+            invokeListener(listener, event);
+        }
     }
 }
 ```
@@ -1902,8 +1899,7 @@ public class MyFirstEventListener implements ApplicationListener<MyEvent> {
 
 ```java
 SimpleApplicationEventMulticaster simpleApplicationEventMulticaster = 
-    applicationContext.getBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME,                            
-                               SimpleApplicationEventMulticaster.class);
+    applicationContext.getBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME, SimpleApplicationEventMulticaster.class);
 simpleApplicationEventMulticaster.setErrorHandler(TaskUtils.LOG_AND_SUPPRESS_ERROR_HANDLER);
 ```
 

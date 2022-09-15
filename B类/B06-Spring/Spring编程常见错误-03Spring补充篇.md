@@ -186,7 +186,7 @@ public DriverConfigLoaderBuilderCustomizer driverConfigLoaderBuilderCustomizer()
 
 有时候，我们使用 Spring Data 做连接时，会比较在意我们的内存占用。例如我们使用 Spring Data Cassandra 操作 Cassandra 时，可能会发现类似这样的问题：
 
-![image-20220827211645980](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208272116147.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208272116147.png" alt="image-20220827211645980" style="zoom:67%;" />
 
 Spring Data Cassandra 在连接 Cassandra 之后，会获取 Cassandra 的 Metadata 信息，这个内存占用量是比较大的，因为它存储了数据的 Token Range 等信息。如上图所示，在我们的应用中，占用 40M 以上已经不少了，但问题是为什么有 4 个占用 40 多 M 呢？难道不是只建立一个连接么？
 
@@ -479,7 +479,7 @@ public class AppConfig {
 
 我们通过 debug 沿着 saveStudent 继续往下跟，得到了一个这样的调用栈：
 
-![image-20220828214520385](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208282145613.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208282145613.png" alt="image-20220828214520385" style="zoom:67%;" />
 
 从这个调用栈中我们看到了熟悉的 CglibAopProxy，另外事务本质上也是一种特殊的切面，在创建的过程中，被 CglibAopProxy 代理。事务处理的拦截器是 TransactionInterceptor，它支撑着整个事务功能的架构，我们来分析下这个拦截器是如何实现事务特性的。
 
@@ -1282,20 +1282,20 @@ System.out.println(result);
 
 使用 Wireshark 抓包工具抓出来的 Http 请求如下：
 
-![image-20220904205741767](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042057099.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042057099.png" alt="image-20220904205741767" style="zoom:50%;" />
 
 从上图可以看出，我们实际上是将定义的表单数据以 JSON 请求体（Body）的形式提交过去了，所以我们的接口处理自然取不到任何表单参数。
 
 那么为什么会以 JSON 请求体来提交数据呢？这里我们不妨扫一眼 RestTemplate 中执行上述代码时的关键几处代码调用。首先，我们看下上述代码的调用栈：
 
-![image-20220904205905906](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042059206.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042059206.png" alt="image-20220904205905906" style="zoom: 67%;" />
 
 我们最终使用的是 Jackson 工具来对表单进行了序列化。使用到 JSON 的关键之处在于其中的关键调用
 RestTemplate.HttpEntityRequestCallback#doWithRequest。
 
 这个方法实际上功能很简单：根据当前要提交的 Body 内容，遍历当前支持的所有编解码器，如果找到合适的编解码器，就使用它来完成 Body 的转化。这里我们不妨看下 JSON 的编解码器对是否合适的判断，参考 AbstractJackson2HttpMessageConverter#canWrite：
 
-![image-20220904210035376](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042100732.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042100732.png" alt="image-20220904210035376" style="zoom:50%;" />
 
 可以看出，当我们使用的 Body 是一个 HashMap 时，是可以完成 JSON 序列化的。所以在后续将这个表单序列化为请求 Body 也就不奇怪了。
 
@@ -1350,7 +1350,7 @@ public void write(MultiValueMap<String, ?> map, @Nullable MediaType contentType,
 
 发送出的数据截图如下：
 
-![image-20220904210831488](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042108775.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042108775.png" alt="image-20220904210831488" style="zoom:50%;" />
 
 **案例 2：当 URL 中含有特殊字符**
 
@@ -1386,7 +1386,7 @@ helloworld:1
 
 我们使用调试方式去查看解析后的 URL，截图如下：
 
-![image-20220904212018518](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042120810.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042120810.png" alt="image-20220904212018518" style="zoom:50%;" />
 
 可以看出，para1 丢掉的 #2 实际是以 Fragment 的方式被记录下来了。
 
@@ -1400,7 +1400,7 @@ protocol://hostname[:port]/path/[?query]#fragment
 
 接着我们看下 URL 解析的调用栈，示例如下：
 
-![image-20220904212228047](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042122381.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042122381.png" alt="image-20220904212228047" style="zoom:67%;" />
 
 参考上述调用栈，解析 URL 的关键点在于 UriComponentsBuilder#fromUriString 实现。Query 和 Fragment 都有所处理。最终它们根据 URI_PATTERN 各自找到了相应的值 (1 和 2)，虽然这并不符合我们的原始预期。
 
@@ -1424,7 +1424,7 @@ helloworld:1#2
 
 与之前的案例代码进行比较，你会发现 URL 的组装方式发生了改变。但最终可以获取到我们预期的效果，调试视图参考如下：
 
-![image-20220904212538746](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042125043.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209042125043.png" alt="image-20220904212538746" style="zoom:67%;" />
 
 如果你想了解更多的话，还可以参考 UriComponentsBuilder#fromHttpUrl，并与之前使用的 UriComponentsBuilder#fromUriString 进行比较。
 
@@ -1598,25 +1598,25 @@ class ApplicationTests {
 
 1. 启动程序加载 spring.xml
 
-![image-20220905211119648](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052111988.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052111988.png" alt="image-20220905211119648" style="zoom:67%;" />
 
 可以看出，它最终以 ClassPathResource 形式来加载，这个资源的情况如下：
 
-![image-20220905211136488](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052111827.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052111827.png" alt="image-20220905211136488" style="zoom:50%;" />
 
 而具体到加载实现，它使用的是 ClassPathResource#getInputStream 来加载 spring.xml 文件：
 
-![image-20220905211158435](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052111781.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052111781.png" alt="image-20220905211158435" style="zoom:67%;" />
 
 从上述调用及代码实现，可以看出最终是可以加载成功的。
 
 2. 测试加载 spring.xml
 
-![image-20220905211248372](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052112761.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052112761.png" alt="image-20220905211248372" style="zoom:67%;" />
 
 可以看出它是按 ServletContextResource 来加载的，这个资源的情况如下：
 
-![image-20220905211302446](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052113785.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052113785.png" alt="image-20220905211302446" style="zoom:67%;" />
 
 具体到实现，它最终使用的是 MockServletContext#getResourceAsStream 来加载文件：
 
@@ -1679,7 +1679,7 @@ src/main/webapp
 
 当程序运行起来后，src/main/resource 下的文件最终是不带什么 resource 的。关于这点，你可以直接查看编译后的目录（本地编译后是 target\classes 目录），示例如下：
 
-![image-20220905211813030](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052118390.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052118390.png" alt="image-20220905211813030" style="zoom:67%;" />
 
 所以，最终我们在所有的目录中都找不到 spring.xml，并且会报错提示加载不了文件。报错的地方位于 ServletContextResource#getInputStream 中：
 
@@ -1714,7 +1714,7 @@ public class Config {
 
 这里，我们可以通过 Spring 的官方文档简单了解下不同加载方式的区别，参考 https://docs.spring.io/spring-framework/docs/2.5.x/reference/resources.html
 
-![image-20220905212225522](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052122892.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052122892.png" alt="image-20220905212225522" style="zoom: 67%;" />
 
 很明显，我们一般都不会使用本案例的方式（即 locations = {"spring.xml"}），毕竟它已经依赖于使用的 ApplicationContext。
 
@@ -1815,11 +1815,11 @@ https://docs.spring.io/springframework/docs/current/reference/html/testing.html#
 
 ServiceOneTests 的 MergedContextConfiguration 示例如下：
 
-![image-20220905214110658](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052141075.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052141075.png" alt="image-20220905214110658" style="zoom:67%;" />
 
 ServiceTwoTests 的 MergedContextConfiguration 示例如下：
 
-![image-20220905214130656](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052141034.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209052141034.png" alt="image-20220905214130656" style="zoom:67%;" />
 
 而追溯到 ContextCustomizer 的创建，我们可以具体来看下。
 

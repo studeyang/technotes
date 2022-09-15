@@ -74,7 +74,7 @@ CPU 的缓存就利用了程序的局部性原理：CPU 从内存中加载数据
 
 首先是 ArrayBlockingQueue。生产者线程向 ArrayBlockingQueue 增加一个元素，每次增加元素 E 之前，都需要创建一个对象 E，如下图所示，ArrayBlockingQueue 内部有 6 个元素，这 6 个元素都是由生产者线程创建的，由于创建这些元素的时间基本上是离散的，所以这些元素的内存地址大概率也不是连续的。
 
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210913222745.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210913222745.png" alt="img" style="zoom:50%;" />
 
 下面我们再看看 Disruptor 是如何处理的。
 
@@ -90,7 +90,7 @@ for (int i=0; i<bufferSize; i++) {
 
 Disruptor 内部 RingBuffer 的结构可以简化成下图：
 
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210913223332.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210913223332.png" alt="img" style="zoom:50%;" />
 
 那问题来了，数组中所有元素内存地址连续能提升性能吗？
 
@@ -123,7 +123,7 @@ int count;
 
 当 CPU 从内存中加载 takeIndex 的时候，会同时将 putIndex 以及 count 都加载进 Cache。下图是某个时刻 CPU 中 Cache 的状况。
 
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210913224928.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210913224928.png" alt="img" style="zoom:50%;" />
 
 > 为了简化，缓存行中我们仅列出了 takeIndex 和 putIndex。
 
@@ -135,7 +135,7 @@ int count;
 
 ArrayBlockingQueue 的入队和出队操作是用锁来保证互斥的，所以入队和出队不会同时发生。如果允许入队和出队同时发生，那就会导致线程 A 和线程 B 争用同一个缓存行，这样也会导致性能问题。所以为了更好地利用缓存，我们必须避免伪共享，那如何避免呢？
 
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210913225349.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210913225349.png" alt="img" style="zoom:50%;" />
 
 方案很简单，每个变量独占一个缓存行、不共享缓存行就可以了，具体技术是缓存行填充。比如想让 takeIndex 独占一个缓存行，可以在 takeIndex 的前后各填充 56 个字节，这样就一定能保证 takeIndex 独占一个缓存行。
 

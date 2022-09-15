@@ -15,11 +15,11 @@ public class HelloWorldController {
 }
 ```
 
-当我们使用 http://localhost:8080/hi1/xiaoming 访问这个服务时，会返回"xiaoming"，即 Spring 会把 name 设置为 URL 中对应的值。
+当我们使用 http://localhost:8080/hi1/xiaoming 访问这个服务时，会返回"xiaoming"，即 Spring 会把 name 设置为 URL 中对应的值。
 
 但是假设这个 name 中含有特殊字符 / 时，例如 http://localhost:8080/hi1/xiao/ming，会如何？具体错误如下所示：
 
-![image-20220801221940581](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208012219747.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208012219747.png" alt="image-20220801221940581" style="zoom:50%;" />
 
 但是当 name 的字符串以 / 结尾时，/ 会被自动去掉。例如我们访问 http://localhost:8080/hi1/xiaoming/，Spring 并不会报错，而是返回 xiaoming。
 
@@ -31,8 +31,7 @@ public class HelloWorldController {
 
 ```java
 @Nullable
-protected HandlerMethod lookupHandlerMethod(
-    String lookupPath, HttpServletRequest request) throws Exception {
+protected HandlerMethod lookupHandlerMethod(String lookupPath, HttpServletRequest request) throws Exception {
     List<Match> matches = new ArrayList<>();
     //尝试按照 URL 进行精准匹配
     List<T> directPathMatches = this.mappingRegistry.getMappingsByUrl(lookupPath);
@@ -54,8 +53,7 @@ protected HandlerMethod lookupHandlerMethod(
         }
         //省略其他非关键代码
         return bestMatch.handlerMethod;
-    }
-    else {
+    } else {
         //匹配不上，直接报错
         return handleNoMatch(this.mappingRegistry.getMappings().keySet(), lookupPath, request);
     }
@@ -68,7 +66,7 @@ protected HandlerMethod lookupHandlerMethod(
 
 这个步骤执行的代码语句是"this.mappingRegistry.getMappingsByUrl(lookupPath)"，实际上，它是查询 MappingRegistry#urlLookup，它的值可以用调试视图查看，如下图所示：
 
-![image-20220801222343140](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208012223197.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208012223197.png" alt="image-20220801222343140" style="zoom:50%;" />
 
 显然，http://localhost:8080/hi1/xiao/ming 的 lookupPath 是"/hi1/xiao/ming"，并不能得到任何精确匹配。这里需要补充的是，"/hi1/{name}"这种定义本身也没有出现在 urlLookup 中。
 
@@ -76,7 +74,7 @@ protected HandlerMethod lookupHandlerMethod(
 
 在步骤 1 匹配失败时，会根据请求来尝试模糊匹配，待匹配的匹配方法可参考下图：
 
-![image-20220801222609581](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208012226641.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208012226641.png" alt="image-20220801222609581" style="zoom:50%;" />
 
 显然，"/hi1/{name}"这个匹配方法已经出现在待匹配候选中了。具体匹配过程可以参考方法 RequestMappingInfo#getMatchingCondition：
 
@@ -99,11 +97,9 @@ private AntPathMatcher antPathMatcher = new AntPathMatcher();
 
 @RequestMapping(path = "/hi1/**", method = RequestMethod.GET)
 public String hi1(HttpServletRequest request) {
-    String path = (String) request.getAttribute(
-        HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
-    //matchPattern 即为"/hi1/**"
-    String matchPattern = (String) request.getAttribute(
-        HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+    String path = (String) request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
+    // matchPattern 即为"/hi1/**"
+    String matchPattern = (String) request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
     return antPathMatcher.extractPathWithinPattern(matchPattern, path);
 }
 ```
@@ -141,7 +137,7 @@ public String hi1(HttpServletRequest request) {
 
 项目上线后就失效了，报错 500，提示匹配不上。
 
-![image-20220802220259134](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208022202330.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208022202330.png" alt="image-20220802220259134" style="zoom: 67%;" />
 
 - 案例解析
 
@@ -151,7 +147,7 @@ public String hi1(HttpServletRequest request) {
 javap -verbose HelloWorldController.class
 ```
 
-![image-20220802220424316](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208022204379.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208022204379.png" alt="image-20220802220424316" style="zoom:50%;" />
 
 debug 参数开启的部分信息就是 LocalVaribleTable，而 paramters 参数开启的信息就是 MethodParameters。观察它们的信息，你会发现它们都含有参数名 name。
 
@@ -160,8 +156,7 @@ debug 参数开启的部分信息就是 LocalVaribleTable，而 paramters 参数
 这里我们可以顺带说下 Spring 解析请求参数名称的过程，参考代码 AbstractNamedValueMethodArgumentResolver#updateNamedValueInfo：
 
 ```java
-private NamedValueInfo updateNamedValueInfo(
-    MethodParameter parameter, NamedValueInfo) {
+private NamedValueInfo updateNamedValueInfo(MethodParameter parameter, NamedValueInfo) {
     String name = info.name;
     if (info.name.isEmpty()) {
         name = parameter.getParameterName();
@@ -171,8 +166,7 @@ private NamedValueInfo updateNamedValueInfo(
                 + "] not available, and parameter name information not found in class file either.");
         }
     }
-    String defaultValue = (ValueConstants.DEFAULT_NONE.equals(info.defaultValue)
-                           ? null : info.defaultValue);
+    String defaultValue = (ValueConstants.DEFAULT_NONE.equals(info.defaultValue) ? null : info.defaultValue);
     return new NamedValueInfo(name, info.required, defaultValue);
 }
 ```
@@ -197,15 +191,14 @@ private NamedValueInfo updateNamedValueInfo(
 
 ```java
 @RequestMapping(path = "/hi4", method = RequestMethod.GET)
-public String hi4(@RequestParam("name") String name, 
-                  @RequestParam("address") address) {
+public String hi4(@RequestParam("name") String name, @RequestParam("address") address) {
     return name + ":" + address;
 }
 ```
 
 在访问 http://localhost:8080/hi4?name=xiaoming&address=beijing 时并不会出问题，但是一旦用户仅仅使用 name 做请求（即 http://localhost:8080/hi4?name=xiaoming ）时，则会直接报错如下：
 
-![image-20220803214049384](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208032140535.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208032140535.png" alt="image-20220803214049384" style="zoom: 67%;" />
 
 既然不存在 address，address 应该设置为 null，而不应该是直接报错不是么？接下来我们就分析下。
 
@@ -214,10 +207,8 @@ public String hi4(@RequestParam("name") String name,
 按注解名（@RequestParam）来确定解析发生的位置是在 RequestParamMethodArgumentResolver 中。接下来我们看下 RequestParamMethodArgumentResolver 对参数解析的一些关键操作，参考其父类方法 AbstractNamedValueMethodArgumentResolver#resolveArgument：
 
 ```java
-public final Object resolveArgument(
-    MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer,
-    NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory)
-    throws Exception {
+public final Object resolveArgument(MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer,
+    NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory) throws Exception {
     NamedValueInfo namedValueInfo = getNamedValueInfo(parameter);
     MethodParameter nestedParameter = parameter.nestedIfOptional();
     //省略其他非关键代码
@@ -229,8 +220,7 @@ public final Object resolveArgument(
         } else if (namedValueInfo.required && !nestedParameter.isOptional()) {
             handleMissingValue(namedValueInfo.name, nestedParameter, webRequest);
         }
-        arg = handleNullValue(namedValueInfo.name, 
-                              arg, nestedParameter.getNestedParameterType());
+        arg = handleNullValue(namedValueInfo.name, arg, nestedParameter.getNestedParameterType());
     }
     //省略后续代码：类型转化等工作
     return arg;
@@ -308,8 +298,7 @@ public String hi6(@RequestParam("Date") Date date) {
 }
 ```
 
-我们使用符合日期格式的 URL 来访问，例如
-http://localhost:8080/hi6?date=2021-5-1 20:26:53，我们会发现 Spring 并不能完成转化，而是报错如下：
+我们使用符合日期格式的 URL 来访问，例如 `http://localhost:8080/hi6?date=2021-5-1 20:26:53`，我们会发现 Spring 并不能完成转化，而是报错如下：
 
 ```
 Failed to convert value of type 'java.lang.String' to required type 'java.util.Date
@@ -321,8 +310,7 @@ Failed to convert value of type 'java.lang.String' to required type 'java.util.D
 
 ```java
 @Nullable
-protected Object resolveName(String name, MethodParameter parameter, 
-                             NativeWebRequest request) throws Exception {
+protected Object resolveName(String name, MethodParameter parameter, NativeWebRequest request) throws Exception {
     //省略其他非关键代码
     if (arg == null) {
         String[] paramValues = request.getParameterValues(name);
@@ -386,8 +374,7 @@ http://localhost:8080/hi6?date=Sat, 12 Aug 1995 13:30:00 GMT
 
 2. 使用好内置格式转化器
 
-在 Spring 中，要完成 String 对于 Date 的转化，ObjectToObjectConverter 并不是最好的转化器。我们可以使用更强大的 AnnotationParserConverter。在 Spring 初
-始化时，会构建一些针对日期型的转化器，即相应的一些 AnnotationParserConverter 的实例。但是为什么有时候用不上呢？
+在 Spring 中，要完成 String 对于 Date 的转化，ObjectToObjectConverter 并不是最好的转化器。我们可以使用更强大的 AnnotationParserConverter。在 Spring 初始化时，会构建一些针对日期型的转化器，即相应的一些 AnnotationParserConverter 的实例。但是为什么有时候用不上呢？
 
 这是因为 AnnotationParserConverter 有目标类型的要求。参考 FormattingConversionService#addFormatterForFieldAnnotation 方法的调试试图：
 
@@ -468,10 +455,8 @@ Key:value2
 
 ```java
 @Override
-public Object resolveArgument(
-    MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer,
-    NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory)
-    throws Exception {
+public Object resolveArgument(MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer,
+    NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory) throws Exception {
     Class<?> paramType = parameter.getParameterType();
     if (MultiValueMap.class.isAssignableFrom(paramType)) {
         // ...
@@ -500,10 +485,8 @@ public Object resolveArgument(
 
 ```java
 @Override
-public Object resolveArgument(
-    MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer,
-    NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory)
-    throws Exception {
+public Object resolveArgument(MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer,
+    NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory) throws Exception {
     Class<?> paramType = parameter.getParameterType();
     if (MultiValueMap.class.isAssignableFrom(paramType)) {
         MultiValueMap<String, String> result;
@@ -551,8 +534,7 @@ String[] headerValues = webRequest.getHeaderValues(headerName)
 
 ```java
 @RequestMapping(path = "/hi2", method = RequestMethod.GET)
-public String hi2(@RequestHeader("MyHeader") String myHeader, 
-                  @RequestHeader MultiValueMap map) {
+public String hi2(@RequestHeader("MyHeader") String myHeader, @RequestHeader MultiValueMap map) {
     return myHeader + " compare with : " + map.get("MyHeader");
 }
 ```
@@ -620,8 +602,7 @@ public HttpHeaders() {
 
 ```java
 @RequestMapping(path = "/hi2", method = RequestMethod.GET)
-public String hi2(@RequestHeader("MyHeader") String myHeader, 
-                  @RequestHeader HttpHeaders map) {
+public String hi2(@RequestHeader("MyHeader") String myHeader, @RequestHeader HttpHeaders map) {
     return myHeader + " compare with : " + map.get("MyHeader");
 }
 ```
@@ -634,7 +615,7 @@ public String hi2(@RequestHeader("MyHeader") String myHeader,
 
 ```java
 @RequestMapping(path = "/hi3", method = RequestMethod.GET)
-public String hi3(HttpServletResponse httpServletResponse){
+public String hi3(HttpServletResponse httpServletResponse) {
     httpServletResponse.addHeader("myheader", "myheadervalue");
     httpServletResponse.addHeader(HttpHeaders.CONTENT_TYPE, "application/json");
     return "ok";
@@ -689,7 +670,7 @@ public void handleReturnValue(@Nullable Object returnValue,
     ServletServerHttpRequest inputMessage = createInputMessage(webRequest);
     ServletServerHttpResponse outputMessage = createOutputMessage(webRequest);
     //对返回值(案例中为“ok”)根据返回类型做编码转化处理
-    writeWithMessageConverters(returnValue, returnType, inputMessage, outputMes
+    writeWithMessageConverters(returnValue, returnType, inputMessage, outputMessage);
 }
 ```
 
@@ -774,18 +755,15 @@ public class HelloController {
 ```java
 HttpServletRequest request = inputMessage.getServletRequest();
 List<MediaType> acceptableTypes = getAcceptableMediaTypes(request);
-List<MediaType> producibleTypes = getProducibleMediaTypes(
-    request, valueType, targetType);
+List<MediaType> producibleTypes = getProducibleMediaTypes(request, valueType, targetType);
 if (body != null && producibleTypes.isEmpty()) {
-    throw new HttpMessageNotWritableException(
-        "No converter found for return value of type: " + valueType);
+    throw new HttpMessageNotWritableException("No converter found for return value of type: " + valueType);
 }
 List<MediaType> mediaTypesToUse = new ArrayList<>();
 for (MediaType requestedType : acceptableTypes) {
     for (MediaType producibleType : producibleTypes) {
         if (requestedType.isCompatibleWith(producibleType)) {
-            mediaTypesToUse.add(
-                getMostSpecificMediaType(requestedType, producibleType));
+            mediaTypesToUse.add(getMostSpecificMediaType(requestedType, producibleType));
         }
     }
 }
@@ -850,7 +828,7 @@ public class HelloController {
 POST http://localhost:8080/springmvc3_war/app/hi2
 Content-Type: application/json
 {
-"name": "xiaoming"
+  "name": "xiaoming"
 }
 ```
 
@@ -892,12 +870,10 @@ if (jackson2Present) {
     Class<?> type = MappingJackson2HttpMessageConverter.class;
     RootBeanDefinition jacksonConverterDef = createConverterDefinition(type, source);
     GenericBeanDefinition jacksonFactoryDef = createObjectMapperFactoryDefinition(source);
-    jacksonConverterDef.getConstructorArgumentValues()
-        .addIndexedArgumentValue(0, jacksonFactoryDef);
+    jacksonConverterDef.getConstructorArgumentValues().addIndexedArgumentValue(0, jacksonFactoryDef);
     messageConverters.add(jacksonConverterDef);
 } else if (gsonPresent) {
-    messageConverters.add(
-        createConverterDefinition(GsonHttpMessageConverter.class, source));
+    messageConverters.add(createConverterDefinition(GsonHttpMessageConverter.class, source));
 }
 ```
 
@@ -965,8 +941,7 @@ mapper.setSerializationInclusion(Include.NON_NULL);
 @RestController
 public class HelloController {
     public HelloController(RequestMappingHandlerAdapter requestMappingHandlerAdapter) {
-        List<HttpMessageConverter<?>> messageConverters =
-            requestMappingHandlerAdapter.getMessageConverters();
+        List<HttpMessageConverter<?>> messageConverters = requestMappingHandlerAdapter.getMessageConverters();
         for (HttpMessageConverter<?> messageConverter : messageConverters) {
             if(messageConverter instanceof MappingJackson2HttpMessageConverter ) {
                 (((MappingJackson2HttpMessageConverter)messageConverter).getObjectMapper())
@@ -988,8 +963,7 @@ public class HelloController {
 public class ReadBodyFilter implements Filter {
     //省略其他非关键代码
     @Override
-    public void doFilter(ServletRequest request,
-                         ServletResponse response, FilterChain chain)
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
         throws IOException, ServletException {
         String requestBody = IOUtils.toString(request.getInputStream(), "utf-8");
         System.out.println("print request body in filter:" + requestBody);
@@ -1036,15 +1010,13 @@ public Student hi3(@RequestBody Student student) {
 @ControllerAdvice
 public class PrintRequestBodyAdviceAdapter extends RequestBodyAdviceAdapter {
     @Override
-    public boolean supports(
-        MethodParameter methodParameter, Type type, 
-        Class<? extends HttpMessageConverter<?>> aClass) {
+    public boolean supports(MethodParameter methodParameter, Type type, 
+                            Class<? extends HttpMessageConverter<?>> aClass) {
         return true;
     }
     @Override
-    public Object afterBodyRead(
-        Object body, HttpInputMessage inputMessage, MethodParameter parameter, 
-        Type targetType, Class<? extends HttpMessageConverter<?>> converterType) {
+    public Object afterBodyRead(Object body, HttpInputMessage inputMessage, MethodParameter parameter, 
+                                Type targetType, Class<? extends HttpMessageConverter<?>> converterType) {
         System.out.println("print request body in advice:" + body);
         return super.afterBodyRead(body, inputMessage, parameter, targetType, converterType);
     }
@@ -1128,7 +1100,7 @@ public Object invokeForRequest(
 
 Spring 内置了相当多的HandlerMethodArgumentResolver，参考下图：
 
-![image-20220809213245779](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208092132100.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208092132100.png" alt="image-20220809213245779" style="zoom:50%;" />
 
 当试图构建出一个方法参数时，会遍历所有支持的解析器（Resolver）以找出适合的解析器，查找代码参考 HandlerMethodArgumentResolverComposite#getArgumentResolver。
 
@@ -1277,7 +1249,7 @@ private Phone phone;
 
 当修正完问题后，我们会发现校验生效了。而如果此时去调试修正后的案例代码，会看到 phone 字段 MetaData 信息中的 cascading 确实为 true 了，参考下图：
 
-![image-20220811214620212](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208112146736.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208112146736.png" alt="image-20220811214620212" style="zoom:50%;" />
 
 **案例 3：误解校验执行**
 
@@ -1313,7 +1285,7 @@ private String name;
 
 其实 @Size 的 Javadoc 已经明确了这种情况，参考下图：
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208112156358.png" alt="image-20220811215626073" style="zoom: 33%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208112156358.png" alt="image-20220811215626073" style="zoom: 50%;" />
 
 我们也找到了完成 @Size 约束的执行方法，参考 SizeValidatorForCharSequence#isValid 方法：
 
@@ -1437,7 +1409,7 @@ Field timeCostFilter in com.spring.puzzle.web.filter.example1.MetricsService req
 
 这里我们直接检索对 @WebFilter 的使用，可以发现 WebFilterHandler 类使用了它，直接在 doHandle() 中加入断点，开始调试，执行调用栈如下：
 
-![image-20220812213549257](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122135398.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122135398.png" alt="image-20220812213549257" style="zoom:67%;" />
 
 从堆栈上，我们可以看出对 @WebFilter 的处理是在 Spring Boot 启动时，而处理的触发点是 ServletComponentRegisteringPostProcessor 这个类。它继承了 BeanFactoryPostProcessor 接口，实现对 @WebFilter、@WebListener、@WebServlet 的扫描和处理，其中对于 @WebFilter 的处理使用的就是上文中提到的WebFilterHandler。
 
@@ -1459,13 +1431,13 @@ public void doHandle(Map<String, Object> attributes, AnnotatedBeanDefinition bea
 
 从这里，我们第一次看到了 FilterRegistrationBean。通过调试上述代码的最后一行，可以看到，最终我们注册的 FilterRegistrationBean，其名字就是我们定义的 WebFilter 的名字：
 
-![image-20220812214151580](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122141771.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122141771.png" alt="image-20220812214151580" style="zoom:50%;" />
 
 现在，我们接着看第二个问题：TimeCostFilter 何时被实例化？为什么它没有成为一个普通的 Bean?
 
 关于这点，我们可以在 TimeCostFilter 的构造器中加个断点，然后使用调试的方式快速定位到它的初始化时机，这里我直接给出了调试截图：
 
-![image-20220812214845284](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122148430.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122148430.png" alt="image-20220812214845284" style="zoom:67%;" />
 
 在上述的关键调用栈中，结合源码，你可以找出一些关键信息：
 
@@ -1473,7 +1445,7 @@ public void doHandle(Map<String, Object> attributes, AnnotatedBeanDefinition bea
 2. FilterRegistrationBean 在被创建时（createBean）会创建 TimeCostFilter 来装配自身，TimeCostFilter 是通过 ResolveInnerBean 来创建的；
 3. TimeCostFilter 实例最终是一种 InnerBean，我们可以通过下面的调试视图看到它的一些关键信息：
 
-![image-20220812215418615](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122154800.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208122154800.png" alt="image-20220812215418615" style="zoom:50%;" />
 
 通过上述分析，可以看出最终 TimeCostFilter 实例是一种 InnerBean，所以自动注入不到也就非常合理了。
 
@@ -1532,7 +1504,7 @@ Filter 处理中时发生异常
 
 以 Tomcat 为例，我们先来看下它的 Filter 实现中最重要的类 ApplicationFilterChain。它采用的是责任链设计模式。责任链核心在于上下文 FilterChain 在不同对象 Filter 间的传递与状态的改变，通过这种链式串联，我们就可以对同一种对象资源实现不同业务场景的处理，达到业务解耦。整个 FilterChain 的结构就像这张图一样：
 
-![image-20220816224711268](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208162247544.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208162247544.png" alt="image-20220816224711268" style="zoom: 67%;" />
 
 这里我们不妨还是带着两个问题去理解 FilterChain：
 
@@ -1669,7 +1641,7 @@ private void internalDoFilter(ServletRequest request, ServletResponse response) 
 
 从下面这张调用栈的截图中，可以看到，经历了一个很长的看似循环的调用栈，我们终于从internalDoFilter() 执行到了 Controller 层的 saveUser()。这个过程就不再一一细讲了。
 
-![image-20220816223301964](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208162233201.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208162233201.png" alt="image-20220816223301964" style="zoom:67%;" />
 
 DemoFilter 代码中的 doFilter() 在捕获异常的部分执行了一次，随后在 try 外面又执行了一次，因而当抛出异常的时候，doFilter() 明显会被执行两次，相对应的
 servlet.service(request, response) 方法以及对应的 Controller 处理方法也被执行了两次。
@@ -2159,7 +2131,7 @@ public class MyWebSecurityConfig extends WebSecurityConfigurerAdapter {
 
 然后我们从浏览器访问我们的接口 http://localhost:8080/admin，使用上述 3 个用户登录，你会发现用户 admin1 可以登录，而 admin2 设置了同样的角色却不可以登陆，并且提示下面的错误：
 
-![image-20220821174312029](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208211743396.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208211743396.png" alt="image-20220821174312029" style="zoom:50%;" />
 
 如何理解这个现象？
 
@@ -2377,7 +2349,7 @@ throw NotAllowException
 
 我们不妨对 Spring 的异常处理过程先做一个了解，过滤器执行流程图如下。
 
-![image-20220822210156725](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208222101071.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208222101071.png" alt="image-20220822210156725" style="zoom: 67%;" />
 
 从这张图中可以看出，当所有的过滤器被执行完毕以后，Spring 才会进入 Servlet 相关的处理。而 DispatcherServlet 才是整个 Servlet 处理的核心，正是在这里，Spring 处理了请求和处理器之间的对应关系，以及这个案例我们所关注的问题——统一异常处理。
 
@@ -2405,7 +2377,7 @@ public HandlerExceptionResolver handlerExceptionResolver(
 }
 ```
 
-![image-20220822212932275](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208222129637.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208222129637.png" alt="image-20220822212932275" style="zoom: 67%;" />
 
 最终 Spring 实例化了 ExceptionHandlerExceptionResolver 类。该类实现了 InitializingBean 接口，并覆写了 afterPropertiesSet()。
 
