@@ -591,11 +591,15 @@ B+ 树为了维护索引有序性，在插入新值的时候需要做必要的�
 
 下面来具体介绍一下 B-树（Balance Tree），一个 m 阶的 B 树具有如下几个特征：
 
-1.根结点至少有两个孩子；<br>2.每个中间节点都包含 k-1 个元素和 k 个孩子，其中 m/2 <= k <= m；<br>3.每一个叶子节点都包含 k-1 个元素，其中 m/2 <= k <= m；<br>4.所有的叶子节点都位于同一层；<br>5.每个节点中的元素从小到大排列，节点当中 k-1 个元素正好是k个孩子包含的元素的值域分划。
+1. 根结点至少有两个孩子；
+2. 每个中间节点都包含 k-1 个元素和 k 个孩子，其中 m/2 <= k <= m；
+3. 每一个叶子节点都包含 k-1 个元素，其中 m/2 <= k <= m；
+4. 所有的叶子节点都位于同一层；
+5. 每个节点中的元素从小到大排列，节点当中 k-1 个元素正好是 k 个孩子包含的元素的值域分划。
 
 [**B+树：**](https://mp.weixin.qq.com/s/jRZMMONW3QP43dsDKIV9VQ)
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/B+树.jpg)
+![image-20220916214630416](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209162146577.png)
 
 B+树的特点：
 
@@ -617,11 +621,11 @@ B树跟B+树的不同点主要集中在这几个地方：
 在下面这个表 T 中，如果我执行 select * from T where k between 3 and 5，需要执行几次树的搜索操作，会扫描多少行？
 
 ```sql
-mysql> create table T (
-    ID int primary key,
-    k int NOT NULL DEFAULT 0, 
-    s varchar(16) NOT NULL DEFAULT '',
-    index k(k)
+create table T (
+  ID int primary key,
+  k int NOT NULL DEFAULT 0, 
+  s varchar(16) NOT NULL DEFAULT '',
+  index k(k)
 ) engine=InnoDB;
  
 insert into T values (100,1,'aa'),(200,2,'bb'),(300,3,'cc'),(500,5,'ee'),(600,6,'ff'),(700,7,'gg');
@@ -687,6 +691,12 @@ B+ 树这种索引结构，可以利用索引的“最左前缀”，来定位�
 **索引下推**
 
 MySQL 5.6 引入的索引下推优化（index condition pushdown)， 可以在索引遍历过程中，对索引中包含的字段先做判断，直接过滤掉不满足条件的记录，减少回表次数。
+
+我们还是以市民表的联合索引（name, age）为例。如果现在有一个需求：检索出表中“名字第一个字是张，而且年龄是 10 岁的所有男孩”。那么，SQL 语句是这么写的：
+
+```sql
+select * from tuser where name like '张%' and age=10 and ismale=1;
+```
 
 无索引下推执行流程：
 
