@@ -62,7 +62,7 @@ CPU、内存、I/O 设备在这个快速发展的过程中，有一个**核心�
 
 在单核时代，所有的线程都是在一颗 CPU 上执行，所有线程都是操作同一个 CPU 的缓存，一个线程对缓存的写，对另外一个线程来说一定是可见的。例如在下面的图中，线程 A 和线程 B 都是操作同一个 CPU 里面的缓存，所以线程 A 更新了变量 V 的值，那么线程 B 之后再访问变量 V，得到的一定是 V 的最新值（线程 A 写过的值）。
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/CPU 缓存与内存的关系图.png" alt="CPU 缓存与内存的关系图" style="zoom:50%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/CPU 缓存与内存的关系图.png" alt="CPU 缓存与内存的关系图" style="zoom:50%;" align="center" />
 
 一个线程对共享变量的修改，另外一个线程能够立刻看到，我们称为**可见性**。
 
