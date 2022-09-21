@@ -1160,6 +1160,6 @@ mysql> CREATE TABLE `t` (
 insert into t(id, c) values(1,1),(2,2),(3,3),(4,4);
 ```
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images//改不掉的诡异情况.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/改不掉的诡异情况.png)
 
 复现出来以后，请你再思考一下，在实际的业务开发中有没有可能碰到这种情况？你的应用代码会不会掉进这个“坑”里，你又是怎么解决的呢？

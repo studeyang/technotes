@@ -16,7 +16,22 @@ select name from CUser where id_card = 'xxxxxxxyyyyyyzzzzz';
 
 那么现在你有两个选择，要么给 id_card 字段创建唯一索引，要么创建一个普通索引。从性能的角度考虑，你选择唯一索引还是普通索引呢？选择的依据是什么呢？
 
-我们还是用第 4 篇文章[《深入浅出索引（上）》](https://github.com/dbses/TechNotes/blob/master/A-03 MySQL/[极客时间]-MySQL实战-01基础篇.md#04--深入浅出索引上)中的例子来说明，假设字段 k 上的值都不重复。
+我们还是用第 4 篇文章[《深入浅出索引（上）》](https://github.com/dbses/TechNotes/blob/master/A-03 MySQL/[极客时间]-MySQL实战-01基础篇.md#04--深入浅出索引上)中的例子来说明。
+
+> 假设，我们有一个主键列为 ID 的表，表中有字段 k，并且在 k 上有索引。这个表的建表语句是：
+>
+> ```sql
+> create table T(
+>   id int primary key, 
+>   k int not null, 
+>   name varchar(16),
+>   index (k)
+> ) engine=InnoDB;
+> ```
+>
+> 表中 R1~R5 的 (ID,k) 值分别为 (100,1)、(200,2)、(300,3)、(500,5) 和 (600,6)。
+
+假设字段 k 上的值都不重复。
 
 ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/InnoDB%20的索引组织结构.png)
 
@@ -51,8 +66,6 @@ select name from CUser where id_card = 'xxxxxxxyyyyyyzzzzz';
 
 将 change buffer 中的操作应用到原数据页，得到最新结果的过程称为 merge。除了访问这个数据页会触发 merge 外，系统有后台线程会定期 merge。在数据库正常关闭（shutdown）的过程中，也会执行 merge 操作。
 
-（change buffer 和 merge 这两个概念缺少图示。）
-
 显然，如果能够将更新操作先记录在 change buffer，减少读磁盘，语句的执行速度会得到明显的提升。而且，数据读入内存是需要占用 buffer pool 的，所以这种方式还能够避免占用内存，提高内存利用率。
 
 那么，什么条件下可以使用 change buffer 呢？
@@ -83,6 +96,12 @@ change buffer 用的是 buffer pool 里的内存，因此不能无限增大。ch
 
 之前我就碰到过一件事儿，有个 DBA 的同学跟我反馈说，他负责的某个业务的库内存命中率突然从 99% 降低到了 75%，整个系统处于阻塞状态，更新语句全部堵住。而探究其原因后，我发现这个业务有大量插入数据的操作，而他在前一天把其中的某个普通索引改成了唯一索引。
 
+> 这里的内存命中率 = 只读写内存次数 / 读写操作总次数；
+>
+> 99%可以理解为：执行100次写操作，最后1次的时候将 change buffer 写入磁盘；
+>
+> 75%可以理解为：执行100次写操作，有25次内存中没有要更新的目标页，需从磁盘读入内存。
+
 **change buffer 的使用场景**
 
 通过上面的分析，你已经清楚了使用 change buffer 对更新过程的加速作用。那么，普通索引的所有场景，使用 change buffer 都可以起到加速作用吗？
@@ -110,10 +129,10 @@ change buffer 容易和 redo log、WAL 混淆。WAL 提升性能的核心机制�
 假设，我们要在表上执行这个插入语句：
 
 ```sql
-mysql> insert into t(id,k) values(id1,k1),(id2,k2);
+insert into t(id,k) values(id1,k1),(id2,k2);
 ```
 
-假设k1 所在的数据页在内存 (InnoDB buffer pool) 中，k2 所在的数据页不在内存中。下图是带 change buffer 的更新状态图。
+假设 k1 所在的数据页在内存 (InnoDB buffer pool) 中，k2 所在的数据页不在内存中。下图是带 change buffer 的更新状态图。
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/带%20change%20buffer%20的更新过程.png" style="zoom: 67%;" />
 
@@ -139,6 +158,8 @@ mysql> insert into t(id,k) values(id1,k1),(id2,k2);
 2. 要读 Page 2 的时候，需要把 Page 2 从磁盘读入内存中，然后从内存返回。
 
 需要读 Page 2 的时候，这个数据页才会被 merge 读入内存。
+
+所以，如果要简单地对比这两个机制在提升更新性能上的收益的话，**redo log 主要节省的是随机写磁盘的 IO 消耗（转成顺序写），而 change buffer 主要节省的则是随机读磁盘的 IO 消耗。**
 
 # 10 | MySQL为什么有时候会选错索引？
 
