@@ -263,11 +263,113 @@ System.out.println(a.compareTo(b));//0
 
 ## 1.3 Java 魔法类 Unsafe 详解
 
+### Unsafe 介绍
 
+`Unsafe` 是位于 `sun.misc` 包下的一个类，主要提供一些用于执行低级别、不安全操作的方法，如直接访问系统内存资源、自主管理内存资源等，这些方法在提升 Java 运行效率、增强 Java 语言底层资源操作能力方面起到了很大的作用。
 
+### Unsafe 创建
 
+`sun.misc.Unsafe` 部分源码如下：
 
+```java
+public final class Unsafe {
+  // 单例对象
+  private static final Unsafe theUnsafe;
+  ......
+  private Unsafe() {
+  }
+  @CallerSensitive
+  public static Unsafe getUnsafe() {
+    Class var0 = Reflection.getCallerClass();
+    // 仅在引导类加载器`BootstrapClassLoader`加载时才合法
+    if(!VM.isSystemDomainLoader(var0.getClassLoader())) {
+      throw new SecurityException("Unsafe");
+    } else {
+      return theUnsafe;
+    }
+  }
+}
+```
 
+`Unsafe` 类为一单例实现，提供静态方法 `getUnsafe` 获取 `Unsafe`实例。这个看上去貌似可以用来获取 `Unsafe` 实例。但是，当我们直接调用这个静态方法的时候，会抛出 `SecurityException` 异常。
+
+在`getUnsafe`方法中，会对调用者的`classLoader`进行检查，判断当前类是否由`Bootstrap classLoader`加载，如果不是的话那么就会抛出一个`SecurityException`异常。也就是说，只有启动类加载器加载的类才能够调用 Unsafe 类中的方法，来防止这些方法在不可信的代码中被调用。
+
+如若想使用 `Unsafe` 这个类的话，应该如何获取其实例呢？
+
+1、利用反射获得 Unsafe 类中已经实例化完成的单例对象 `theUnsafe` 。
+
+```java
+private static Unsafe reflectGetUnsafe() {
+    try {
+      Field field = Unsafe.class.getDeclaredField("theUnsafe");
+      field.setAccessible(true);
+      return (Unsafe) field.get(null);
+    } catch (Exception e) {
+      log.error(e.getMessage(), e);
+      return null;
+    }
+}
+```
+
+2、从`getUnsafe`方法的使用限制条件出发，通过 Java 命令行命令`-Xbootclasspath/a`把调用 Unsafe 相关方法的类 A 所在 jar 包路径追加到默认的 bootstrap 路径中，使得 A 被引导类加载器加载，从而通过`Unsafe.getUnsafe`方法安全的获取 Unsafe 实例。
+
+```shell
+java -Xbootclasspath/a: ${path}   // 其中path为调用Unsafe相关方法的类所在jar包路径
+```
+
+### **Unsafe 功能**
+
+概括的来说，`Unsafe` 类实现功能可以被分为下面 8 类：
+
+1. 内存操作
+2. 内存屏障
+3. 对象操作
+4. 数据操作
+5. CAS 操作
+6. 线程调度
+7. Class 操作
+8. 系统信息
+
+**1. 内存操作**
+
+在 Java 中是不允许直接对内存进行操作的，对象内存的分配和回收都是由 JVM 自己实现的。但是在 `Unsafe` 中，提供的下列接口可以直接进行内存操作： 
+
+```java
+//分配新的本地空间
+public native long allocateMemory(long bytes);
+//重新调整内存空间的大小
+public native long reallocateMemory(long address, long bytes);
+//将内存设置为指定值
+public native void setMemory(Object o, long offset, long bytes, byte value);
+//内存拷贝
+public native void copyMemory(Object srcBase, long srcOffset,Object destBase, long destOffset,long bytes);
+//清除内存
+public native void freeMemory(long address);
+```
+
+使用下面的代码进行测试：
+
+```java
+private void memoryTest() {
+    int size = 4;
+    long addr = unsafe.allocateMemory(size);
+    long addr3 = unsafe.reallocateMemory(addr, size * 2);
+    System.out.println("addr: "+addr);
+    System.out.println("addr3: "+addr3);
+    try {
+        unsafe.setMemory(null,addr ,size,(byte)1);
+        for (int i = 0; i < 2; i++) {
+            unsafe.copyMemory(null,addr,null,addr3+size*i,4);
+        }
+        System.out.println(unsafe.getInt(addr));
+        System.out.println(unsafe.getLong(addr3));
+    }finally {
+        unsafe.freeMemory(addr);
+        unsafe.freeMemory(addr3);
+    }
+}
+```
 
 
 
