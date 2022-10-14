@@ -1,8 +1,8 @@
 > 来源：https://javaguide.cn/home.html
 
-# 01 Java 基础 
 
-## 1.1 Java代理模式详解
+
+# 01 | Java代理模式详解
 
 **JDK动态代理机制**
 
@@ -183,7 +183,7 @@ aliSmsService.send("java");
 1. JDK 动态代理只能代理实现了接口的类或者直接代理接口，而 CGLIB 可以代理未实现任何接口的类。另外， CGLIB 动态代理是通过生成一个被代理类的子类来拦截被代理类的方法调用，因此不能代理声明为 final 类型的类和方法。
 2. 就二者的效率来说，大部分情况都是 JDK 动态代理更优秀，随着 JDK 版本的升级，这个优势更加明显。
 
-## 1.2 BigDecimal 详解
+# 02 | BigDecimal 详解
 
 `BigDecimal` 可以实现对浮点数的运算，不会造成精度丢失。
 
@@ -261,13 +261,13 @@ BigDecimal b = new BigDecimal("1.0");
 System.out.println(a.compareTo(b));//0
 ```
 
-## 1.3 Java 魔法类 Unsafe 详解
+# 03 | Java 魔法类 Unsafe 详解
 
-### Unsafe 介绍
+## 3.1 Unsafe 介绍
 
 `Unsafe` 是位于 `sun.misc` 包下的一个类，主要提供一些用于执行低级别、不安全操作的方法，如直接访问系统内存资源、自主管理内存资源等，这些方法在提升 Java 运行效率、增强 Java 语言底层资源操作能力方面起到了很大的作用。
 
-### Unsafe 创建
+## 3.2 Unsafe 创建
 
 `sun.misc.Unsafe` 部分源码如下：
 
@@ -318,7 +318,7 @@ private static Unsafe reflectGetUnsafe() {
 java -Xbootclasspath/a: ${path}   // 其中path为调用Unsafe相关方法的类所在jar包路径
 ```
 
-### **Unsafe 功能**
+## 3.3 Unsafe 功能
 
 概括的来说，`Unsafe` 类实现功能可以被分为下面 8 类：
 
