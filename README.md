@@ -24,3 +24,9 @@
 
 - Apollo：https://github.com/apolloconfig/apollo/tree/master/docs
 - Docsify：https://docsify.js.org/#/zh-cn/
+
+# 每周分享
+
+关注公众号：
+
+![微信公众号二维码](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210231020314.jpg)
