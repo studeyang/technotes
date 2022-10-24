@@ -136,8 +136,7 @@ connection.close();
 Order 类的定义如下代码所示：
 
 ```java
-public class Order{
-
+public class Order {
     private Long id; //订单Id
     private String orderNumber; //订单编号
     private String deliveryAddress; //物流地址
@@ -150,13 +149,12 @@ Order 对应的数据库 Schema 定义如下代码所示：
 
 ```sql
 DROP TABLE IF EXISTS `order`;
- 
 create table `order` (
-    `id` bigint(20) NOT NULL AUTO_INCREMENT,
-    `order_number` varchar(50) not null,
-    `delivery_address` varchar(100) not null,
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `order_number` varchar(50) not null,
+  `delivery_address` varchar(100) not null,
   `create_time` timestamp not null DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`)
 );
 ```
 
