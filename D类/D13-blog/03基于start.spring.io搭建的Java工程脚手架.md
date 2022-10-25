@@ -1,22 +1,24 @@
+# 基于start.spring.io搭建Java工程脚手架
+
 # 一、背景：为什么要做？
 
 ## 创建工程的痛点
 
-2020 年，我们公司迎来了业务发展的迅猛期，滋生大量创建工程的需求。总体来说，面临着以下几个问题。
+2020 年，我们公司迎来了业务发展的迅猛期，滋生大量创建工程的需求。总体来说，创建工程面临着以下几个问题。
 
-1. 在新建工程时，多采用 copy 历史工程，并在上面进行修改的方式，造成了新工程里遗留了一些老旧的“垃圾"；
-2. 各团队所建工程分层方式不一，结构混乱，甚至有的包有着相同的职责，命名却不一样，难以形成共识传递下去；
+1. 在创建工程时，多采用 copy 历史工程，并在上面进行修改的方式，造成了新工程里遗留了一些老旧的“垃圾"；
+2. 各团队所建工程分层方式不一，结构混乱，甚至有的包职责相同，命名却不一样，难以形成共识传递下去；
 3. 所依赖组件版本不一，比如`jackson`、`guava`包，难以形成技术演进，或者说技术演进兼容性问题很难解决；
 
 ## 业内方案参考
 
 `start.spring.io`整合了`Gradle`, `Maven`工程，语言支持`Java`,`Kotlin`,`Groovy`。
 
-![image-20221025160447890](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025160447890.png)
+![start.spring.io主页面](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025160447890.png)
 
 `start.aliyun.com`在`start.spring.io`基础上增加了不同应用架构的选择：`MVC`, 分层架构, `COLA`。同时也增加阿里的开源组件例如`Spring Cloud Alibaba`。
 
-![image-20221025164751496](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025164751496.png)
+![start.aliyun.com主页面](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025164751496.png)
 
 同时也增加了【一键运行】功能，【分享】功能可以保存分享至自己的账号下。
 
@@ -24,16 +26,18 @@
 
 ## 脚手架画像
 
-1. 快速创建一个最小可运行工程；
-2. 规范工程命名、服务应用架构分层， 增加代码结构规范、可理解性；
-3. 快速集成 CI/CD，代码驱动 API 接口文档生成，提升开发效率；
-4. 统一第三方组件版本号；
+1. 能快速创建一个最小可运行工程；
+2. 能规范工程命名、服务应用架构分层， 增加代码结构规范、可理解性；
+3. 能快速集成 CI/CD，代码驱动 API 接口文档生成，提升开发效率；
+4. 能统一第三方组件版本号；
 
 ## 1.0 版本
 
-为了快速落地脚手架，我们使用了 Maven Archetype 来实现。首先创建一个规范化的工程，工程为4层架构分层，因此取名为`zebra`。
+为了快速落地脚手架，我们使用了 Maven Archetype 来实现。首先创建一个规范化的工程。
 
-![image-20221025165801144](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025165801144.png)
+> 工程结构需分层清晰，像斑马的条纹，因此取名为`zebra`。
+
+![规范的示例工程](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025165801144.png)
 
 然后使用 Maven 的`maven-archetype-plugin`插件，生成脚手架。
 
@@ -50,9 +54,9 @@
 </plugin>
 ```
 
-生成脚手架如下：
+生成的脚手架如下：
 
-![image-20221025170421765](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025170421765.png)
+![示例工程的脚手架](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025170421765.png)
 
 脚手架中生成的代码不是可编译的代码，它包含了一些变量。
 
@@ -126,7 +130,7 @@ mvn archetype:generate    \
 
 最终形态：
 
-![image-20221025172539871](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025172539871.png)
+![脚手架2.0主页面](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025172539871.png)
 
 # 三、实现：怎么做的？
 
@@ -134,9 +138,9 @@ mvn archetype:generate    \
 
 ## 主要实现
 
-当前端组织好参数后，最终通过 HTTP 请求将参数传递给后端。
+当前端组织好参数后，最终通过 HTTP 请求将参数传递给后端，后端接收到的参数如下。
 
-![image-20221025173854836](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025173854836.png)
+![ProjectGenerationController](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025173854836.png)
 
 后端接收到工程类型为`maven-project`，并通过如下配置将之识别为`zebra-project`，即分层架构。
 
@@ -160,7 +164,9 @@ initializr:
       action: /starter.zip
 ```
 
-我们自定义`zebra-project`分层架构的代码实现。这里定义一些 Customizer，实现工程生成的一些定制（[Spring Initializr](https://github.com/spring-io/initializr) 提供了代码的扩展性）。代码如下：
+我们自定义`zebra-project`分层架构的代码实现。这里定义一些 Customizer，实现工程的一些定制，例如：定制`pom.xml`生成的内容。代码如下：
+
+> （[Spring Initializr](https://github.com/spring-io/initializr) 提供了 Customizer 接口的扩展性）
 
 ```java
 @ProjectGenerationConfiguration
@@ -183,7 +189,7 @@ public class ZebraProjectGenerationConfiguration {
 }
 ```
 
-这里定义一些 Contributor，实现工程各个部分结构的生成，例如`Root pom`文件。
+再定义一些 Contributor，实现工程各个部分结构的生成，例如根目录`pom.xml`文件。
 
 ```java
 @ProjectGenerationConfiguration
@@ -265,27 +271,26 @@ initializr:
 
 ## 一键运行
 
-一键运行功能是把生成好的工程上传至公司代码仓库（Gitlab），并做好新工程的 CICD 配置（Jenkins），然后将工程部署到云容器（Kubernetes）的过程。
+一键运行功能是把生成好的工程上传至公司的代码仓库（Gitlab），并做好新工程的 CICD 配置（Jenkins），然后将工程部署到云容器（Kubernetes）的过程。
 
-![image-20221025180421988](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025180421988.png)
+![一键运行页面](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025180421988.png)
 
-前端使用的是 React 组件是抖音的 Semi。Gitlab Groups 是通过 Gitlab API 授权获取的，这个授权过程如下：
+前端使用的是 React 组件是抖音的 Semi。Gitlab Groups 下拉列表是通过 Gitlab API 授权获取的，这个授权过程如下：
 
-![image-20221020171907903](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221020171907903.png)
+![Gitlab授权流程图](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221020171907903.png)
 
 授权完成后，点击确认的后续过程：
 
-![image-20221020173624403](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221020173624403.png)
+![一键运行的业务流程](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221020173624403.png)
 
 `createGitlabProjectProcessor`业务处理：
 
 - 完成 `gitlab`工程的创建；
 - 生成新工程，并上传至`gitlab`；
 
-`createDevopsProcessor`业务处理：
+`createDevopsProcessor`业务处理：生成并上传工程服务部署模板；
 
-- 生成并上传工程服务部署模板；
+`cicdTriggerProcessor`业务处理：触发`PRECI`操作（后续操作由`jenkins`回调衔接）；
 
-`cicdTriggerProcessor`业务处理：
+到这里，大致的实现就讲完了。如果你也想搭建一个工程脚手架，欢迎跟我联系，我们一起交流。
 
-- 触发`PRECI`操作（后续操作由`jenkins`回调衔接）；
