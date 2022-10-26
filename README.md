@@ -29,4 +29,4 @@
 
 关注公众号：
 
-![微信公众号二维码](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210231020314.jpg)
+![微信公众号二维码](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/qrcode_for_gh_8d08add0e5a6_258.jpg)

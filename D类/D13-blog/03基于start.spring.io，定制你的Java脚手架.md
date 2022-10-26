@@ -1,4 +1,4 @@
-# 基于start.spring.io搭建Java工程脚手架
+# 基于start.spring.io，定制你的Java脚手架
 
 # 一、背景：为什么要做？
 
@@ -35,7 +35,7 @@
 
 为了快速落地脚手架，我们使用了 Maven Archetype 来实现。首先创建一个规范化的工程。
 
-> 工程结构需分层清晰，像斑马的条纹，因此取名为`zebra`。
+> 工程结构需分层清晰，像斑马的条纹，因此取名为`zebra`。工程已开源：https://github.com/dbses/zebra
 
 ![规范的示例工程](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221025165801144.png)
 
@@ -292,5 +292,5 @@ initializr:
 
 `cicdTriggerProcessor`业务处理：触发`PRECI`操作（后续操作由`jenkins`回调衔接）；
 
-到这里，大致的实现就讲完了。如果你也想搭建一个工程脚手架，欢迎跟我联系，我们一起交流。
+到这里，大致的实现就讲完了。如果你也想搭建一个工程脚手架，欢迎和我交流。
 
