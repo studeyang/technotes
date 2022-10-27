@@ -1,10 +1,44 @@
 > 代码基于 SpringBoot 2.6.4 分析。
+>
+> 这本书不行，讲一个知识点太啰嗦，感觉是在凑文字。还不如网上的一些博客讲的通俗明了。
 
 # 第3章 SpringBoot的工作机制
 
 ## 3.2 @SpringBootApplication 背后的秘密
 
 **怎么创建 ApplicationContext 的？**
+
+SpringApplication
+
+```java
+public ConfigurableApplicationContext run(String... args) {
+    // ...
+    context = createApplicationContext();
+    // ...
+}
+protected ConfigurableApplicationContext createApplicationContext() {
+    return this.applicationContextFactory.create(this.webApplicationType);
+}
+```
+
+ApplicationContextFactory
+
+```java
+ApplicationContextFactory DEFAULT = (webApplicationType) -> {
+	try {
+		switch (webApplicationType) {
+		case SERVLET:
+			return new AnnotationConfigServletWebServerApplicationContext();
+		case REACTIVE:
+			return new AnnotationConfigReactiveWebServerApplicationContext();
+		default:
+			return new AnnotationConfigApplicationContext();
+		}
+	}
+};
+```
+
+
 
 
 
