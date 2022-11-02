@@ -391,25 +391,7 @@ GEORADIUS cars:locations 116.054579 39.030452 5 km ASC COUNT 10
 
 可以看到，使用 GEO 数据类型可以非常轻松地操作经纬度这种信息。
 
-**如何自定义数据类型？**
-
-
-
-- Redis 的基本对象结构
-
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202211012124798.png" alt="image-20221101212410730" style="zoom:50%;" />
-
-- 开发一个新的数据类型
-
-第一步：定义新数据类型的底层结构
-
-第二步：在 RedisObject 的 type 属性中，增加这个新类型的定义
-
-第三步：开发新类型的创建和释放函数
-
-第四步：开发新类型的命令操作
-
-
+# 14 | 如何在Redis中保存时间序列数据？
 
 
 
