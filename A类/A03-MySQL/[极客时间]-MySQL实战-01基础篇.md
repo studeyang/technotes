@@ -68,7 +68,7 @@ mysql -h $ip -P $port -u $user -p
 MySQL 也提供了这种“按需使用”的方式。你可以将参数 query_cache_type 设置成 DEMAND，这样对于默认的 SQL 语句都不使用查询缓存。而对于你确定要使用查询缓 存的语句，可以用 SQL_CACHE 显式指定，像下面这个语句一样：
 
 ```sql
-select SQL_CACHE * from T where ID=10；
+select SQL_CACHE * from T where ID=10;
 ```
 
 需要注意的是，MySQL 8.0 版本直接将查询缓存的整块功能删掉了。

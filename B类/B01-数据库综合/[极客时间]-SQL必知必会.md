@@ -40,7 +40,7 @@ Redis 的查询效率非常高，根据官方提供的数据，Redis 每秒最�
 或者下面写法：
 
 ```
-> Hmset user1 username zhangfei age 28
+> hmset user1 username zhangfei age 28
 ```
 
 3. 字符串列表（list）
