@@ -4,7 +4,7 @@
 
 ```java
 /**
- * @author <a href="mailto:yanglu_u@126.com">dbses</a>
+ * @author <a href="https://github.com/studeyang">studeyang</a>
  * @since 1.0 ${DATE}
  */
 ```
@@ -18,8 +18,13 @@
  * @author <a href="mailto:yanglu_u@126.com">dbses</a>
  * @since 1.0 $date$
  */
- 
+
 date{"yyyy-MM-dd"}
+
+/**
+ * @author <a href="https://github.com/studeyang">studeyang</a>
+ * @since 2.0 2022/5/25
+ */
 ```
 
 添加变量：
