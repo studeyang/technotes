@@ -1,4 +1,24 @@
+# 前言
+
+前几天在知乎看到一个问题：如何建立自己的知识体系？在一篇高赞回答中讲述了建立“外脑”是关键。
+
+> 大脑是用来思考的，不是用来记忆的。
+
+> 查理芒格图片
+
+我很认同这样的看法，我的账号名为“杨同学technotes”，technotes 源于我最近几年总结的 github 项目，意为“技术笔记”，也就是“外脑”的意思。我将一直往里面填充东西，不断优化内容，欢迎关注。
+
+> Github: https://github.com/studeyang/technotes
+>
+> technotes站点：https://www.dbses.cn/technotes
+
+本文来自我的 technotes Redis篇。
+
 # 谈谈Redis的高可用性
+
+下面是一张 Redis 全景图，我觉得画得非常全面。
+
+> 图源：极客时间蒋德均老师的《Redis核心技术与实战》课程
 
 
 
@@ -26,11 +46,21 @@ Redis哨兵机制
 
 ![图源网络](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221124174919856.png)
 
-# 主库挂了，如何恢复数据？
+# 主库挂了，如何快速恢复数据？
 
-AOF、RDB
+我们知道，Redis 是内存数据库，一旦宕机，内存里的数据将会清空。因此，Redis 提供了两种数据持久化的方法，分别是 AOF 和 RDB。
 
-AOF日志文件太大了怎么办？
+
+
+RDB xxx。
+
+AOF xxx。
+
+
+
+Redis 4.0 中提出了一个混合使用 AOF 和 RDB 的方法。
+
+AOF 日志文件太大了怎么办？
 
 那Redis是怎么判断日志太太的呢？
 
