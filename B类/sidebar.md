@@ -2,7 +2,7 @@
 
 - **数据库综合**
   
-- [SQL必知必会](B类/B01-数据库综合/[极客时间]-SQL必知必会.md)
+  - [SQL必知必会](B类/B01-数据库综合/[极客时间]-SQL必知必会.md)
   
 - **RPC**
   - [RPC实战与核心原理-基础篇](B类/B02-RPC/[极客时间]-RPC实战与核心原理-01基础篇.md)
@@ -18,15 +18,13 @@
   - [阿里云-消息队列Kafka版](B类/B03-消息队列/[阿里云]-消息队列Kafka版.md)
   
 - **Neo4j**
-  
-- [Neo4j介绍](B类/B04-Neo4j/[个人整理]-Neo4J基础.md)
+  - [Neo4j介绍](B类/B04-Neo4j/[个人整理]-Neo4J基础.md)
   
 - **Redis**
   - [《Redis设计与实现》读书笔记](B类/B05-Redis/《Redis设计与实现》读书笔记.md)
   - [Redis-01原理、协议及使用](B类/B05-Redis/Redis-01原理、协议及使用.md)
   - [Redis-02进阶](B类/B05-Redis/Redis-02进阶.md)
   - [Redis核心技术与实战-基础篇](B类/B05-Redis/Redis核心技术与实战-01基础篇.md)
-  
   - [Redis核心技术与实战-实践篇](B类/B05-Redis/Redis核心技术与实战-02实践篇.md)
 - **Spring**
   - [Spring的IoC容器](B类/B06-Spring/《Spring揭秘》第二部分-Spring的IoC容器.md)
@@ -40,7 +38,7 @@
 
 - **Tomcat**
   
-- [深入拆解Tomcat](B类/B07-Tomcat/[极客时间]-深入拆解Tomcat.md)
+  - [深入拆解Tomcat](B类/B07-Tomcat/[极客时间]-深入拆解Tomcat.md)
   
 - **设计模式**
   - [设计模式之美-01设计模式学习导读](B类/B08-设计模式/[极客时间]-设计模式之美-01设计模式学习导读.md)
@@ -91,7 +89,7 @@
 
 - **Lua**
   
-- [Lua教程](B类/B16-Lua/[runoob]-Lua教程.md)
+  - [Lua教程](B类/B16-Lua/[runoob]-Lua教程.md)
   
 - **Camunda**
   - [Camunda](B类/B17-Camunda/Camunda.md)
