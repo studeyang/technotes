@@ -1,34 +1,85 @@
-# Redis高可用全景一览
+# Redis高可用之哨兵机制
 
-# 一、哨兵机制
+在上一篇的文章xxx中，我们学习了 Redis 的高可用性。
 
-所以，如果主库挂了，我们就需要运行一个新主库，比如说把一个从库切换为主库，把它当成主库。在 Redis 主从集群中，哨兵机制是实现主从库自动切换的关键机制。
+Redis高可用
+  |-保证服务少中断 
+    -> 多副本
+    -> 主从库模式保证数据一致及从库的高可用
+    -> 哨兵保证主库的高可用
+    -> 哨兵集群保证哨兵高可用
+  |-保证数据少丢失
+    -> AOF日志
+    -> AOF恢复数据较慢
+    -> RDB内存快照
+    -> 执行快照间隔不宜过短
+    -> AOF+RDB
 
-![Redis哨兵机制](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212111841284.png)
-
-## 2.1 哨兵的职责
+并且我们学习了哨兵三个职责，分别是：
 
 哨兵其实就是一个运行在特殊模式下的 Redis 进程，主从库实例运行的同时，它也在运行。哨兵主要负责的就是三个任务：监控、选主（选择主库）和通知。
 
-![哨兵的职责](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212112030551.png)
+今天我们就深入学习一下哨兵机制。首先来说一下监控。
 
-监控是指哨兵进程在运行时，周期性地给所有的主从库发送 PING 命令，检测它们是否仍然在线运行。如果从库没有在规定时间内响应哨兵的 PING 命令，哨兵就会把它标记为“下线状态”；同样，如果主库也没有在规定时间内响应哨兵的 PING 命令，哨兵就会判定主库下线，然后开始自动切换主库的流程。
+## 一、如何判断主库是否下线？
 
-选主是指主库挂了以后，哨兵就需要从很多个从库里，按照一定的规则选择一个从库实例，把它作为新的主库。这一步完成后，现在的集群里就有了新主库。
+Redis 源码中包含了一个名为 sentinel.conf 的文件，运行一个 Sentinel 所需的最少配置如下所示：
 
-然后，哨兵会执行最后一个任务：通知。在执行通知任务时，哨兵会把新主库的连接信息发给其他从库，让它们执行 replicaof 命令，和新主库建立连接，并进行数据复制。同时，哨兵会把新主库的连接信息通知给客户端，让它们把请求操作发到新主库上。
+```
+sentinel monitor mymaster 127.0.0.1 6379 2
+sentinel down-after-milliseconds mymaster 60000
+sentinel failover-timeout mymaster 180000
+sentinel parallel-syncs mymaster 1
 
-## 2.2 如何判断主库是否下线？
+sentinel monitor resque 192.168.1.3 6380 4
+sentinel down-after-milliseconds resque 10000
+sentinel failover-timeout resque 180000
+sentinel parallel-syncs resque 5
+```
 
-## 2.3 如何选定新主库？
+第一行配置指示 Sentinel 去监视一个名为 mymaster 的主服务器， 这个主服务器的 IP 地址为 127.0.0.1 ， 端口号为 6379 ， 而将这个主服务器判断为失效至少需要 2 个 Sentinel 同意 （只要同意 Sentinel 的数量不达标，自动故障迁移就不会执行）。
+
+### 1.1 主观下线和客观下线
+
+- down-after-milliseconds 选项指定了 Sentinel 认为服务器已经断线所需的毫秒数。
+
+如果服务器在给定的毫秒数之内， 没有返回 Sentinel 发送的 PING 命令的回复， 或者返回一个错误， 那么 Sentinel 将这个服务器标记为主观下线（subjectively down，简称 SDOWN ）。
+
+不过只有一个 Sentinel 将服务器标记为主观下线并不一定会引起服务器的自动故障迁移： 只有在足够数量的 Sentinel 都将一个服务器标记为主观下线之后， 服务器才会被标记为客观下线（objectively down， 简称 ODOWN ）， 这时自动故障迁移才会执行。
+
+将服务器标记为客观下线所需的 Sentinel 数量由对主服务器的配置决定。（具体的配置是什么呢？）
+
+一个 Sentinel 可以通过向另一个 Sentinel 发送 SENTINEL is-master-down-by-addr 命令来询问对方是否认为给定的服务器已下线。
+
+如果 master-down-after-milliseconds 选项的值为 30000 毫秒（30 秒）， 那么只要服务器能在每 29 秒之内返回至少一次有效回复， 这个服务器就仍然会被认为是处于正常状态的。
+
+每个 Sentinel 以每秒钟一次的频率向它所知的主服务器、从服务器以及其他 Sentinel 实例发送一个 PING 命令。
+
+当没有足够数量的 Sentinel 同意主服务器已经下线， 主服务器的客观下线状态就会被移除。 当主服务器重新向 Sentinel 的 PING 命令返回有效回复时， 主服务器的主观下线状态就会被移除。
+
+### 1.2 自动发现哨兵和从服务器
+
+你无须为运行的每个 Sentinel 分别设置其他 Sentinel 的地址， 因为 Sentinel 可以通过发布与订阅功能来自动发现正在监视相同主服务器的其他 Sentinel ， 这一功能是通过向频道 sentinel:hello 发送信息来实现的。
+
+每个 Sentinel 会以每两秒一次的频率， 通过发布与订阅功能， 向被它监视的所有主服务器和从服务器的 **sentinel**:hello 频道发送一条信息， 信息中包含了 Sentinel 的 IP 地址、端口号和运行 ID （runid）。
 
 
 
-## 2.4 哨兵集群的高可用
+
+
+## 二、如何选定新主库？
 
 
 
-# 小结
+## 三、将新主库通知给客户端和从库
+
+
+
+## 致谢
+
+http://www.redis.cn/topics/sentinel.html
+
+https://redis.io/docs/management/sentinel
 
 本文为个人理解，如有误，欢迎交流指正。公众号【】
 
