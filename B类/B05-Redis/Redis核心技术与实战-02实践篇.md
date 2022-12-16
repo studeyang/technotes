@@ -25,7 +25,7 @@ photo_obj_id: 3301000051
 
 其实，除了记录实际数据，String 类型还需要额外的内存空间记录数据长度、空间使用等信息，这些信息也叫作元数据。当你保存 64 位有符号整数时，String 类型会把它保存为一个 8 字节的 Long 类型整数，这种保存方式通常也叫作 int 编码方式。当你保存的数据中包含字符时，String 类型就会用简单动态字符串（Simple Dynamic String，SDS）结构体来保存，如下图所示：
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210202129596.png" alt="image-20221020212931551" style="zoom: 25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210202129596.png" alt="image-20221020212931551" style="zoom: 50%;" />
 
 - buf：字节数组，保存实际数据。为了表示字节数组的结束，Redis 会自动在数组最后加一个“\0”，这就会额外占用 1 个字节的开销。
 - len：占 4 个字节，表示 buf 的已用长度。
@@ -35,7 +35,7 @@ photo_obj_id: 3301000051
 
 一个 RedisObject 包含了 8 字节的元数据和一个 8 字节指针，这个指针再进一步指向具体数据类型的实际数据所在，例如指向 String 类型的 SDS 结构所在的内存地址，可以看一下下面的示意图。
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210202130142.png" alt="image-20221020213054096" style="zoom: 25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210202130142.png" alt="image-20221020213054096" style="zoom: 50%;" />
 
 为了节省内存空间，Redis 还对 Long 类型整数和 SDS 的内存布局做了专门的设计。
 
@@ -53,7 +53,7 @@ photo_obj_id: 3301000051
 
 Redis 会使用一个全局哈希表保存所有键值对，哈希表的每一项是一个 dictEntry 的结构体，用来指向一个键值对。dictEntry 结构中有三个 8 字节的指针，分别指向 key、value 以及下一个 dictEntry，三个指针共 24 字节，如下图所示：
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210202133557.png" alt="image-20221020213301517" style="zoom: 25%;" />
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210202133557.png" alt="image-20221020213301517" style="zoom: 50%;" />
 
 但是，这三个指针只有 24 字节，为什么会占用了 32 字节呢？这就要提到 Redis 使用的内存分配库 jemalloc 了。
 
