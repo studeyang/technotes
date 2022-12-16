@@ -1,6 +1,6 @@
 # 用法一：List转Map
 
-**Key 对象类型不变**
+**Value 对象类型不变**
 
 ```java
 /*
@@ -17,7 +17,7 @@ Map<String, Message> map = messages.stream()
     .collect(Collectors.toMap(Message::getId, Function.identity()));
 ```
 
-**Key 对象类型转化**
+**Value 对象类型转化**
 
 ```java
 /*
@@ -30,7 +30,7 @@ List<Message> messages = new ArrayList<>();
 /*
   id -> type
 */
-Map<String, Message> map = messages.stream()
+Map<String, String> map = messages.stream()
     .collect(Collectors.toMap(Message::getId, Message::getType));
 ```
 
