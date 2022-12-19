@@ -1,27 +1,18 @@
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212192108982.png)
+
 # Redis高可用之哨兵机制实现细节
 
-在上一篇的文章xxx中，我们学习了 Redis 的高可用性。
+本文来自我的 technotes [1] Redis篇，欢迎你常来逛逛。
 
-Redis高可用
-  |-保证服务少中断 
-    -> 多副本
-    -> 主从库模式保证数据一致及从库的高可用
-    -> 哨兵保证主库的高可用
-    -> 哨兵集群保证哨兵高可用
-  |-保证数据少丢失
-    -> AOF日志
-    -> AOF恢复数据较慢
-    -> RDB内存快照
-    -> 执行快照间隔不宜过短
-    -> AOF+RDB
-
-并且我们学习了哨兵三个职责，分别是：
-
-哨兵其实就是一个运行在特殊模式下的 Redis 进程，主从库实例运行的同时，它也在运行。哨兵主要负责的就是三个任务：监控、选主（选择主库）和通知。
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212192103555.png)
 
 ## 正文
 
-首先呐，在哨兵启动前，我们要对哨兵进行配置。Redis 源码中包含了一个名为 sentinel.conf [1] 的文件，该文件中部分配置如下：
+在上一篇的文章[《Redis高可用全景一览》](https://mp.weixin.qq.com/s?__biz=MzkwMTI4NTI1NA==&mid=2247484248&idx=1&sn=2d74e8f202bfe1353c516dba815d5a00&chksm=c0b657b1f7c1dea713b64438401ac282e16a86227b67a52afec88349f917aac9b4456e102f44&token=735535098&lang=zh_CN#rd)中，我们学习了 Redis 的高可用性。高可用性有两方面含义：一是服务少中断，二是数据少丢失。主从库模式和哨兵保证了服务少中断，AOF 日志和 RDB 快照保证了数据少丢失。
+
+并且我们学习了哨兵三个职责，分别是：监控、选主（选择主库）和通知。今天我们就来详细学习一下。
+
+首先呐，在哨兵启动前，我们要对哨兵进行配置。Redis 源码中包含了一个名为 sentinel.conf [2] 的文件，该文件中部分配置如下：
 
 ```
 sentinel monitor mymaster 127.0.0.1 6379 2
@@ -52,7 +43,7 @@ sentinel down-after-milliseconds mymaster 60000
 
 这是由哨兵向主库发送 INFO 命令来完成的。就像下图所示，哨兵 2 给主库发送 INFO 命令，主库接受到这个命令后，就会把从库列表返回给哨兵。接着，哨兵就可以根据从库列表中的连接信息，和每个从库建立连接。哨兵 1 和 3 也可以通过相同的方法和从库建立连接。
 
-![image-20221218213115166](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182131224.png)
+![获取从节点信息](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182131224.png)
 
 下面是在一个主节点上执行 info 命令的结果片段：
 
@@ -66,17 +57,17 @@ slave1:ip=127.0.0.1,port=6381,state=online,offset=4917,lag=1
 
 之后，哨兵会在这个连接上持续地对从库进行监控。每隔10秒， 哨兵节点就会向主节点和从节点发送 info 命令，获取集群最新的拓扑结构。这样，当有新的从节点加入时就可以立刻感知出来。节点不可达或者选定新主库后，也可以通过 info 命令实时更新节点拓扑信息。
 
-![image-20221218204901686](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182125270.png)
+![执行info命令](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182125270.png)
 
 有了集群的信息，哨兵终于可以开始它的工作了。第一项职责：判断主从库是否下线。
 
 ## 三、如何判断主从库下线？
 
-### 3.1 定时 ping 命令
+### 3.1 定时执行 ping 命令
 
-哨兵进程在运行时，每隔1秒，会向主节点、 从节点、 其余 Sentinel 节点发送一条 ping 命令，检测它们是否仍然在线运行。如果主、从库没有在规定时间内响应哨兵的 PING 命令，哨兵就会把它标记为“下线状态”；
+哨兵进程在运行时，每隔1秒，会向主节点、 从节点、 其余 Sentinel 节点发送一条 ping 命令，检测它们是否仍然在线运行。如果主、从库没有在规定时间内响应哨兵的 ping 命令，哨兵就会把它标记为「下线状态」。
 
-![image-20221218204838284](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182048330.png)
+![执行ping命令](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182048330.png)
 
 如果检测的是主库，那么，哨兵还不能简单地开启主从切换。因为很有可能存在这么一个情况：那就是哨兵误判了，其实主库并没有故障。
 
@@ -84,11 +75,11 @@ slave1:ip=127.0.0.1,port=6381,state=online,offset=4917,lag=1
 
 那怎么减少误判呢？
 
-### 1.1 主观下线和客观下线
+### 3.2 主观下线和客观下线
 
 哨兵机制通常会采用多实例组成的集群模式进行部署，这也被称为哨兵集群。引入多个哨兵实例一起来判断，就可以避免单个哨兵因为自身网络状况不好，而误判主库下线的情况。同时，多个哨兵的网络同时不稳定的概率较小，由它们一起做决策，误判率也能降低。
 
-![image-20221218220611072](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182206121.png)
+![主观下线和客观下线](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182206121.png)
 
 还记得我在文章开头给出的 sentinel.conf 配置吗？
 
@@ -101,17 +92,15 @@ sentinel down-after-milliseconds mymaster 60000
 
 如果服务器在该毫秒数之内， 没有返回 Sentinel 发送的 ping 命令的回复， 或者返回一个错误， 那么 Sentinel 将这个服务器标记为主观下线（subjectively down，简称 SDOWN ）。
 
-一个 Sentinel 可以通过向另一个 Sentinel 发送 SENTINEL is-master-down-by-addr 命令来询问对方是否认为主库已下线。如果没有足够数量的 Sentinel 同意主库已经下线， 当主库重新向 Sentinel 的 PING 命令返回有效回复时， 主库的主观下线状态就会被移除。
+如果没有足够数量的 Sentinel 同意主库已经下线， 当主库重新向 Sentinel 的 PING 命令返回有效回复时， 主库的主观下线状态就会被移除。而如果超出 2 个 Sentinel 都将主库标记为主观下线之后， 主库才会被标记为客观下线（objectively down， 简称 ODOWN ）。哨兵就要开始下一个决策过程了，即从许多从库中，选出一个从库来做新主库。
 
-如果超出 2 个 Sentinel 都将主库标记为主观下线之后， 主库才会被标记为客观下线（objectively down， 简称 ODOWN ）。哨兵就要开始下一个决策过程了，即从许多从库中，选出一个从库来做新主库。
+## 四、如何选定新主库？
 
-## 二、如何选定新主库？
-
-### 2.1 初步筛选
+### 4.1 初步筛选
 
 设想一下，如果在选主时，一个从库正常运行，我们把它选为新主库开始使用了。可是，很快它的网络出了故障，此时，我们就又得重新选主了。这显然不是我们期望的结果。所以，在选主时，除了要检查从库的当前在线状态，还要判断它之前的网络连接状态。如果从库总是和主库断连，而且断连次数超出了一定的阈值，我们就有理由相信，这个从库的网络状况并不是太好，就可以把这个从库筛掉了。
 
-![image-20221218223846241](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182238290.png)
+![初步筛选](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182238290.png)
 
 具体怎么判断呢？你使用配置项 down-after-milliseconds * 10。其中，down-after-milliseconds 是我们认定主从库断连的最大连接超时时间。如果在 down-after-milliseconds 毫秒内，主从节点都没有通过网络联系上，我们就可以认为主从节点断连了。如果发生断连的次数超过了 10 次，就说明这个从库的网络状况不好，不适合作为新主库。
 
@@ -119,7 +108,7 @@ sentinel down-after-milliseconds mymaster 60000
 
 接下来就要给剩余的从库打分了。我们可以分别按照三个规则依次进行三轮打分，这三个规则分别是从库优先级、从库复制进度以及从库 ID 号。
 
-### 2.1 三轮打分
+### 4.2 三轮打分
 
 第一轮：优先级最高的从库得分高。
 
@@ -137,42 +126,85 @@ sentinel down-after-milliseconds mymaster 60000
 
 如下图所示，从库 2 就应该被选为新主库。
 
-![image-20221218224115940](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182241987.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212182241987.png)
 
 第三轮：ID 号小的从库得分高。
 
 每个实例都会有一个 ID，这个 ID 就类似于这里的从库的编号。目前，Redis 在选主库时，有一个默认的规定：在优先级和复制进度都相同的情况下，ID 号最小的从库得分最高，会被选为新主库。
 
-到这里，新主库就被选出来了。
+到这里，新主库就被选出来了，接下来就是将从库升级为主库。但是问题又来了，这么多哨兵，该由谁来执行主从切换操作呢？
 
-### 2.2 由哪个哨兵执行主从切换？
+### 4.3 由哪个哨兵执行主从切换？
 
-## 三、将新主库通知给从库和客户端
+任何一个哨兵实例只要自身判断主库“主观下线”后，就会向其他 Sentinel 发送 SENTINEL is-master-down-by-addr 命令来询问对方是否认为主库已下线。接着，其他哨兵实例会根据自己和主库的连接情况，做出 Y 或 N 的响应，Y 相当于赞成票，N 相当于反对票。
 
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212192124895.png)
 
+此时，这个哨兵就可以再给其他哨兵发送命令，表明希望由自己来执行主从切换，并让所有其他哨兵进行投票。这个投票过程称为“Leader 选举”。选举出来的 Leader 就是最终执行主从切换的哨兵。
 
-### 3.1 哨兵是如何知道从库的 IP 地址和端口的？
+例如，现在有 3 个哨兵，quorum 配置的是 2，我们来看一下选举的过程是什么样的。
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210172154962.png" alt="image-20221017215455883" style="zoom:67%;" />
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212192128595.png)
 
-自动发现哨兵和从服务器
+在 T1 时刻，S1 判断主库为“客观下线”，它想成为 Leader，就先给自己投一张赞成票，然后分别向 S2 和 S3 发送命令，表示要成为 Leader。
 
-你无须为运行的每个 Sentinel 分别设置其他 Sentinel 的地址， 因为 Sentinel 可以通过发布与订阅功能来自动发现正在监视相同主服务器的其他 Sentinel ， 这一功能是通过向频道 sentinel:hello 发送信息来实现的。
+在 T2 时刻，S3 判断主库为“客观下线”，它也想成为 Leader，所以也先给自己投一张赞成票，再分别向 S1 和 S2 发送命令，表示要成为 Leader。
 
-每个 Sentinel 会以每两秒一次的频率， 通过发布与订阅功能， 向被它监视的所有主服务器和从服务器的 **sentinel**:hello 频道发送一条信息， 信息中包含了 Sentinel 的 IP 地址、端口号和运行 ID （runid）。
+在 T3 时刻，S1 收到了 S3 的 Leader 投票请求。因为 S1 已经给自己投了一票 Y，所以它不能再给其他哨兵投赞成票了，所以 S1 回复 N 表示不同意。同时，S2 收到了 T2 时 S3 发送的 Leader 投票请求。因为 S2 之前没有投过票，它会给第一个向它发送投票请求的哨兵回复 Y，给后续再发送投票请求的哨兵回复 N，所以，在 T3 时，S2 回复 S3，同意 S3成为 Leader。
 
-### 3.2 基于 pub/sub 机制的客户端事件通知
+在 T4 时刻，S2 才收到 T1 时 S1 发送的投票命令。因为 S2 已经在 T3 时同意了 S3 的投票请求，此时，S2 给 S1 回复 N，表示不同意 S1 成为 Leader。发生这种情况，是因为 S3 和 S2 之间的网络传输正常，而 S1 和 S2 之间的网络传输可能正好拥塞了，导致投票请求传输慢了。
 
+在 T5 时刻，S1 得到的票数是来自它自己的一票 Y 和来自 S2 的一票 N。而 S3 除了自己的赞成票 Y 以外，还收到了来自 S2 的一票 Y。此时，S3 不仅获得了半数以上的 Leader 赞成票，也达到预设的 quorum 值（quorum 为 2），所以它最终成为了 Leader。
 
+接着，S3 会开始执行选主操作，而且在选定新主库后，会给其他从库和客户端通知新主库的信息。
 
-## 致谢
+## 五、将新主库通知给从库和客户端
 
-http://www.redis.cn/topics/sentinel.html
+通过上文的学习，我们知道哨兵可以向主库发送 INFO 命令，来获取从库的 IP 地址和端口。
 
-https://redis.io/docs/management/sentinel
+但是，哨兵不能只和主、从库连接。因为，主从库切换后，客户端也需要知道新主库的连接信息，才能向新主库发送请求操作。所以，哨兵还需要把新主库的信息告诉客户端。
 
-本文为个人理解，如有误，欢迎交流指正。公众号【】
+那怎么把新主库的信息告诉客户端呢？
 
-> [1] https://github.com/redis/redis/blob/unstable/sentinel.conf
+### 5.1 基于 pub/sub 机制的客户端事件通知
 
-推广：年末面试季，Redis的这些高可用特性你能回答全面吗？
+从本质上说，哨兵就是一个运行在特定模式下的 Redis 实例，只不过它并不服务请求操作，只是完成监控、选主和通知的任务。所以，每个哨兵实例也提供 pub/sub 机制，客户端可以从哨兵订阅消息。
+
+下图示中是一些重要的频道，以及涉及的几个关键事件。更多的频道你可以在文末链接 [3] 中查看。
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202212192138719.png)
+
+客户端从主库读取哨兵的配置文件后，可以获得哨兵的地址和端口，和哨兵建立网络连接。
+
+当哨兵把新主库选择出来后，客户端就会看到下面的 switch-master 事件。这个事件表示主库已经切换了，新主库的 IP 地址和端口信息已经有了。这个时候，客户端就可以用这里面的新主库地址和端口进行通信了。
+
+```
+switch-master <master name> <oldip> <oldport> <newip> <newport>
+```
+
+## 小结
+
+至此，哨兵的工作职责及细节我们就学习完了。我整理了本文知识消化链路，如下。
+
+```
+在sentinel.conf中配置哨兵
+-> 没有配置其他哨兵ip，怎么组成集群的？
+-> 哨兵是怎么知道从库的IP和端口的？
+-> 职责1：如何判断主从库下线了？
+-> 职责2：如何选定新主库？
+-> 由哪个哨兵执行主从切换？
+-> 职责3：如何把新主库告诉客户端？
+```
+
+更多技术干货，我会在后面的内容里继续分享，敬请关注。公众号「杨同学technotes」，欢迎技术交流。
+
+> 文中所提及的链接
+>
+> - [1] https://www.dbses.cn/technotes
+> - [2] https://github.com/redis/redis/blob/unstable/sentinel.conf
+> - [3] https://redis.io/docs/management/sentinel/#pubsub-messages
+>
+> 附 Redis 文档
+>
+> - http://www.redis.cn/topics/sentinel.html
+> - https://redis.io/docs/management/sentinel
