@@ -1,6 +1,6 @@
 # 01 | 快速使用
 
-> 参考：https://github.com/camunda-community-hub/spring-zeebe/tree/master/examples
+> 参考：https://github.com/camunda-community-hub/spring-zeebe/tree/8.1.12/example
 
 ## 1.1 添加依赖
 
@@ -161,5 +161,48 @@ public class AXBZeebeAutoController {
 
 
 
-## 
+# 04 | 了解 zeebe
+
+> - 项目地址：https://github.com/camunda/zeebe
+> - 官网：https://camunda.com/platform/zeebe/
+> - InfoQ文章：https://xie.infoq.cn/article/4e361655b83634d2a3a0c9a61
+
+## 4.1 Zeebe 介绍
+
+Zeebe 是开源的用于微服务编排的分布式工作流引擎。
+
+### Zeebe 架构
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/c337f96566db5c56aa42adcd6acfc725.png)
+
+### Zeebe Cluster
+
+![image-20221220144645588](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221220144645588.png)
+
+### Partitions
+
+多个 brokers 组成 partition，通过 Raft protocol 选举 partition 中的 leader。
+
+![image-20221220144909821](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221220144909821.png)
+
+类似 Kafka 中的 partition，Zeebe 中将 Process 分发到所有的 partition。
+
+### Zeebe Example
+
+![image-20221220150409974](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/image-20221220150409974.png)
+
+### 支持 Spring Boot Worker
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/1d08e786f4b9f37b8905e901857a8b04.png)
+
+### Operate 可视化
+
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/1847c45cfcefb264646f072d570d7c47.png)
+
+## 4.2 官方资料
+
+### Overview Components
+
+![ComponentsAndArchitecture_SaaS-edd9396b71911e6e4df0e16fa905e869](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/ComponentsAndArchitecture_SaaS-edd9396b71911e6e4df0e16fa905e869.png)
 
