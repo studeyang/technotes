@@ -1,6 +1,12 @@
-# 用什么数据类型省内存？
+#用什么数据类型省内存？
 
-## 1、用什么数据结构可以节省内存？
+##回顾
+
+上篇文章《》中的思考题：既然 String 类型这么占内存，那么你有好的方案来节省内存吗？
+
+##正文
+
+##1、用什么数据结构可以节省内存？
 
 Redis 有一种底层数据结构，叫压缩列表（ziplist），这是一种非常节省内存的结构。
 
@@ -64,11 +70,21 @@ Redis Hash 类型的两种底层实现结构，分别是压缩列表和哈希表
 
 
 
-## 参考资料
+##参考资料
 
 - 文中的一些命令，参考菜鸟教程：https://www.runoob.com/redis/redis-tutorial.html
 - Redis 的 key 也是 SDS 类型的，参考：https://www.cnblogs.com/lonely-wolf/p/14261486.html
 - SDS 的定义，参考：https://juejin.cn/post/6844903936520880135#heading-6
 - 文章大纲，参考极客时间《Redis核心技术与实战》
-- 《Redis设计与实现》
+- 部分内容参考《Redis设计与实现》
+
+##说明
+
+之前的分享内容都是相对零散的知识点，不成体系。以后的每周分享，我会尽量将每篇文章串连起来，于是我决定做一个专栏，名字就叫《学习分享》。这是该系列的第一篇。
+
+《学习分享》每周一发表。这些内容大多来自我平时学习过程中的笔记，笔记仓库在 Github：studeyang/technotes。我认为比较优质的内容，就会以文章的形式发表在该专栏。这个专栏会首发在我的[公众号](https://mp.weixin.qq.com/s?src=11&timestamp=1673405233&ver=4281&signature=px*j8mbL7UqCSQ57TjTzwC*t5bZkg2wHHWwU175K31ZcyKAAN8Qprt2mvkQsxY5YhCDwNPfMsZcPeh0f26m9cdVe4m--CU6P7IlnkoSaRNB6KTntfm2*Mr2nSOzywQI3&new=1)、[掘金](https://juejin.cn/user/2594503173605767/posts)和[今日头条](https://www.toutiao.com/c/user/token/MS4wLjABAAAArFlpgpSvRI74ttxw76bAENUnFIFcYTJQnZYS77fZmNQ/?source=mp_msg&tab=article)，我也维护在了 Github：studeyang/learn-share。
+
+如果内容对你有帮助，可以微信搜索公众号「杨同学technotes」关注我。
+
+##相关文章
 
