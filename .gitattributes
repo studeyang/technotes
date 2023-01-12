@@ -1,0 +1,5 @@
+# ignore
+*.sh linguist-vendored
+
+# set language
+*.md linguist-language=Markdown
