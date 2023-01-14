@@ -47,8 +47,8 @@ $ grep -nri redis docs | cat --number
 
 ## 每周分享
 
-在学习过程中，如果遇到好的内容，我会以文章的形式分享出来。内容会发表在我的[公众号](https://mp.weixin.qq.com/s?src=11&timestamp=1673405233&ver=4281&signature=px*j8mbL7UqCSQ57TjTzwC*t5bZkg2wHHWwU175K31ZcyKAAN8Qprt2mvkQsxY5YhCDwNPfMsZcPeh0f26m9cdVe4m--CU6P7IlnkoSaRNB6KTntfm2*Mr2nSOzywQI3&new=1)、[掘金](https://juejin.cn/user/2594503173605767/posts)和[今日头条](https://www.toutiao.com/c/user/token/MS4wLjABAAAArFlpgpSvRI74ttxw76bAENUnFIFcYTJQnZYS77fZmNQ/?source=mp_msg&tab=article)。
+在学习过程中，如果遇到有深度、有帮助的内容，我会以文章的形式分享出来，内容会发表在我的[公众号](https://mp.weixin.qq.com/s/TWRVaQPhrQf9oPxsAsuIKQ)、[掘金](https://juejin.cn/user/2594503173605767/posts)和[今日头条](https://www.toutiao.com/c/user/token/MS4wLjABAAAArFlpgpSvRI74ttxw76bAENUnFIFcYTJQnZYS77fZmNQ/?source=mp_msg&tab=article)，也会维护在 Github：[studeyang/leanrning-share](https://github.com/studeyang/learning-share)。
 
-微信搜索「杨同学technotes」或者通过下面二维码，即可关注公众号。
+公众号可通过微信搜索「杨同学technotes」或者扫下面的二维码，即可关注。
 
 ![微信公众号二维码](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/qrcode_for_gh_8d08add0e5a6_258.jpg)
