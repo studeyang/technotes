@@ -30,11 +30,11 @@ Redis 有一种底层数据结构，叫压缩列表（ziplist），这是一种�
 
 ![image-20221020213433269](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202210202134308.png)
 
-- zlbytes：
-- zltail：
-- zllen
-- entry
-- zlend
+- zlbytes：4字节
+- zltail：4字节
+- zllen：2字节
+- entry：
+- zlend：1字节
 
 
 
