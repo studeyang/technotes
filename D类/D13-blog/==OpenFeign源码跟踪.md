@@ -9,3 +9,9 @@ new DiscoveryClientServiceInstanceListSupplier
 ```
 
 Feign, Ribbon, Discovery
+
+
+
+## 如何自定义修改 FeignClient 的 url ？
+
+> 这种技术太细节了，用到的时候再看一下就可以了。没有必要特地去研究，还是要把重点放在全局观上。
