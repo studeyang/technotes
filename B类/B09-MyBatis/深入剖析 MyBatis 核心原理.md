@@ -415,7 +415,7 @@ JDBC 的数据类型与 Java 语言中的数据类型虽然有点对应关系，
 | VARCHAR            | Java.lang.String     |
 | CHAR               | Java.lang.String     |
 | BLOB               | Java.lang.byte[]     |
-| INTEGER UNSIGNED   | Java.lang..Long      |
+| INTEGER UNSIGNED   | Java.lang.Long       |
 | TINYINT UNSIGNED   | Java.lang.Integer    |
 | SMALLINT UNSIGNED  | Java.lang.Integer    |
 | MEDIUMINT UNSIGNED | Java.lang.Integer    |
@@ -912,8 +912,8 @@ XMLConfigBuilder.parse() 方法触发了 mybatis-config.xml 配置文件的解�
 - 解析 \<typeAliases> 标签；
 - 解析 \<plugins> 标签；
 - 解析 \<objectFactory> 标签；
-- 解析 <objectWrapperFactory> 标签；
-- 解析 <reflectorFactory> 标签；
+- 解析 \<objectWrapperFactory\> 标签；
+- 解析 \<reflectorFactory\> 标签；
 - 解析 \<environments> 标签；
 - 解析 \<databaseIdProvider> 标签；
 - 解析 \<typeHandlers> 标签；
@@ -977,12 +977,12 @@ mapperElement() 方法就是 XMLConfigBuilder 处理 <mappers> 标签的具体�
 
 MyBatis 会为每个 Mapper.xml 映射文件创建一个 XMLMapperBuilder 实例完成解析。XMLMapperBuilder 中 configurationElement() 方法是真正解析 Mapper.xml 映射文件的地方，其中定义了处理 Mapper.xml 映射文件的核心流程：
 
-- 获取 <mapper> 标签中的 namespace 属性，同时会进行多种边界检查；
-- 解析 <cache> 标签；
-- 解析 <cache-ref> 标签；
-- 解析 <resultMap> 标签；
-- 解析 <sql> 标签；
-- 解析 <select>、<insert>、<update>、<delete> 等 SQL 标签。
+- 获取 \<mapper\> 标签中的 namespace 属性，同时会进行多种边界检查；
+- 解析 \<cache\> 标签；
+- 解析 \<cache-ref\> 标签；
+- 解析 \<resultMap\> 标签；
+- 解析 \<sql\> 标签；
+- 解析 \<select\>、\<insert\>、\<update\>、\<delete\> 等 SQL 标签。
 
 下面我们就按照顺序逐一介绍这些方法的核心实现。
 
