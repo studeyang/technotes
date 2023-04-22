@@ -175,7 +175,7 @@ Redis 是单线程程序，在事务执行时不会中断事务，其他客户�
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201119225334.png" style="zoom:50%;" />
 
-你能看到实际上最后一张票被客户端 2 抢到了，这是因为客户端 1WATCH 的票的变量在 EXEC 之前发生了变化，整个事务就被打断，返回空回复（nil）。
+你能看到实际上最后一张票被客户端 2 抢到了，这是因为客户端 1 WATCH 的票的变量在 EXEC 之前发生了变化，整个事务就被打断，返回空回复（nil）。
 
 需要说明的是 MULTI 后不能再执行 WATCH 命令，否则会返回 WATCH inside MULTI is not allowed 错误（因为 WATCH 代表的就是在执行事务前观察变量是否发生了改变，如果变量改变了就不将事务打断，所以在事务执行之前，也就是 MULTI 之前，使用 WATCH）。同时，如果在执行命令过程中有语法错误，Redis 也会报错，整个事务也不会被执行，Redis 会忽略运行时发生的错误，不会影响到后面的执行。
 
