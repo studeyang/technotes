@@ -17,7 +17,7 @@
 - 技术组件之响应式消息通信篇：介绍消息通信的基本概念，以及基于 Spring Cloud Stream 所提供的响应式编程组件来完成与 RabbitMQ 等主流消息中间件之间的集成。
 - 技术组件之响应式测试篇：介绍针对案例系统中各层响应式组件进行有效测试的解决方案。
 
-# 模块一：基础篇
+# ==模块一：基础篇==
 
 # 01 | 追本溯源：响应式编程究竟是一种什么样的技术体系？
 
@@ -336,7 +336,7 @@ customer-service 一般会与用户账户服务 account-service 进行交互以�
 - 消息中间件：使用 Spring Cloud Stream 组件。
 - Repository 层：将引入 MongoDB 和 Redis 这两款支持响应式流的 NoSQL 数据库。MongoDB 用于存储业务数据，Redis 用于消息数据缓存。
 
-# 模块二：编程框架篇
+# ==模块二：编程框架篇==
 
 # 05 | 响应式编程框架 Reactor
 
@@ -467,8 +467,8 @@ public Mono<Account> getAccountById(@PathVariable Long id) {
 
 背压是所有响应式编程框架所必须要考虑的核心机制，Reactor 框架支持所有常见的背压传播模式，包括以下几种。
 
-- 纯推模式：这种模式下，订阅者通过 subscription.request(Long.MAX_VALUE) 请求有效无限数量的元素。
-- 纯拉模式：这种模式下，订阅者通过 subscription.request(1) 方法在收到前一个元素后只请求下一个元素。
+- 纯推模式：这种模式下，订阅者通过 `subscription.request(Long.MAX_VALUE)` 请求有效无限数量的元素。
+- 纯拉模式：这种模式下，订阅者通过 `subscription.request(1)` 方法在收到前一个元素后只请求下一个元素。
 - 推-拉混合模式：这种模式下，当订阅者有实时控制需求时，发布者可以适应所提出的数据消费速度。
 
 基于这些背压传播模式，在 Reactor 框架中，针对背压有以下四种处理策略。
@@ -478,9 +478,9 @@ public Mono<Account> getAccountById(@PathVariable Long id) {
 - LATEST：类似于 DROP 策略，但让消费者只得到来自上游组件的最新数据。
 - ERROR：代表一种错误处理策略，当消费者无法及时处理数据时发出一个错误信号。
 
-Reactor 使用了一个枚举类型 OverflowStrategy 来定义这些背压处理策略，并提供了一组对应的 onBackpressureBuffer、onBackpressureDrop、onBackpressureLatest 和 onBackpressureError 操作符来设置背压，分别对应上述四种处理策略。
+Reactor 使用了一个枚举类型 `OverflowStrategy` 来定义这些背压处理策略，并提供了一组对应的 `onBackpressureBuffer`、`onBackpressureDrop`、`onBackpressureLatest` 和 `onBackpressureError` 操作符来设置背压，分别对应上述四种处理策略。
 
-Reactor 官网给出的 onBackpressureBuffer 操作符的弹珠图如下所示。
+Reactor 官网给出的 `onBackpressureBuffer` 操作符的弹珠图如下所示。
 
 ![Drawing 9.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211211225124.png)
 
@@ -1300,7 +1300,7 @@ Error has been observed by the following operator(s):
 
 可以看到，这个检查点信息会包含在异常堆栈中。根据需要在系统的关键位置上添加自定义的检查点，也是我们日常开发过程中的一种最佳实践。
 
-# 模块三：响应式Web服务
+# ==模块三：响应式Web服务==
 
 # 09 | 框架升级：WebFlux 比 Web MVC 到底好在哪里？
 
@@ -1819,7 +1819,7 @@ Mono<String> response = requester.route("hello")
         .retrieveMono(String.class);
 ```
 
-# 模块四：响应式数据访问
+# ==模块四：响应式数据访问==
 
 # 17 | R2DBC：关系型数据库能具备响应式数据访问特性吗？
 
