@@ -18,19 +18,22 @@ Java 的有些新技术，甚至能催生一个新行业。比如 Java 代理的
 
 在这门课程里，我从 JDK 9 到 JDK 17 的新特性中筛选出了最核心、有用的 18 条特性。我会分三个模块给你讲解一般软件工程师需要经常使用的 Java 语言新技能。
 
-- 第一模块，我会给你介绍一些可以提升编码效率的特性，比如说档案类。
+- 第一模块，我会给你介绍一些可以==提升编码效率==的特性，比如说档案类。
 
   学完这一部分内容，你能够使用这些新特性，大幅度提高自己的编码效率，降低编码错误。保守估计，你的编码效率可以提高 20%。这也就意味着，如果工作量不变，每一个星期你都可以多休息一天。
 
-- 第二模块，我们会把焦点放在提升代码性能上，比如错误处理的最新成果。
+- 第二模块，我们会把焦点放在==提升代码性能==上，比如错误处理的最新成果。
 
   学完这一部分内容，你将能够使用这些新特性，大幅度提高软件产品的性能，帮助公司提高用户满意度，节省运营费用。保守估计，你编写代码的性能可以提高 20%，甚至更多。
 
-- 第三模块，我会跟你讲讲如何通过新特性降低维护难度，比如模块化和安全性、兼容性问题。
+- 第三模块，我会跟你讲讲如何通过新特性==降低维护难度==，比如模块化和安全性、兼容性问题。
 
-  学完这一部分内容，你将能够编写出更健壮，更容易维护的代码，并且能够知道怎么高效地把旧系统升级到 Java 的新版本。这一部分的目标，就是帮助你把代码的维护成本降低 20% 或者更多。
 
-# 01 | JShell：怎么快速验证简单的小问题？
+学完这一部分内容，你将能够编写出更健壮，更容易维护的代码，并且能够知道怎么高效地把旧系统升级到 Java 的新版本。这一部分的目标，就是帮助你把代码的维护成本降低 20% 或者更多。
+
+# ==提升编码效率==
+
+# 01 | JShell（9）：怎么快速验证简单的小问题？
 
 JShell 这个特性，是在 JDK 9 正式发布的，是 Java 的脚本语言。
 
@@ -41,7 +44,7 @@ JShell 这个特性，是在 JDK 9 正式发布的，是 Java 的脚本语言。
 ```java
 class HowAreYou {
     public static void main(String[] args) {
-        System.out.println("How are you?");
+        System.out.println("Hello, world!");
     }
 }
 ```
@@ -74,6 +77,20 @@ jshell>
 ```shell
 jshell> /exit
 | Goodbye
+```
+
+- JShell 的命令
+
+```
+jshell> /help
+| Type a Java language expression, statement, or declaration.
+| Or type one of the following commands:
+| /list [<name or id>|-all|-start]
+| list the source you have typed
+... snipped ...
+| /help [<command>|<subject>]
+| get information about using the jshell tool
+... snipped ...
 ```
 
 - 立即执行的语句
@@ -154,9 +171,39 @@ $3 ==> false
 
 JShell 的设计并不是为了取代 IDE。JShell 在处理简单的小逻辑，验证简单的小问题时，比 IDE 更有效率。如果我们能够在有限的几行代码中，把要验证的问题表达清楚，JShell 就能够快速地给出计算的结果。
 
-# 02 | 文字块：怎么编写所见即所得的字符串？
+**思考题**
+
+在前面的讨论里，我们使用了一个例子，来说明 Java 处理字符串常量的方式。
+
+```shell
+jshell> "Hello, world" == "Hello, world"
+$2 ==> true
+| created scratch variable $2 : boolean
+```
+
+你有没有办法，让这个例子更容易理解？使用多个 JShell 片段，是不是更好理解？
+
+可以定义 s1="Hello, world", s2="Hello, world", 再判断 s1==s2。
+
+# 02 | 文字块（15）：怎么编写所见即所得的字符串？
 
 文字块这个特性，首先在 JDK 13 中以预览版的形式发布。在 JDK 14 中，改进的文字块再次以预览版的形式发布。最后，文字块在 JDK 15 正式发布。
+
+**阅读案例**
+
+下面的例子中，我们要构造一个简单的表示"Hello，World！"的 HTML 字符串。
+
+```java
+String stringBlock =
+        "<!DOCTYPE html>\n" +
+        "<html>\n" +
+        " <body>\n" +
+        " <h1>\"Hello World!\"</h1>\n" +
+        " </body>\n" +
+        "</html>\n";
+```
+
+这样的字符串不好写，不好看，也不好读。并且，这样的实际例子还比较多，比如 HTML, SQL, XML, JSON, HTTP，随便就可以列一大堆。
 
 **所见即所得的文字块**
 
@@ -235,7 +282,26 @@ public class TextBlocks {
 
 这就说明了，文字块是在编译期处理的，并且在编译期被转换成了常量字符串，然后就被当作常规的字符串了。所以，如果文字块代表的内容，和传统字符串代表的内容一样，那么这两个常量字符串变量就指向同一内存地址，代表同一个对象。
 
-# 03 | 档案类：怎么精简地表达不可变数据？
+**思考题**
+
+在有些场景里，要想完全地实现“所见即所得”，仅仅使用文字块，可能还是要费一点周折的。比如我们看到的诗，有的时候是页面居中对齐的。比如下面的这首小诗，采用的格式就是居中对齐。
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202305172225375.png)
+
+居中对齐这种形式，在 HTML 或者文档的世界里，很容易处理，设置一下格式就可以了。如果是用 Java 语言，该怎么处理好这首小诗的居中对齐问题？
+
+可以这样写：
+
+```java
+String s = """
+\s           No man is an island,
+\s             Entire of itself,
+\s    Every man is a picec of the continent,
+\s            A part of the main.
+""";
+```
+
+# 03 | 档案类（16）：怎么精简地表达不可变数据？
 
 档案类这个特性，首先在 JDK 14 中以预览版的形式发布。在 JDK 15 中，改进的档案类再次以预览版的形式发布。最后，档案类在 JDK 16 正式发布。
 
@@ -268,44 +334,25 @@ public final class Circle implements Shape {
 
 它有一个私有的变量 radius，用来表示圆的半径。有一个构造方法，用来生成圆形的实例。有一个设置半径的方法 setRadius，一个读取半径的方法 getRadius。还有一个重载的方法 getArea，用来计算圆形的面积。
 
-可是，这样的设计有哪些严重的缺陷呢？
+这个圆形类之所以典型，是因为它交代了面向对象设计的关键思想，包括面向对象编程的三大支柱性原则：封装、继承和多态。
+
+这个圆形类有哪些严重的缺陷呢？
 
 **案例分析**
 
 上面这个例子，最重要的问题，就是它的接口不是多线程安全的。如果在一个多线程的环境中，有些线程调用了 setRadius 方法，有些线程调用 getRadius 方法，这些调用的最终结果是难以预料的。这也就是我们常说的多线程安全问题。
 
-考虑多线程安全的问题，我们增加线程同步。
+解决多线程安全的问题，通常做法是在方法上增加线程同步，但这样它的吞吐量损失也有十数倍。
 
-```java
-package co.ivi.jus.record.former;
+这样的代价就有点大了。最有效的办法，就是在接口设计的时候，争取做到即使不使用线程同步，也能做到多线程安全。也就是说，==这个对象是一个只读的对象，不支持修改。==
 
-public final class Circle implements Shape {
-    private double radius;
-    public Circle(double radius) {
-        this.radius = radius;
-    }
-    @Override
-    public synchronized double getArea() {
-        return Math.PI * radius * radius;
-    }
-    public synchronized double getRadius() {
-        return radius;
-    }
-    public synchronized void setRadius(double radius) {
-        this.radius = radius;
-    }
-}
-```
-
-可是，线程同步并不是免费的午餐。哪怕最简单的同步，比如上面代码里同步的 getRadius 方法，它的吞吐量损失也有十数倍。
-
-这样的代价就有点大了。最有效的办法，就是在接口设计的时候，争取做到即使不使用线程同步，也能做到多线程安全。也就是说，这个对象是一个只读的对象，不支持修改。
+下面的代码，是一个修改过的 Circle 类实现。在这个实现里，圆形的对象一旦实例化，就不能再修改它的半径了。相应地，我们删除了设置半径的方法。也就是说，这个对象是一个只读的对象，不支持修改。通常地，我们称这样的对象为不可变对象。
 
 ```java
 package co.ivi.jus.record.immute;
 
 public final class Circle implements Shape {
-    public final double radius;
+    private final double radius; // 属性设为final
     public Circle(double radius) {
         this.radius = radius;
     }
@@ -313,12 +360,15 @@ public final class Circle implements Shape {
     public double area() {
         return Math.PI * radius * radius;
     }
+    public double getRadius() {
+        return radius;
+    }
 }
 ```
 
-对于只读的圆形类的设计，有两个好处。第一个好处，就是天生的多线程安全。第二个好处，就是简化的代码。
+对于只读的圆形类的设计，好处就是天生的多线程安全。
 
-不过，这样的设计似乎破坏了面向对象编程的封装原则。公开半径变量 radius，相当于公开的实现细节。
+还有没有进一步简化的空间呢？
 
 **声明档案类**
 
@@ -337,17 +387,19 @@ public record Circle(double radius) implements Shape {
 
 对比一下传统的 Circle 类的代码，首先，最常见的 class 关键字不见了，取而代之的是 record 关键字。然后，类标识符 Circle 后面，有用小括号括起来的参数。最后，在大括号里，也就是档案类的实现代码里，变量的声明没有了，构造方法也没有了。
 
-我们已经知道怎么生成一个档案类实例了，但还有一个问题是，我们能读取这个圆形档案类的半径吗？
+使用构造方法的形式来生成 Circle 档案类实例。
 
-其实，类标识符声明后面的小括号里的参数，就是等价的不可变变量。在档案类里，这样的不可变变量是私有的变量，我们不可以直接使用它们。但是我们可以通过等价的方法来调用它们。
+```java
+Circle circle = new Circle(10.0);
+```
+
+读取这个圆形档案类的半径，变量的标识符就是等价方法的标识符。
 
 ```java
 double radius = circle.radius();
 ```
 
-变量的标识符就是等价方法的标识符。
-
-在档案类里，方法调用的形式又回来了。调用形式依然保持着良好的封装形式。打破封装原则的顾虑也就不复存在了。
+需要注意的是，由于档案类表示的是不可变数据，除了构造方法之外，并没有给不可变变量赋值的方法。
 
 **档案类的其他改进**
 
@@ -392,6 +444,17 @@ public class ModernUseCases {
 这段代码运行的结果告诉我们，两个半径为 10 厘米的圆形的档案类实例，是相等的实例。
 
 这是因为，档案类内置了缺省的 equals 方法、hashCode 方法以及 toString 方法的实现。一般情况下，我们就再也不用担心这三个方法的重载问题了。
+
+**不可变的数据**
+
+如果一个 Java 类一旦实例化就不能再修改，那么用它表述的数据就是不可变数据。Java 档案类就是表述不可变数据的。为了强化“不可变”这一原则，避免面向对象设计的陷阱，Java 档案类还做了以下的限制：
+
+1. Java 档案类不支持扩展子句，用户不能定制它的父类。隐含的，它的父类是 java.lang.Record。父类不能定制，也就意味着我们不能通过修改父类来影响 Java 档案的行为。
+2. Java 档案类是个终极（final）类，不支持子类，也不能是抽象类。没有子类，也就意味着我们不能通过修改子类来改变 Java 档案的行为。
+3. Java 档案类声明的变量是不可变的变量。这就是我们前面反复强调的，一旦实例化就不能再修改的关键所在。
+4. Java 档案类不能声明本地（native）方法。如果允许了本地方法，也就意味着打开了修改不可变变量的后门。
+
+常地，我们把 Java 档案类看成是一种特殊形式的 Java 类。除了上述的限制，Java 档案类和普通类的用法是一样的。
 
 **透明的载体**
 
@@ -449,6 +512,47 @@ $16 ==> false
 
 运算的结果显示，这两个实例并不相等。这不是我们期望的结果。其中的原因，就是因为数组这个变量的 equals 方法并不能正常工作。
 
+- 不推荐重载 toString 方法
+
+为了更个性化的显示，我们有时候也需要重载 toString 方法。但是，我们通常不建议重载不可变数据的读取方法。因为，这样的重载往往意味着需要变更缺省的不可变数值，从而打破实例的状态，进而造成许多无法预料的、让人费解的后果。
+
+比如说，我们设想定义一个数，如果是负值的话，我们希望读取的是它的相反数。下面的例子，就是一个味道很坏的示范。
+
+```shell
+jshell> record Number(int x) {
+...> public int x() {
+...> return x > 0 ? x : (-1) * x;
+...> }
+...> }
+| created record Number
+
+jshell> Number n = new Number(-1);
+n ==> Number[x=-1]
+
+jshell> n.x();
+$9 ==> 1
+
+jshell> Number m = new Number(n.x());
+m ==> Number[x=1]
+
+jshell> m.equals(n);
+$11 ==> false
+```
+
+这让代码变得难以理解，很容易出错。更严重的问题是，这样的重载不再能够支持实例的拷贝。比如说，我们把实例 n 拷贝到另一个实例 m。这两个实例按照道理来说应该相等。而由于重载了读取的方法，实际的结果，这两个实例是不相等的。这样的结果，也可能会使代码容易出错，而且难以调试。
+
+**思考题**
+
+我们都知道，社会保障号是高度敏感的信息，不能被泄漏，也不能被盗取。可以用字节数组用来表示社会保障号。你来想一想，equals(), hashCode(), toString() 有哪些方法需要重载？为什么？代码看起来是什么样子的？有难以克服的困难吗？
+
+```java
+record SocialSecurityNumber(byte[] ssn) {
+    // Here is your code.
+    // 字节数据判等，需要重载：equals(), hashCode(), 
+    // 由于不能被泄漏，toString() 就不用重载了
+}
+```
+
 # 04 | 封闭类：怎么刹住失控的扩展性？
 
 封闭类这个特性，首先在 JDK 15 中以预览版的形式发布。在 JDK 16 中，改进的封闭类再次以预览版的形式发布。最后，封闭类在 JDK 17 正式发布。
@@ -457,9 +561,9 @@ $16 ==> false
 
 
 
+# ==提升代码性能==
 
-
-
+# ==降低维护难度==
 
 
 
