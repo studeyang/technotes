@@ -301,7 +301,7 @@ String s = """
 """;
 ```
 
-# 03 | 档案类（16）：怎么精简地表达不可变数据？
+# 03 | record（16）：怎么精简地表达不可变数据？
 
 档案类这个特性，首先在 JDK 14 中以预览版的形式发布。在 JDK 15 中，改进的档案类再次以预览版的形式发布。最后，档案类在 JDK 16 正式发布。
 
@@ -553,15 +553,177 @@ record SocialSecurityNumber(byte[] ssn) {
 }
 ```
 
-# 04 | 封闭类：怎么刹住失控的扩展性？
+# 04 | sealed（17）：怎么刹住失控的扩展性？
 
 封闭类这个特性，首先在 JDK 15 中以预览版的形式发布。在 JDK 16 中，改进的封闭类再次以预览版的形式发布。最后，封闭类在 JDK 17 正式发布。
 
 **阅读案例**
 
+下面的这段代码，是形状类的抽象，名字是 Shape，它有一个抽象方法 area()，用来计算形状的面积。它还有一个公开的属性 id，用来标识这个形状的对象。
 
+```java
+public abstract class Shape {
+    public final String id;
+    public Shape(String id) {
+        this.id = id;
+    }
+    public abstract double area();
+}
+```
+
+正方形是一个形状。
+
+```java
+public class Square extends Shape {
+    public final double side;
+    public Square(String id, double side) {
+        super(id);
+        this.side = side;
+    }
+    @Override
+    public double area() {
+        return side * side;
+    }
+}
+```
+
+那么，到底怎么判断一个形状是不是正方形呢？如果只有上面一个形状，答案似乎很简单。
+
+```java
+static boolean isSquare(Shape shape) {
+    return (shape instanceof Square);
+}
+```
+
+**案例分析**
+
+上面的这个例子，判断的只是“一个形状的对象是不是一个正方形的实例”。但实际上，一个长方形的每一个边的长度都是一样的，其实它就是一个正方形，但是表示它的类是长方形的类，而不是正方形类。所以，上面的这段代码还是有缺陷的，并不总是能够正确判断一个形状是不是正方形。
+
+```java
+public class Rectangle extends Shape {
+    public final double length;
+    public final double width;
+    public Rectangle(String id, double length, double width) {
+        super(id);
+        this.length = length;
+        this.width = width;
+    }
+    @Override
+    public double area() {
+        return length * width;
+    }
+}
+```
+
+对于“怎么判断一个形状是不是正方形”这个问题，我想应该有进一步的判断。
+
+```java
+public static boolean isSquare(Shape shape) {
+    if (shape instanceof Rectangle rect) {
+        return (rect.length == rect.width);
+    }
+    return (shape instanceof Square);
+}
+```
+
+但其实，这个问题我们还没有搞定。因为正方形也是一个特殊的菱形，如果一个对象是一个菱形类的实例，上面的代码就有缺陷。
+
+更令人窘迫的是，正方形还是一个特殊的梯形，还是一个特殊的多边形。随着我们学习一步一步的深入，我们知道还有很多形状的特殊形式是正方形，而且我们并不知道我们知识范围外的那些形状，当然更不能提穷举它们了。
+
+无限制的扩展性，是问题的根源。
+
+**怎么限制住扩展性？**
+
+JDK 17 之前的 Java 语言，限制住可扩展性只有两个方法，使用私有类或者 final 修饰符。显而易见，私有类不是公开接口，只能内部使用；而 final 修饰符彻底放弃了可扩展性。要么全开放，要么全封闭，可扩展性只能在可能性的两个极端游走。
+
+JDK 17 之后，有了第三种方法。这个办法，就是使用 Java 的 sealed 关键字。
+
+**怎么声明封闭类**
+
+```java
+public abstract sealed class Shape permits Circle, Square {
+    public final String id;
+    public Shape(String id) {
+        this.id = id;
+    }
+    public abstract double area();
+}
+```
+
+这里定义的形状这个类，只允许有圆形和正方形两个子类。
+
+如果子类和封闭类在同一个源代码文件里，封闭类可以不使用 permits 语句。
+
+```java
+public abstract sealed class Shape {
+    public final String id;
+    public Shape(String id) {
+        this.id = id;
+    }
+    public abstract double area();
+    public static final class Circle extends Shape {
+        // snipped
+    }
+    public static final class Square extends Shape {
+        // snipped
+    }
+}
+```
+
+**怎么声明许可类**
+
+许可类必须声明是否继续保持封闭：
+
+- 许可类可以声明为终极类（final），从而关闭扩展性；
+- 许可类可以声明为封闭类（sealed），从而延续受限制的扩展性；
+- 许可类可以声明为解封类（non-sealed）, 从而支持不受限制的扩展性。
+
+**思考题**
+
+文中解决“怎么判断一个形状是不是正方形”这个问题的代码是版本 1.0。假设在版本 2.0 里，需要增加另一个许可类，用来支持长方形（Rectangle）。那么：
+
+1. 封闭类的代码该怎么改动，才能支持长方形？
+2. “判断一个形状是不是正方形”的代码该怎么改动，才能适应封闭类的改变？
+3. 增加一个许可类，会有兼容性的影响吗？比如说，使用版本 1.0 来判断一个形状是不是正方形的代码还能使用吗？
+
+```java
+//封闭类支持长方形
+public abstract sealed class Shape permits Circle, Square, Rectangle {
+    public final String id;
+    public Shape(String id) {
+        this.id = id;
+    }
+    public abstract double area();
+}
+```
+
+```java
+//判断一个形状是不是正方形
+public static boolean isSquare(Shape shape) {
+    if (shape instanceof Rectangle rect) {
+        return (rect.length == rect.width);
+    }
+    return (shape instanceof Square);
+}
+```
+
+第三个问题，不能使用。
+
+# 05 | 类型匹配：怎么切除臃肿的强制转换？
+
+
+
+# 06 | switch表达式：怎么简化多情景操作？
+
+
+
+# 07 | switch匹配：能不能适配不同的类型？
 
 # ==提升代码性能==
+
+
+
+
 
 # ==降低维护难度==
 
