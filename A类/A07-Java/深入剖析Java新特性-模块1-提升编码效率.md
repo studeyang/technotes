@@ -709,15 +709,251 @@ public static boolean isSquare(Shape shape) {
 
 第三个问题，不能使用。
 
-# 05 | 类型匹配：怎么切除臃肿的强制转换？
+# 05 | 类型匹配（16）：怎么切除臃肿的强制转换？
 
+**阅读案例**
 
+我们要设计一个方法，来判断一个形状是不是正方形。
 
-# 06 | switch表达式：怎么简化多情景操作？
+```java
+static boolean isSquare(Shape shape) {
+    if (shape instanceof Rectangle) {
+        Rectangle rect = (Rectangle) shape;
+        return (rect.length == rect.width);
+    }
+    return (shape instanceof Square);
+}
+```
 
+我们可以用什么方法改进这个模式，提高生产效率呢？ 这个问题的答案就是类型匹配。
 
+**类型匹配**
+
+我们先来看看使用了类型匹配的代码的样子。下面的例子，就是使用类型匹配的一段代码。
+
+```java
+if (shape instanceof Rectangle rect) {
+    return (rect.length == rect.width);
+}
+```
+
+**匹配变量的作用域**
+
+第一段代码，我们看看最常规的使用。我们可以在确认类型匹配的条件语句之内使用匹配变量。这个条件语句之外，不是匹配变量的作用域。
+
+```java
+public static boolean isSquareImplA(Shape shape) {
+    if (shape instanceof Rectangle rect) {
+        // rect is in scope
+        return rect.length() == rect.width();
+    }
+    // rect is not in scope here
+    return shape instanceof Square;
+}
+```
+
+第二段代码，我们看看有点意外的使用。我们可以在确认类型不匹配的条件语句之后使用匹配变量。这个条件语句之内，不是匹配变量的作用域。
+
+```java
+public static boolean isSquareImplB(Shape shape) {
+    if (!(shape instanceof Rectangle rect)) {
+        // rect is not in scope here
+        return shape instanceof Square;
+    }
+    // rect is in scope
+    return rect.length() == rect.width();
+}
+```
+
+第三段代码，我们看看紧凑的方式。这一段代码的逻辑，和第一段代码一样，我们只是换成了一种更紧凑的表示方法。
+
+```java
+public static boolean isSquareImplC(Shape shape) {
+    return shape instanceof Square || // rect is not in scope here
+        (shape instanceof Rectangle rect &&
+         rect.length() == rect.width()); // rect is in scope here
+}
+```
+
+第四段代码，我们看看逻辑或运算。它类似于第三段代码，只是我们把逻辑与运算符替换成了逻辑或运算符。这时候的逻辑，就变成了“类型匹配或者匹配变量满足某一个条件”。逻辑或运算符也是从左到右计算。
+
+不过和逻辑与运算符不同的是，一般来说，只有第一个运算不成立，也就是说类型不匹配时，才能进行下一步的运算。下一步的运算，匹配变量并没有被赋值，我们不能够在这一部分使用匹配变量。所以，这一段代码并不能通过编译器的审查。
+
+```java
+public static boolean isSquareImplD(Shape shape) {
+    return shape instanceof Square || // rect is not in scope here
+        (shape instanceof Rectangle rect ||
+         rect.length() == rect.width()); // rect is not in scope here
+}
+```
+
+第五段代码，我们看看位与运算。这段代码和第三段代码类似，只是我们把逻辑与运算符（&&）替换成了位与运算符（&）。不过（&）可没有短路的特性，所以，下面这一段代码，也不能通过编译器的审查。
+
+```java
+public static boolean isSquareImplE(Shape shape) {
+    return shape instanceof Square | // rect is not in scope here
+        (shape instanceof Rectangle rect &
+         rect.length() == rect.width()); // rect is in scope here
+}
+```
+
+第六段代码，我们把匹配变量的作用域的影响延展一下，看看它对影子变量（Shadowed Variable）的影响。
+
+```java
+public final class Shadow {
+    private static final Rectangle rect = null;
+    public static boolean isSquare(Shape shape) {
+        if (shape instanceof Rectangle rect) {
+            // Field rect is shadowed, local rect is in scope
+            System.out.println("This should be the local rect: " + rect);
+            return rect.length() == rect.width();
+        }
+        // Field rect is in scope, local rect is not in scope here
+        System.out.println("This should be the field rect: " + rect);
+        return shape instanceof Shape.Square;
+    }
+}
+```
+
+第七段代码，我们还是来看一看影子变量。只不过，这一次，我们使用类似于第二段代码的代码组织方式，来表述类型匹配部分的逻辑。
+
+```java
+public final class Shadow {
+    private static final Rectangle rect = null;
+    public static boolean isSquare(Shape shape) {
+        if (!(shape instanceof Rectangle rect)) {
+            // Field rect is in scope, local rect is not in scope here
+            System.out.println("This should be the field rect: " + rect);
+            return shape instanceof Shape.Square;
+        }
+        // Field rect is shadowed, local rect is in scope
+        System.out.println("This should be the local rect: " + rect);
+        return rect.length() == rect.width();
+    }
+}
+```
+
+我们把这些代码放在一起，分析一下它们的特点。
+
+第四段和第五段代码，不能通过编译器的审查，所以我们不能使用这两种编码方式。
+
+第二段和第七段代码，匹配变量的作用域，远离了类型匹配语句。这种距离上的疏远，无论在视觉上还是心理上，都不是很舒适的选择。不舒适，就给错误留下了空间，不容易编码，也不容易排错。这种代码逻辑和语法上都没有问题，但是不太容易阅读。
+
+第一段和第六段代码，匹配变量的作用域，紧跟着类型匹配语句。这是我们感觉舒适的代码布局，也是最安全的代码布局，不容易出错，也容易阅读。
+
+第三段代码，它的编排方式不太容易阅读，阅读者需要认真拆解每一个条件，才能确认逻辑是正确的。相对于第一段和第六段代码，第三段代码的组织方式，是一个次优的选择。
+
+# 06 | switch表达式（14）：怎么简化多情景操作？
+
+**阅读案例**
+
+生活中，我们熟悉这样的顺口溜，“一三五七八十腊，三十一天永不差，四六九冬三十整，平年二月二十八，闰年二月把一加”。
+
+下面的这段代码，就是按照这个顺口溜的逻辑来计算了一下，今天所在的这个月，一共有多少天。
+
+```java
+class DaysInMonth {
+    public static void main(String[] args) {
+        Calendar today = Calendar.getInstance();
+        int month = today.get(Calendar.MONTH);
+        int year = today.get(Calendar.YEAR);
+        int daysInMonth;
+        switch (month) {
+            case Calendar.JANUARY:
+            case Calendar.MARCH:
+            case Calendar.MAY:
+            case Calendar.JULY:
+            case Calendar.AUGUST:
+            case Calendar.OCTOBER:
+            case Calendar.DECEMBER:
+                daysInMonth = 31;
+                break;
+            case Calendar.APRIL:
+            case Calendar.JUNE:
+            case Calendar.SEPTEMBER:
+            case Calendar.NOVEMBER:
+                daysInMonth = 30;
+                break;
+            case Calendar.FEBRUARY:
+                if (((year % 4 == 0) && !(year % 100 == 0))
+                    || (year % 400 == 0)) {
+                    daysInMonth = 29;
+                } else {
+                    daysInMonth = 28;
+                }
+                break;
+            default:
+                throw new RuntimeException(
+                    "Calendar in JDK does not work");
+        }
+        System.out.println("There are " + daysInMonth + " days in this month.");
+    }
+}
+```
+
+这样的 switch 语句至少有两个容易犯错误的地方。
+
+第一个容易犯错的地方，就是在 break 关键字的使用上。上面的代码里，如果多使用一个 break 关键字，代码的逻辑就会发生变化；同样的，少使用一个 break 关键字也会出现问题。
+
+第二个容易犯错的地方，是反复出现的赋值语句。
+
+**switch 表达式**
+
+```java
+class DaysInMonth {
+    public static void main(String[] args) {
+        Calendar today = Calendar.getInstance();
+        int month = today.get(Calendar.MONTH);
+        int year = today.get(Calendar.YEAR);
+        int daysInMonth = switch (month) {
+            case Calendar.JANUARY,
+                Calendar.MARCH,
+                Calendar.MAY,
+                Calendar.JULY,
+                Calendar.AUGUST,
+                Calendar.OCTOBER,
+                Calendar.DECEMBER -> 31;
+            case Calendar.APRIL,
+                Calendar.JUNE,
+                Calendar.SEPTEMBER,
+                Calendar.NOVEMBER -> 30;
+            case Calendar.FEBRUARY -> {
+                if (((year % 4 == 0) && !(year % 100 == 0))
+                    || (year % 400 == 0)) {
+                    yield 29;
+                } else {
+                    yield 28;
+                }
+            }
+            default -> throw new RuntimeException(
+                "Calendar in JDK does not work");
+        };
+        System.out.println(
+            "There are " + daysInMonth + " days in this month.");
+    }
+}
+```
+
+大多数情况下，switch 表达式箭头标识符的右侧是一个数值或者是一个表达式。 如果需要一个或者多个语句，我们就要使用代码块的形式。这时候，我们就需要引入一个新的 yield 语句来产生一个值，这个值就成为这个封闭代码块代表的数值。
+
+为了便于理解，我们可以把 yield 语句产生的值看成是 switch 表达式的返回值。所以，yield 只能用在 switch 表达式里，而不能用在 switch 语句里。
+
+```java
+case Calendar.FEBRUARY -> {
+    if (((year % 4 == 0) && !(year % 100 == 0))
+        || (year % 400 == 0)) {
+        yield 29;
+    } else {
+        yield 28;
+    }
+}
+```
+
+如果没有最后的 default 情景分支，编译器就会报错。这是一个影响深远的改进，它会使得 switch 表达式的代码更加健壮，大幅度降低维护成本。
 
 # 07 | switch匹配：能不能适配不同的类型？
+
+
 
 # ==提升代码性能==
 
