@@ -27,4 +27,8 @@
 - **业务踩坑**
   - [Java开发常见错误-代码篇](D类/D10-业务踩坑/[极客时间]-Java开发常见错误-01代码篇.md)
 
-
+- **最佳实践**
+  - [Intellij Idea最佳实践](D类/D13-最佳实践/Intellij%20Idea最佳实践.md)
+  - [Java8 Stream最佳实践](D类/D13-最佳实践/Java8%20Stream最佳实践.md)
+  - [Postman最佳实践](D类/D13-最佳实践/Postman最佳实践.md)
+  - [RestTemplate最佳实践](D类/D13-最佳实践/RestTemplate最佳实践.md)
