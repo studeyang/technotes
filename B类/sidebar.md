@@ -28,7 +28,7 @@
 
 - **Spring**
   - [Spring的IoC容器](B类/B06-Spring/《Spring揭秘》第二部分-Spring的IoC容器.md)
-  - [Spring AOP框架](B类/B06-Spring/《Spring揭秘》第三部分-Spring%20AOP框架.md)
+  - [Spring AOP框架](B类/B06-Spring/《Spring揭秘》第三部分-Spring-AOP框架.md)
   - [Spring事务管理](B类/B06-Spring/《Spring揭秘》第五部分-事务管理.md)
   - [Spring面试题-第一天](B类/B06-Spring/Spring面试题-第一天.md)
   - [Spring响应式编程](B类/B06-Spring/Spring响应式编程.md)
@@ -46,7 +46,7 @@
 
 - **MyBatis**
   - [《MyBatis技术内幕》读书笔记](B类/B09-MyBatis/《MyBatis技术内幕》读书笔记.md)
-  - [深入剖析 MyBatis 核心原理](B类/B09-MyBatis/深入剖析%20MyBatis%20核心原理.md)
+  - [深入剖析MyBatis核心原理](B类/B09-MyBatis/深入剖析MyBatis核心原理.md)
 
 - **系统性能**
   - [性能调优实战-Java编程调优](B类/B10-系统性能/[极客时间]-性能调优实战-01Java编程调优.md)
