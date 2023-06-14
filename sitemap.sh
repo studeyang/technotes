@@ -4,11 +4,12 @@ sitemap="sitemap.xml"
 website_link="https://studeyang.tech/technotes"
 ignore=(
   sidebar.md
+  A类/Python/sidebar.md
   B类/sidebar.md
   C类/sidebar.md
   D类/sidebar.md
   README.md
-  Python/README.md
+  A类/Python/README.md
   A类/README.md
   B类/README.md
   C类/README.md

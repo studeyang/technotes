@@ -9,7 +9,6 @@
 - **Java虚拟机**
   - [深入拆解Java虚拟机-基本原理](A类/A02-Java虚拟机/[极客时间]-深入拆解Java虚拟机-01基本原理.md)
   - [深入浅出Java虚拟机](A类/A02-Java虚拟机/[拉勾教育]-深入浅出Java虚拟机.md)
-  - [《深入理解Java虚拟机》（周志明）读书笔记](A类/A02-Java虚拟机/《深入理解Java虚拟机》（周志明）读书笔记.md)
 
 - **MySQL**
   - [MySQL实战-基础篇](A类/A03-MySQL/[极客时间]-MySQL实战-01基础篇.md)
@@ -32,3 +31,17 @@
   
 - **Java**
   - [深入剖析Java新特性](A类/A07-Java/深入剖析Java新特性-模块1-提升编码效率.md)
+
+- 零基础学Python
+  - [01 | Python介绍与安装](A类/Python/零基础学Python/01Python介绍与安装.md)
+  - [02 | 变量、数字、序列、映射和集合](A类/Python/零基础学Python/02变量、数字、序列、映射和集合.md)
+  - [03 | 条件和循环.md](A类/Python/零基础学Python/03条件和循环.md)
+  - [04 | 文件、输入输出、异常](A类/Python/零基础学Python/04文件、输入输出、异常.md)
+  - [05 | 函数、模块.md](A类/Python/零基础学Python/05函数、模块.md)
+  - [06 | 面向对象编程](A类/Python/零基础学Python/06面向对象编程.md)
+  - [07 | 多线程编程](A类/Python/零基础学Python/07多线程编程.md)
+  - [08 | 标准库、机器学习库](A类/Python/零基础学Python/08标准库、机器学习库.md)
+  - [09 | 第三方库](A类/Python/零基础学Python/09第三方库.md)
+
+- Python核心技术与实战
+  - [Python核心技术与实战-基础篇](A类/Python/Python核心技术与实战/Python核心技术与实战-基础篇.md)

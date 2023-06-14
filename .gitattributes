@@ -3,4 +3,4 @@
 *.html linguist-vendored
 
 # set language
-*.md linguist-language=Markdown
+*.md linguist-language=html

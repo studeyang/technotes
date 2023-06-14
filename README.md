@@ -1,6 +1,6 @@
 # 互联网技术学习笔记
 
-学习过程中的笔记。更好的阅读效果：https://www.studeyang.tech
+学习过程中的笔记。更好的阅读效果：https://studeyang.tech/technotes
 
 ## 如何搜索
 

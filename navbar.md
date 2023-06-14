@@ -1,11 +1,12 @@
 <!-- _navbar.md -->
 
-- [基础类](sidebar.md)
-- [进阶类](B类/sidebar.md)
-- [架构类](C类/sidebar.md)
-- [扩展类](D类/sidebar.md)
-- More...
-  - [Python](Python/sidebar.md)
+- [基础知识](sidebar.md)
+  <!-- [Python](A类/Python/sidebar.md) -->
+
+- [互联网进阶](B类/sidebar.md)
+- [架构视角](C类/sidebar.md)
+- [行业观](D类/sidebar.md)
+  
 
 
 
