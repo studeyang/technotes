@@ -16,7 +16,7 @@ select name from CUser where id_card = 'xxxxxxxyyyyyyzzzzz';
 
 那么现在你有两个选择，要么给 id_card 字段创建唯一索引，要么创建一个普通索引。从性能的角度考虑，你选择唯一索引还是普通索引呢？选择的依据是什么呢？
 
-我们还是用第 4 篇文章[《深入浅出索引（上）》](https://github.com/dbses/TechNotes/blob/master/A-03 MySQL/[极客时间]-MySQL实战-01基础篇.md#04--深入浅出索引上)中的例子来说明。
+我们还是用第 4 篇文章[《深入浅出索引（上）》](https://github.com/studeyang/TechNotes/blob/master/A-03 MySQL/[极客时间]-MySQL实战-01基础篇.md#04--深入浅出索引上)中的例子来说明。
 
 > 假设，我们有一个主键列为 ID 的表，表中有字段 k，并且在 k 上有索引。这个表的建表语句是：
 >

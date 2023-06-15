@@ -1,4 +1,4 @@
-![](https://cdn.jsdelivr.net/gh/dbses/technotes@master/Python/零基础学Python/python_knowledge_map.jpg)
+![](https://cdn.jsdelivr.net/gh/studeyang/technotes@master/Python/零基础学Python/python_knowledge_map.jpg)
 
 ## 在Windows系统上安装Python
 

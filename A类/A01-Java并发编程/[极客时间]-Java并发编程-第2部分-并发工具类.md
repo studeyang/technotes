@@ -578,7 +578,7 @@ try {
 
 这样看上去好像是没有问题的，先是获取读锁，然后再升级为写锁，对此还有个专业的名字，叫**锁的升级**。可惜 ReadWriteLock 并不支持这种升级。在上面的代码示例中，读锁还没有释放，此时获取写锁，会导致写锁永久等待，最终导致相关线程都被阻塞，永远也没有机会被唤醒。锁的升级是不允许的，这个你一定要注意。
 
-（测试代码在 [github](https://github.com/dbses/Test4yang/tree/master/JavaThread/src/main/java/char17/LevelUpLockDemo.java) 上）
+（测试代码在 [github](https://github.com/studeyang/Test4yang/tree/master/JavaThread/src/main/java/char17/LevelUpLockDemo.java) 上）
 
 不过，虽然锁的升级是不允许的，但是锁的降级却是允许的。以下代码来源自 ReentrantReadWriteLock 的官方示例，略做了改动。你会发现在代码【1】处，获取读锁的时候线程还是持有写锁的，这种锁的降级是支持的。
 
@@ -1749,7 +1749,7 @@ save(r3);
 
 下面是代码实现。
 
-（测试代码在 [github](https://github.com/dbses/Test4yang/tree/master/JavaThread/src/main/java/char24/BubbleTeaDemo.java) 上）
+（测试代码在 [github](https://github.com/studeyang/Test4yang/tree/master/JavaThread/src/main/java/char24/BubbleTeaDemo.java) 上）
 
 ```java
 // 任务 1：洗水壶 -> 烧开水
