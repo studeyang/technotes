@@ -2,7 +2,6 @@ import datetime
 import os
 
 url = 'https://studeyang.tech/technotes/#'
-file_path = "./sitemap.xml"
 exclude_files = [
     'coverpage', 'navbar', 'README', 'sidebar',
     'A类/README', 'A类/Python/README', 'A类/Python/sidebar',
@@ -17,6 +16,7 @@ exclude_files = [
 def create_sitemap():
     xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    txt = ''
     for path, dirs, files in os.walk("./"):
         for file in files:
             if not file.endswith('.md'):
@@ -28,6 +28,7 @@ def create_sitemap():
                 if new_path in exclude_files:
                     continue
                 print(new_path)
+                txt += f'{url}/{new_path}\n'
                 xml += '  <url>\n'
                 xml += f'    <loc>{url}/{new_path}</loc>\n'
                 lastmod = datetime.datetime.utcfromtimestamp(os.path.getmtime(path + file)).strftime('%Y-%m-%d')
@@ -40,8 +41,10 @@ def create_sitemap():
                 break
     xml += f'</urlset>\n'
 
-    with open(file_path, 'w', encoding='utf-8') as sitemap:
+    with open('./sitemap.xml', 'w', encoding='utf-8') as sitemap:
         sitemap.write(xml)
+    with open('./sitemap.txt', 'w', encoding='utf-8') as sitemap:
+        sitemap.write(txt)
 
 
 if __name__ == '__main__':
