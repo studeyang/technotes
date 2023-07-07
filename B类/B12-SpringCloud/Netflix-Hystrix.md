@@ -1,4 +1,4 @@
-> 参考文档：https://github.com/Netflix/Hystrix/wiki
+> 翻译自：https://github.com/Netflix/Hystrix/wiki
 
 ## 一、简述
 
@@ -249,7 +249,7 @@ clean build 方式的输出如下
 
 下图展示了当你用使用 Hystrix 封装后的客户端请求一个服务时的流程：
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/hystrix-command-flow-chart-640.png) 
+![img](https://github.com/Netflix/Hystrix/wiki/images/hystrix-command-flow-chart-640.png)
 
 [*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/hystrix-command-flow-chart.png)
 
@@ -327,7 +327,7 @@ Observable<K> ocValue = command.toObservable();    //cold observable
 
 Here, Hystrix invokes the request to the dependency by means of the method you have written for this purpose, one of the following:
 
-- [`HystrixCommand.run()`](http://netflix.github.io/Hystrix/javadoc/com/netflix/hystrix/HystrixCommand.html#run()) — returns a single response or throws an exception
+- [`HystrixCommand.run()`](http://netflix.github.io/Hystrix/javadoc/com/netflix/hystrix/HystrixCommand.html#run()) — 返回单个响应或者引发异常
 - [`HystrixObservableCommand.construct()`](http://netflix.github.io/Hystrix/javadoc/com/netflix/hystrix/HystrixObservableCommand.html#construct()) — returns an Observable that emits the response(s) or sends an `onError` notification
 
 If the `run()` or `construct()` method exceeds the command’s timeout value, the thread will throw a `TimeoutException` (or a separate timer thread will, if the command itself is not running in its own thread). In that case Hystrix routes the response through 8. Get the Fallback, and it discards the eventual return value `run()` or `construct()` method if that method does not cancel/interrupt.
@@ -394,7 +394,9 @@ If the Hystrix command succeeds, it will return the response or responses to the
 
 The following diagram shows how a `HystrixCommand` or `HystrixObservableCommand` interacts with a [`HystrixCircuitBreaker`](http://netflix.github.io/Hystrix/javadoc/index.html?com/netflix/hystrix/HystrixCircuitBreaker.html) and its flow of logic and decision-making, including how the counters behave in the circuit breaker.
 
-[![img](https://github.com/Netflix/Hystrix/wiki/images/circuit-breaker-640.png) *(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/circuit-breaker-1280.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/circuit-breaker-640.png)
+
+[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/circuit-breaker-1280.png)
 
 The precise way that the circuit opening and closing occurs is as follows:
 
@@ -420,7 +422,7 @@ Clients (libraries, network calls, etc) execute on separate threads. This isolat
 
 Hystrix uses separate, per-dependency thread pools as a way of constraining any given dependency so latency on the underlying executions will saturate the available threads only in that pool.
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/request-example-with-latency-640.png) 
+![img](https://github.com/Netflix/Hystrix/wiki/images/request-example-with-latency-640.png)
 
 [*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/request-example-with-latency-1280.png)
 
@@ -440,7 +442,9 @@ Netflix, in its design of Hystrix, chose the use of threads and thread-pools to 
 - Most network access is performed synchronously.
 - Failure and latency can occur in the client-side code as well, not just in the network call.
 
-[![img](https://github.com/Netflix/Hystrix/wiki/images/isolation-options-640.png) *(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/isolation-options-1280.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/isolation-options-640.png)
+
+[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/isolation-options-1280.png)
 
 
 
@@ -477,7 +481,9 @@ The Netflix API processes 10+ billion Hystrix Command executions per day using t
 
 The following diagram represents one `HystrixCommand` being executed at 60 requests-per-second on a single API instance (of about 350 total threaded executions per second per server):
 
-[![img](https://github.com/Netflix/Hystrix/wiki/images/thread-cost-60rps-640.png) *(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/thread-cost-60rps-original.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/thread-cost-60rps-640.png)
+
+[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/thread-cost-60rps-original.png)
 
 At the median (and lower) there is no cost to having a separate thread.
 
@@ -514,7 +520,9 @@ You can front a `HystrixCommand` with a request collapser ([`HystrixCollapser`](
 
 The following diagram shows the number of threads and network connections in two scenarios: first without and then with request collapsing (assuming all connections are “concurrent” within a short time window, in this case 10ms).
 
-[![img](https://github.com/Netflix/Hystrix/wiki/images/collapser-640.png) *(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/collapser-1280.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/collapser-640.png)
+
+[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/collapser-1280.png)
 
 **Sequence Diagram**
 
@@ -566,7 +574,7 @@ If, however, a particular command is heavily utilized concurrently and can batch
 
 **Collapser Flow**
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/collapser-flow-640.png) 
+![img](https://github.com/Netflix/Hystrix/wiki/images/collapser-flow-640.png)
 
 [*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/collapser-flow-1280.png)
 
@@ -578,7 +586,9 @@ If, however, a particular command is heavily utilized concurrently and can batch
 
 Here is an example flow involving an HTTP request lifecycle and two threads doing work within that request:
 
-[![img](https://github.com/Netflix/Hystrix/wiki/images/request-cache-640.png) *(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/request-cache-1280.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/request-cache-640.png)
+
+[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/request-cache-1280.png)
 
 The benefits of request caching are:
 
@@ -2091,36 +2101,34 @@ For example, if the key was named “`SubscriberGetAccount`” then the property
 
 ### 6.2 Command Properties
 
-The following [Properties](http://netflix.github.io/Hystrix/javadoc/index.html?com/netflix/hystrix/HystrixCommandProperties.html) control `HystrixCommand` behavior:
-
-
+下面的配置 [Properties](http://netflix.github.io/Hystrix/javadoc/index.html?com/netflix/hystrix/HystrixCommandProperties.html) 决定了 `HystrixCommand` 如何被执行。
 
 #### 6.2.1 Execution
 
-The following Properties control how [`HystrixCommand.run()`](http://netflix.github.io/Hystrix/javadoc/com/netflix/hystrix/HystrixCommand.html#run()) executes.
-
-
+下面的配置决定了 [`HystrixCommand.run()`](http://netflix.github.io/Hystrix/javadoc/com/netflix/hystrix/HystrixCommand.html#run()) 如何被执行。
 
 **execution.isolation.strategy**
 
-This property indicates which isolation strategy `HystrixCommand.run()` executes with, one of the following two choices:
+`HystrixCommand.run()` 以哪种隔离策略执行，分为 THREAD 和 SEMAPHORE 两种。
 
-- `THREAD` — it executes on a separate thread and concurrent requests are limited by the number of threads in the thread-pool
-- `SEMAPHORE` — it executes on the calling thread and concurrent requests are limited by the semaphore count
+- `THREAD` — 它在单独的线程上执行，同时请求受线程池中线程数量的限制。
+- `SEMAPHORE` — 它在调用线程上执行，并且并发请求受信号量计数限制。
 
-Thread or Semaphore
+Thread 还是 Semaphore，该如何选择？
 
-The default, and the recommended setting, is to run `HystrixCommand`s using thread isolation (`THREAD`) and `HystrixObservableCommand`s using semaphore isolation (`SEMAPHORE`).
+HystrixCommand 默认使用的是 THREAD，这也是推荐的方式，HystrixObservableCommand 用的是 SEMAPHORE 方式。
 
 Commands executed in threads have an extra layer of protection against latencies beyond what network timeouts can offer.
 
-Generally the only time you should use semaphore isolation for `HystrixCommand`s is when the call is so high volume (hundreds per second, per instance) that the overhead of separate threads is too high; this typically only applies to non-network calls.
+<!-- 在线程中执行的命令具有比网络超时更多的保护层，以防止延迟。-->
+
+通常情况下，只有在调用非网络请求且高并发（每秒数百次，每个实例）时，使用 SEMAPHORE 隔离才是适当的，因为单独线程的开销太高了。
 
 > Netflix API has 100+ commands running in 40+ thread pools and only a handful of those commands are not running in a thread - those that fetch metadata from an in-memory cache or that are façades to thread-isolated commands (see [“Primary + Secondary with Fallback” pattern](https://github.com/Netflix/Hystrix/wiki/How-To-Use#common-patterns) for more information on this).
 
 ![img](https://github.com/Netflix/Hystrix/wiki/images/isolation-options-640.png)
 
-[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/isolation-options-1280.png).
+[(Click for larger view)](https://github.com/Netflix/Hystrix/wiki/images/isolation-options-1280.png)
 
 See [how isolation works](https://github.com/Netflix/Hystrix/wiki/How-it-Works#isolation) for more information about this decision.
 
@@ -2134,6 +2142,8 @@ See [how isolation works](https://github.com/Netflix/Hystrix/wiki/How-it-Works#i
 
 
 **execution.isolation.thread.timeoutInMilliseconds**
+
+HystrixCommand 默认是由超时时间控制（execution.timeout.enabled = true）并且分配降级策略的，这个参数就设定了超时时间，默认为 1000 ms
 
 This property sets the time in milliseconds after which the caller will observe a timeout and walk away from the command execution. Hystrix marks the `HystrixCommand` as a TIMEOUT, and performs fallback logic. Note that there is configuration for turning off timeouts per-command, if that is desired (see command.timeout.enabled).
 
@@ -2149,6 +2159,8 @@ This property sets the time in milliseconds after which the caller will observe 
 
 **execution.timeout.enabled**
 
+如上所述，是否开启超时控制，默认为 true
+
 This property indicates whether the `HystrixCommand.run()` execution should have a timeout.
 
 | Default Value               | `true`                                                       |
@@ -2160,6 +2172,8 @@ This property indicates whether the `HystrixCommand.run()` execution should have
 
 
 **execution.isolation.thread.interruptOnTimeout**
+
+超时后是否允许 interrupt，默认为 true
 
 This property indicates whether the `HystrixCommand.run()` execution should be interrupted when a timeout occurs.
 
@@ -2173,6 +2187,8 @@ This property indicates whether the `HystrixCommand.run()` execution should be i
 
 **execution.isolation.thread.interruptOnCancel**
 
+cancel 后是否 interrupt，默认为 false
+
 This property indicates whether the `HystrixCommand.run()` execution should be interrupted when a cancellation occurs.
 
 | Default Value               | `false`                                                      |
@@ -2184,6 +2200,8 @@ This property indicates whether the `HystrixCommand.run()` execution should be i
 
 
 **execution.isolation.semaphore.maxConcurrentRequests**
+
+如果你的隔离策略配置的是 ExecutionIsolationStrategy.SEMAPHORE，那这个参数就是表明信号量的值，也就是最大的并发请求数。如果达到了这个值，随后的请求将会被拒绝。默认为 10。这个信号量值设置为多少，等同于你往线程池里放多少个线程，不过信号量的开销要小得多，而且方法的执行速度也要快得多，如果不是这样的情况，最好还是选择线程池方式，也就是 THREAD
 
 This property sets the maximum number of requests allowed to a `HystrixCommand.run()` method when you are using `ExecutionIsolationStrategy.SEMAPHORE`.
 
@@ -2205,11 +2223,15 @@ The isolation principle is still the same so the semaphore should still be a sma
 
 #### 6.2.2 Fallback
 
+以下配置决定了 HystrixCommand.getFallback 的逻辑，这些配置同时适用于 THREAD 和 SEMAPHORE
+
 The following properties control how [`HystrixCommand.getFallback()`](http://netflix.github.io/Hystrix/javadoc/com/netflix/hystrix/HystrixCommand.html#getFallback()) executes. These properties apply to both `ExecutionIsolationStrategy.THREAD` and `ExecutionIsolationStrategy.SEMAPHORE`.
 
 
 
 **fallback.isolation.semaphore.maxConcurrentRequests**
+
+该值为请求 Fallback 的最大并发请求数，默认为 10，如果达到了这个值，随后的请求将会抛出异常
 
 This property sets the maximum number of requests a `HystrixCommand.getFallback()` method is allowed to make from the calling thread.
 
@@ -2224,6 +2246,8 @@ If the maximum concurrent limit is hit then subsequent requests will be rejected
 
 
 **fallback.enabled**
+
+当错误或超时发生时，是否走降级策略，默认为 true
 
 Since: 1.2
 
@@ -2245,6 +2269,8 @@ The circuit breaker properties control behavior of the [`HystrixCircuitBreaker`]
 
 **circuitBreaker.enabled**
 
+是否开启熔断器，默认为 true
+
 This property determines whether a circuit breaker will be used to track health and to short-circuit requests if it trips.
 
 | Default Value               | `true`                                                       |
@@ -2256,6 +2282,8 @@ This property determines whether a circuit breaker will be used to track health 
 
 
 **circuitBreaker.requestVolumeThreshold**
+
+滑动窗口大小，即触发熔断的最小请求数量，默认为 20。举个例子，一共只有 19 个请求落在窗口内，就算全都失败了，也不会触发熔断
 
 This property sets the minimum number of requests in a rolling window that will trip the circuit.
 
@@ -2271,6 +2299,8 @@ For example, if the value is 20, then if only 19 requests are received in the ro
 
 **circuitBreaker.sleepWindowInMilliseconds**
 
+设置一个时间，当触发熔断后，多少秒之后再次进行访问尝试，看是否仍然要保持熔断状态，默认为 5000ms
+
 This property sets the amount of time, after tripping the circuit, to reject requests before allowing attempts again to determine if the circuit should again be closed.
 
 | Default Value               | `5000`                                                       |
@@ -2282,6 +2312,8 @@ This property sets the amount of time, after tripping the circuit, to reject req
 
 
 **circuitBreaker.errorThresholdPercentage**
+
+设置一个失败率，失败的请求达到这个值时，就触发熔断，默认为 50%
 
 This property sets the error percentage at or above which the circuit should trip open and start short-circuiting requests to fallback logic.
 
@@ -2323,11 +2355,15 @@ The `circuitBreaker.forceOpen` property takes precedence so if it is set to `tru
 
 #### 6.2.4 Metrics
 
+该配置指定了如何在运行过程中收集 metrics
+
 The following properties are related to capturing metrics from `HystrixCommand` and `HystrixObservableCommand` execution.
 
 
 
 **metrics.rollingStats.timeInMilliseconds**
+
+指标收集的滑动窗口时间，也就是 Hystrix 保持多久的一个指标收集，为之后的使用和上报做准备，默认为 10000 ms。下图为具体图示
 
 This property sets the duration of the statistical rolling window, in milliseconds. This is how long Hystrix keeps metrics for the circuit breaker to use and for publishing.
 
@@ -2349,6 +2385,8 @@ For example, if this property is set to 10 seconds (`10000`) with ten 1-second b
 
 **metrics.rollingStats.numBuckets**
 
+配合上面的参数使用，表示一个滑动窗口时间被分割为多少个 buckets 来进行细粒度指标收集，默认为 10
+
 This property sets the number of buckets the rolling statistical window is divided into.
 
 **Note:** The following must be true — “`metrics.rollingStats.timeInMilliseconds % metrics.rollingStats.numBuckets == 0`” — otherwise it will throw an exception.
@@ -2368,6 +2406,8 @@ As of 1.4.12, this property affects the initial metrics creation only, and adjus
 
 **metrics.rollingPercentile.enabled**
 
+进行百分比、均值等指标的收集，默认为 true，如果不选，则所有这类的指标返回 -1
+
 This property indicates whether execution latencies should be tracked and calculated as percentiles. If they are disabled, all summary statistics (mean, percentiles) are returned as -1.
 
 | Default Value               | `true`                                                       |
@@ -2379,6 +2419,8 @@ This property indicates whether execution latencies should be tracked and calcul
 
 
 **metrics.rollingPercentile.timeInMilliseconds**
+
+进行百分比均值等指标收集的窗口时间，默认为 60000 ms
 
 This property sets the duration of the rolling window in which execution times are kept to allow for percentile calculations, in milliseconds.
 
@@ -2395,6 +2437,8 @@ As of 1.4.12, this property affects the initial metrics creation only, and adjus
 
 
 **metrics.rollingPercentile.numBuckets**
+
+同理，上述百分比指标将被分为多少个 buckets 来进行收集，必须整除
 
 This property sets the number of buckets the `rollingPercentile` window will be divided into.
 
@@ -2415,6 +2459,8 @@ As of 1.4.12, this property affects the initial metrics creation only, and adjus
 
 **metrics.rollingPercentile.bucketSize**
 
+收集百分比指标时，每一个 buckets 最大收集的请求数，默认为 100。举个例子，如果该值设置为 100，那一个 bucket 有 500 个请求过来时，只会用后 100 个请求做指标计算。
+
 This property sets the maximum number of execution times that are kept per bucket. If more executions occur during the time they will wrap around and start over-writing at the beginning of the bucket.
 
 For example, if bucket size is set to 100 and represents a bucket window of 10 seconds, but 500 executions occur during this time, only the last 100 executions will be kept in that 10 second bucket.
@@ -2433,6 +2479,8 @@ As of 1.4.12, this property affects the initial metrics creation only, and adjus
 
 **metrics.healthSnapshot.intervalInMilliseconds**
 
+设置一个时间，来指定收集健康指标的时间间隔（比如计算成功数、错误率等），默认为 500ms。该指标的意义是如果你的系统 CPU 负载很高，该指标计算同样也是 CPU 密集型运算，这个值可以让你控制多久进行一次健康统计。
+
 This property sets the time to wait, in milliseconds, between allowing health snapshots to be taken that calculate success and error percentages and affect circuit breaker status.
 
 On high-volume circuits the continual calculation of error percentages can become CPU intensive thus this property allows you to control how often it is calculated.
@@ -2447,11 +2495,15 @@ On high-volume circuits the continual calculation of error percentages can becom
 
 #### 6.2.5 Request Context
 
+以下参数会影响 HystrixRequestContex
+
 These properties concern [`HystrixRequestContext`](http://netflix.github.com/Hystrix/javadoc/index.html?com/netflix/hystrix/strategy/concurrency/HystrixRequestContext.html) functionality used by `HystrixCommand`.
 
 
 
 **requestCache.enabled**
+
+该参数决定了 HystrixCommand.getCacheKey 是否被启用，默认为 true
 
 This property indicates whether [`HystrixCommand.getCacheKey()`](http://netflix.github.io/Hystrix/javadoc/com/netflix/hystrix/HystrixCommand.html#getCacheKey()) should be used with [`HystrixRequestCache`](http://netflix.github.io/Hystrix/javadoc/index.html?com/netflix/hystrix/HystrixRequestCache.html) to provide de-duplication functionality via request-scoped caching.
 
@@ -2464,6 +2516,8 @@ This property indicates whether [`HystrixCommand.getCacheKey()`](http://netflix.
 
 
 **requestLog.enabled**
+
+该参数决定了执行过程中的日志，是否会输出到 HystrixRequestLog
 
 This property indicates whether `HystrixCommand` execution and events should be logged to [`HystrixRequestLog`](http://netflix.github.io/Hystrix/javadoc/index.html?com/netflix/hystrix/HystrixRequestLog.html).
 
@@ -2519,6 +2573,10 @@ This property indicates whether request caching is enabled for [`HystrixCollapse
 
 ### 6.4 ThreadPool Properties
 
+以下参数控制 command 在执行时所需的线程池参数，与 Java 中的 ThreadPoolExecutor 的参数是对应的。大多数情况下 10 个线程足够了（甚至更小）。要想判断到底多少个线程合适，有以下的经验计算公式。
+
+流量顶峰时的 QPS * 99%请求时延 + 一些用来缓冲的空间
+
 The following properties control the behavior of the thread-pools that Hystrix Commands execute on. Please note that these names match those in [the ThreadPoolExecutor Javadoc](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ThreadPoolExecutor.html)
 
 Most of the time the default value of 10 threads will be fine (often it could be made smaller).
@@ -2553,6 +2611,8 @@ You can change configurations in real-time as needed as performance characterist
 
 **coreSize**
 
+核心线程数，默认为 10
+
 This property sets the core thread-pool size.
 
 | Default Value               | `10`                                                         |
@@ -2565,6 +2625,8 @@ This property sets the core thread-pool size.
 
 **maximumSize**
 
+最大线程数，该参数在 `allowMaximumSizeToDivergeFromCoreSize` 为 true 时才生效，默认与核心线程数一样，都是 10
+
 Added in 1.5.9. This property sets the maximum thread-pool size. This is the maximum amount of concurrency that can be supported without starting to reject `HystrixCommand`s. Please note that this setting only takes effect if you also set `allowMaximumSizeToDivergeFromCoreSize`. Prior to 1.5.9, core and maximum sizes were always equal.
 
 | Default Value               | `10`                                                         |
@@ -2576,6 +2638,8 @@ Added in 1.5.9. This property sets the maximum thread-pool size. This is the max
 
 
 **maxQueueSize**
+
+设置 BlockingQueue 所实现队列的最大队列大小，默认为 -1。为 -1 代表用的是 SynchronousQueue，否则就是固定大小的 LinkedBlockingQueue。当核心线程池的线程都在忙碌时，新请求将会落在这个队列里，但超出队列部分将会被拒绝
 
 This property sets the maximum queue size of the `BlockingQueue` implementation.
 
@@ -2597,6 +2661,8 @@ To change between `SynchronousQueue` and `LinkedBlockingQueue` requires a restar
 
 **queueSizeRejectionThreshold**
 
+当队列里的等待线程数达到该值时，随后的请求将会被拒绝，即使还没达到 maxQueueSize。该参数的意义是因为 maxQueueSize 在线程刚创建时就固定了大小，无法改变，该值可以弥补这个缺憾，所以有时候 maxQueueSize 不起作用就是因为这个。默认为 5
+
 This property sets the queue size rejection threshold — an artificial maximum queue size at which rejections will occur even if `maxQueueSize` has not been reached. This property exists because the `maxQueueSize` of a [`BlockingQueue`](http://docs.oracle.com/javase/6/docs/api/java/util/concurrent/BlockingQueue.html) cannot be dynamically changed and we want to allow you to dynamically change the queue size that affects rejections.
 
 This is used by `HystrixCommand` when queuing a thread for execution.
@@ -2613,6 +2679,8 @@ This is used by `HystrixCommand` when queuing a thread for execution.
 
 **keepAliveTimeMinutes**
 
+1.5.9版本之前，线程池是固定大小的（相当于 coreSize == maximumSize），而之后的版本这两个值可能不同，线程池可能会创建或销毁线程以动态调整。该参数指定了线程多久不使用就被释放掉，默认值是 1min
+
 This property sets the keep-alive time, in minutes.
 
 Prior to 1.5.9, all thread pools were fixed-size, as `coreSize == maximumSize`. In 1.5.9 and after, setting `allowMaximumSizeToDivergeFromCoreSize` to `true` allows those 2 values to diverge, such that the pool may acquire/release threads. If `coreSize < maximumSize`, then this property controls how long a thread will go unused before being released.
@@ -2627,6 +2695,8 @@ Prior to 1.5.9, all thread pools were fixed-size, as `coreSize == maximumSize`. 
 
 **allowMaximumSizeToDivergeFromCoreSize**
 
+是否允许线程池的大小扩大到 maximumSize，默认为 false
+
 Added in 1.5.9. This property allows the configuration for `maximumSize` to take effect. That value can then be equal to, or higher, than `coreSize`. Setting `coreSize < maximumSize` creates a thread pool which can sustain `maximumSize` concurrency, but will return threads to the system during periods of relative inactivity. (subject to `keepAliveTimeInMinutes`)
 
 | Default Value               | `false`                                                      |
@@ -2638,6 +2708,8 @@ Added in 1.5.9. This property allows the configuration for `maximumSize` to take
 
 
 **metrics.rollingStats.timeInMilliseconds**
+
+监控线程池指标的滑动窗口时间，默认 10000 ms
 
 This property sets the duration of the statistical rolling window, in milliseconds. This is how long metrics are kept for the thread pool.
 
@@ -2653,6 +2725,8 @@ The window is divided into buckets and “rolls” by those increments.
 
 **metrics.rollingStats.numBuckets**
 
+监控线程池指标的 buckets 数量，默认为 10，必须能被上一个指标整除
+
 This property sets the number of buckets the rolling statistical window is divided into.
 
 **Note:** The following must be true — “`metrics.rollingStats.timeInMilliseconds % metrics.rollingStats.numBuckets == 0`” — otherwise it will throw an exception.
@@ -2666,6 +2740,8 @@ In other words, 10000/10 is okay, so is 10000/20 but 10000/7 is not.
 | Instance Property           | `hystrix.threadpool.*HystrixThreadPoolProperties*.metrics.rollingStats.numBuckets` |
 | How to Set Instance Default | `HystrixThreadPoolProperties.Setter()   .withMetricsRollingStatisticalWindowBuckets(int value)` |
 
+
+
 ## 七、Metrics and Monitoring
 
 ### 7.1 Motivation
@@ -2676,7 +2752,11 @@ These metrics are useful both individually, and in aggregate. Getting the set of
 
 Here's an illustration of commands executing and writing metrics :
 
-[![img](https://github.com/Netflix/Hystrix/wiki/images/metrics-generation.png)](https://github.com/Netflix/Hystrix/wiki/images/metrics-generation.png) *(Click for larger view.)*
+![img](https://github.com/Netflix/Hystrix/wiki/images/metrics-generation.png) 
+
+[*(Click for larger view.)*](https://github.com/Netflix/Hystrix/wiki/images/metrics-generation.png)
+
+
 
 ### 7.2 Hystrix Event Types
 
@@ -2685,6 +2765,8 @@ The complete set of Hystrix command event types is specified in the table below.
 In a `HystrixCommand`, only single values are returned, so there is 1 event types for execution, and, if necessary, 1 event type for fallback. So a **SUCCESS** implies a value return and the completion of the command.
 
 In a `HystrixObservableCommand`, [0..n] values may be returned, so the **EMIT** event corresponds to a value returned, and the other execution events correspond to the command terminating. If you're familiar with [RxJava](https://github.com/ReactiveX/RxJava), **EMIT** is equivalent to `OnNext`, **SUCCESS** is equivalent to `OnCompleted`, and **FAILURE** is equivalent to `OnError`.
+
+
 
 **Command Execution Event Types (`com.netflix.hystrix.HystrixEventType`)**
 
@@ -2699,6 +2781,8 @@ In a `HystrixObservableCommand`, [0..n] values may be returned, so the **EMIT** 
 | **THREAD_POOL_REJECTED** | thread pool at capacity, execution not attempted            | YES                |
 | **SEMAPHORE_REJECTED**   | semaphore at capacity, execution not attempted              | YES                |
 
+
+
 **Command Fallback Event Types (`com.netflix.hystrix.HystrixEventType`)**
 
 | Name                   | Description                                                | Throws Exception? |
@@ -2709,6 +2793,8 @@ In a `HystrixObservableCommand`, [0..n] values may be returned, so the **EMIT** 
 | **FALLBACK_REJECTION** | fallback semaphore at capacity, fallback not attempted     | YES               |
 | **FALLBACK_MISSING**   | no fallback implemented                                    | YES               |
 
+
+
 **Other Command Event Types (`com.netflix.hystrix.HystrixEventType`)**
 
 | Name                    | Description                                                  |
@@ -2717,12 +2803,16 @@ In a `HystrixObservableCommand`, [0..n] values may be returned, so the **EMIT** 
 | **RESPONSE_FROM_CACHE** | was the command able to be looked up in cache? If so, execution did not occur |
 | **COLLAPSED**           | was the command a result of a collapser batch?               |
 
+
+
 **Thread Pool Event Types (`com.netflix.hystrix.HystrixEventType.ThreadPool`)**
 
 | Name         | Description                                          |
 | ------------ | ---------------------------------------------------- |
 | **EXECUTED** | thread pool has space and allowed the command to run |
 | **REJECTED** | thread pool had no room, and rejected the command    |
+
+
 
 **Collapser Event Types (`com.netflix.hystrix.HystrixEventType.Collapser`)**
 
@@ -2731,6 +2821,8 @@ In a `HystrixObservableCommand`, [0..n] values may be returned, so the **EMIT** 
 | **BATCH_EXECUTED**      | batch generated by collapser and batch command invoked       |
 | **ADDED_TO_BATCH**      | argument added to collapser batch                            |
 | **RESPONSE_FROM_CACHE** | argument not added to collapser batch, because it was found in request cache |
+
+
 
 ### 7.3 Metrics storage
 
