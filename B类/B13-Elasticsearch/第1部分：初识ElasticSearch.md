@@ -82,13 +82,9 @@
 
 文档是所有可搜索数据的最小单元，相当于 MySQL 表中的一条记录；
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231745.png" alt="image-20220108224441455" style="zoom:50%;" />
-
 文档的元数据：用于标注文档的相关信息。
 
 _index, _type, _id, _source, _all, _version, _score
-
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231745.png" alt="image-20220108224556296" style="zoom:50%;" />
 
 **索引（Index）**
 
@@ -103,8 +99,6 @@ Type：7.0 开始，一个 Index 只能创建一个 Types；
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220108225259.png" alt="image-20220108225259906" style="zoom:50%;" />
 
 **REST API**
-
-![image-20200917235323174](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231746.png)
 
 Index 相关 API
 
@@ -173,8 +167,6 @@ Tribe Node：连接到不同的 Elasticsearch 集群，支持将这些集群当�
 
 开发环境中一个节点可以承担多种角色；生产环境中，应该设置单一角色的节点。
 
-![image-20220108230212143](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231746.png)
-
 **分片**
 
 主分片（Primary Shard）：用以解决数据水平扩展的问题。通过主分片，可以将数据分布到集群内的所有节点之上；
@@ -182,8 +174,6 @@ Tribe Node：连接到不同的 Elasticsearch 集群，支持将这些集群当�
 副本（Replica Shard）：用以解决数据高可用的问题，是主分片的拷贝；
 
 一个三节点的集群中，blogs 索引的分片分布情况如下。
-
-![image-20200918001419658](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/learn/20220111231746.png)
 
 # 第5章：文档的操作
 
