@@ -41,15 +41,386 @@ Spring Security 提供的是一整套完整的安全性解决方案。面向不�
 
 响应式编程是 Spring 5 最核心的新功能，也是 Spring 家族目前重点推广的技术体系。Spring 5 的响应式编程模型以 Project Reactor 库为基础，后者则实现了响应式流规范。
 
+# 02 | 用户认证：如何使用 Spring Security 构建用户认证体系？
+
+**Spring Security 配置体系**
+
+```java
+protected void configure(HttpSecurity http) throws Exception {
+ 
+        http
+           .authorizeRequests()
+               .anyRequest().authenticated()
+               .and()
+           .formLogin().and()
+           .httpBasic();
+}
+```
+
+- 首先，通过 HttpSecurity 类的 authorizeRequests() 方法对所有访问 HTTP 端点的 HttpServletRequest 进行限制；
+- 然后，anyRequest().authenticated() 语句指定了对于所有请求都需要执行认证，也就是说没有通过认证的用户就无法访问任何端点；
+- 接着，formLogin() 语句用于指定使用表单登录作为认证方式，也就是会弹出一个登录界面；
+- 最后，httpBasic() 语句表示可以使用 HTTP 基础认证（Basic Authentication）方法来完成认证。
+
+**实现 HTTP 基础认证和表单登录认证**
+
+httpBasic() 和 formLogin() 这两种用于控制用户认证的实现手段，分别代表了HTTP 基础认证和表单登录认证。
+
+现在查看 HTTP 请求，可以看到 Request Header 中添加了 Authorization 标头，格式为：Authorization: \<type\> \<credentials\>。这里的 type 就是“Basic”，而 credentials 则是这样一个字符串：
+
+```
+dXNlcjo5YjE5MWMwNC1lNWMzLTQ0YzctOGE3ZS0yNWNkMjY3MmVmMzk=
+```
+
+这个字符串就是将用户名和密码组合在一起，再经过 Base64 编码得到的结果。而我们知道 Base64 只是一种编码方式，并没有集成加密机制，所以本质上传输的还是明文形式。
+
+HTTP 基础认证比较简单，没有定制的登录页面，所以单独使用的场景比较有限。在使用 Spring Security 时，我们一般会把 HTTP 基础认证和接下来要介绍的表单登录认证结合起来一起使用。
+
+在 WebSecurityConfigurerAdapter 的 configure() 方法中，一旦配置了 HttpSecurity 的 formLogin() 方法，就启动了表单登录认证。
+
+**配置 Spring Security 用户认证体系**
+
+我们已经知道可以通过 WebSecurityConfigurerAdapter 类的 configure(HttpSecurity http) 方法来完成认证。我们可以通过继承 WebSecurityConfigurerAdapter 类并且覆写其中的 configure(AuthenticationManagerBuilder auth) 的方法来完成对用户信息的配置工作。请注意这是两个不同的 configure() 方法。
+
+针对 WebSecurityConfigurer 配置类，我们首先需要明确配置的内容。实际上，初始化用户信息非常简单，只需要指定用户名（Username）、密码（Password）和角色（Role）这三项数据即可。在 Spring Security 中，基于 AuthenticationManagerBuilder 工具类为开发人员提供了基于内存、JDBC、LDAP 等多种验证方案。
+
+- 使用基于内存的用户信息存储方案
+
+```java
+@Override
+protected void configure(AuthenticationManagerBuilder builder) throws Exception {
+ 
+    builder.inMemoryAuthentication()
+        .withUser("spring_user").password("password1").roles("USER")
+        .and()
+        .withUser("spring_admin").password("password2").roles("USER", "ADMIN");
+}
+```
+
+可以看到，基于内存的用户信息存储方案实现也比较简单，但同样缺乏灵活性，因为用户信息是写死在代码里的。所以，我们接下来就要引出另一种更为常见的用户信息存储方案——数据库存储。
+
+- 使用基于数据库的用户信息存储方案
+
+既然是将用户信息存储在数据库中，势必需要创建表结构。我们可以在 Spring Security 的源文件（org/springframework/security/core/userdetails/jdbc/users.ddl）中找到对应的 SQL 语句，如下所示：
+
+```sql
+create table users(username varchar_ignorecase(50) not null primary key,password varchar_ignorecase(500) not null,enabled boolean not null);
+ 
+create table authorities (username varchar_ignorecase(50) not null,authority varchar_ignorecase(50) not null,constraint fk_authorities_users foreign key(username) references users(username));
+ 
+create unique index ix_auth_username on authorities (username,authority);
+```
+
+一旦我们在自己的数据库中创建了这两张表，并添加了相应的数据，就可以直接通过注入一个 DataSource 对象进行用户数据的查询，如下所示：
+
+```java
+@Autowired
+DataSource dataSource;
+ 
+@Override
+protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+ 
+        auth.jdbcAuthentication().dataSource(dataSource)
+               .usersByUsernameQuery("select username, password, enabled from Users " + "where username=?")
+               .authoritiesByUsernameQuery("select username, authority from UserAuthorities " + "where username=?")
+               .passwordEncoder(new BCryptPasswordEncoder());
+}
+```
+
+请你注意，这里我们用到了一个passwordEncoder() 方法，这是 Spring Security 中提供的一个密码加解密器。
+
+# 03 | 认证体系：如何深入理解 Spring Security 用户认证机制？
+
+**Spring Security 中的用户和认证**
+
+Spring Security 中的认证过程由一组核心对象组成，大致可以分成两大类，一类是**用户对象**，一类是**认证对象**，下面我们来具体了解一下。
 
 
 
+- Spring Security 中的用户对象
+
+Spring Security 中的用户对象用来描述用户并完成对用户信息的管理，涉及**UserDetails、GrantedAuthority、UserDetailsService 和 UserDetailsManager**这四个核心对象。
+
+1. UserDetails：描述 Spring Security 中的用户。
+2. GrantedAuthority：定义用户的操作权限。
+3. UserDetailsService：定义了对 UserDetails 的查询操作。
+4. UserDetailsManager：扩展 UserDetailsService，添加了创建用户、修改用户密码等功能。
 
 
 
+- Spring Security 中的认证对象
+
+认证对象代表认证请求本身，并保存该请求访问应用程序过程中涉及的各个实体的详细信息。
+
+```java
+public interface Authentication extends Principal, Serializable {
+    //安全主体具有的权限
+    Collection<? extends GrantedAuthority> getAuthorities();
+ 
+	//证明主体有效性的凭证
+    Object getCredentials();
+ 
+    //认证请求的明细信息
+    Object getDetails();
+ 
+    //主体的标识信息
+    Object getPrincipal();
+ 
+    //认证是否通过
+    boolean isAuthenticated();
+ 
+    //设置认证结果
+    void setAuthenticated(boolean isAuthenticated) throws IllegalArgumentException;
+}
+```
+
+在安全领域，请求访问该应用程序的用户通常被称为**主体**（Principal），在 JDK 中存在一个同名的接口，而 Authentication 扩展了这个接口。
+
+显然，Authentication 只代表了认证请求本身，而具体执行认证的过程和逻辑需要由专门的组件来负责，这个组件就是 AuthenticationProvider，定义如下：
+
+```java
+public interface AuthenticationProvider {
+ 
+    //执行认证，返回认证结果
+    Authentication authenticate(Authentication authentication)
+             throws AuthenticationException;
+ 
+    //判断是否支持当前的认证对象
+    boolean supports(Class<?> authentication);
+}
+```
 
 
 
+**实现定制化用户认证方案**
+
+通过前面的分析，我们明确了用户信息存储的实现过程实际上是可以定制化的。Spring Security 所做的工作只是把常见的、符合一般业务场景的实现方式嵌入到了框架中。如果有特殊的场景，开发人员完全可以实现自定义的用户信息存储方案。
+
+- 扩展 UserDetails
+
+扩展 UserDetails 的方法就是直接实现该接口，例如我们可以构建如下所示的 SpringUser 类：
+
+```java
+public class SpringUser implements UserDetails {
+ 
+    private static final long serialVersionUID = 1L;
+    private Long id;  
+    private final String username;
+    private final String password;
+    private final String phoneNumber;
+}
+```
+
+一旦我们构建了这样一个 SpringUser 类，就可以创建对应的表结构存储类中定义的字段。
+
+```java
+public interface SpringUserRepository extends CrudRepository<SpringUser, Long> {
+    SpringUser findByUsername(String username);  
+}
+```
+
+
+
+- 扩展 UserDetailsService
+
+UserDetailsService 接口只有一个 loadUserByUsername 方法需要实现。因此，我们基于 SpringUserRepository 的 findByUsername 方法，根据用户名从数据库中查询数据。
+
+```java
+@Service
+public class SpringUserDetailsService 
+        implements UserDetailsService {
+	 
+  @Autowired
+  private SpringUserRepository repository;
+ 
+  @Override
+  public UserDetails loadUserByUsername(String username)
+      throws UsernameNotFoundException {
+ 
+    SpringUser user = repository.findByUsername(username);
+    if (user != null) {
+      return user;
+    }
+    throw new UsernameNotFoundException(
+                    "SpringUser '" + username + "' not found");
+  }
+}
+```
+
+
+
+- 扩展 AuthenticationProvider
+
+扩展 AuthenticationProvider 的过程就是提供一个自定义的 AuthenticationProvider 实现类。这里我们以最常见的用户名密码认证为例，梳理自定义认证过程所需要实现的步骤，如下所示：
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202309072202806.png)
+
+首先我们需要通过 UserDetailsService 获取一个 UserDetails 对象，然后根据该对象中的密码与认证请求中的密码进行匹配，如果一致则认证成功，反之抛出一个 BadCredentialsException 异常。示例代码如下所示：
+
+```java
+@Component
+public class SpringAuthenticationProvider implements AuthenticationProvider {
+ 
+    @Autowired
+    private UserDetailsService userDetailsService;
+ 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+ 
+    @Override
+    public Authentication authenticate(Authentication authentication) {
+        String username = authentication.getName();
+        String password = authentication.getCredentials().toString();
+ 
+        UserDetails user = userDetailsService.loadUserByUsername(username);
+        if (passwordEncoder.matches(password, user.getPassword())) {
+            return new UsernamePasswordAuthenticationToken(username, password, u.getAuthorities());
+        } else {
+            throw new BadCredentialsException("The username or password is wrong!");
+        }
+    }
+ 
+    @Override
+    public boolean supports(Class<?> authenticationType) {
+        return authenticationType.equals(UsernamePasswordAuthenticationToken.class);
+    }
+}
+```
+
+
+
+- 整合定制化配置
+
+最后，我们创建一个 SpringSecurityConfig 类，该类继承了 WebSecurityConfigurerAdapter 配置类。
+
+```java
+@Configuration
+public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
+ 
+    @Autowired
+    private UserDetailsService springUserDetailsService;
+ 
+    @Autowired
+    private AuthenticationProvider springAuthenticationProvider;
+ 
+ 
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+ 
+     auth.userDetailsService(springUserDetailsService)
+	.authenticationProvider(springAuthenticationProvider);
+	}
+}
+```
+
+# 04 | 密码安全：Spring Security 中包含哪些加解密技术？
+
+用户认证的过程通常涉及密码的校验，因此密码的安全性也是我们需要考虑的一个核心问题。Spring Security 作为一款功能完备的安全性框架，一方面提供了**用于完成认证操作的 PasswordEncoder 组件**，另一方面也包含一个独立而完整的**加密模块**，方便在应用程序中单独使用。
+
+**PasswordEncoder**
+
+我们通过 jdbcAuthentication() 方法验证用户信息时一定要**集成加密机制**，也就是使用 passwordEncoder() 方法嵌入一个 PasswordEncoder 接口的实现类。
+
+```java
+@Override
+protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+ 
+        auth.jdbcAuthentication().dataSource(dataSource)
+               .usersByUsernameQuery("select username, password, enabled from Users " + "where username=?")
+               .authoritiesByUsernameQuery("select username, authority from UserAuthorities " + "where username=?")
+               .passwordEncoder(new BCryptPasswordEncoder());
+}
+```
+
+
+
+- PasswordEncoder 接口
+
+在 Spring Security 中，PasswordEncoder 接口代表的是一种密码编码器，其核心作用在于**指定密码的具体加密方式**，以及如何将一段给定的加密字符串与明文之间完成匹配校验。
+
+Spring Security 内置了一大批 PasswordEncoder 接口的实现类，如下所示：
+
+1. NoOpPasswordEncoder：以明文形式保留密码，不对密码进行编码。这种 PasswordEncoder 通常只用于演示，不应该用于生产环境。
+2. StandardPasswordEncoder：使用 SHA-256 算法对密码执行哈希操作。
+3. BCryptPasswordEncoder：使用 bcrypt 强哈希算法对密码执行哈希操作。
+4. Pbkdf2PasswordEncoder：使用 PBKDF2 算法对密码执行哈希操作。
+
+
+
+- 自定义 PasswordEncoder
+
+如果你想使用某种算法集成 PasswordEncoder，就可以实现类似如下所示的 Sha512PasswordEncoder，这里使用了 SHA-512 作为加解密算法：
+
+```java
+public class Sha512PasswordEncoder implements PasswordEncoder {
+ 
+   @Override
+   public String encode(CharSequence rawPassword) {
+      return hashWithSHA512(rawPassword.toString());
+   }
+
+   @Override
+   public boolean matches(CharSequence rawPassword, String encodedPassword) {
+      String hashedPassword = encode(rawPassword);
+  	  return encodedPassword.equals(hashedPassword);
+   }
+
+   private String hashWithSHA512(String input) {
+     StringBuilder result = new StringBuilder();
+
+     try {
+       MessageDigest md = MessageDigest.getInstance("SHA-512");
+       byte [] digested = md.digest(input.getBytes());
+       for (int i = 0; i < digested.length; i++) {
+       result.append(Integer.toHexString(0xFF & digested[i]));
+       }
+       } catch (NoSuchAlgorithmException e) {
+       throw new RuntimeException("Bad algorithm");
+     }
+
+     return result.toString();
+  }
+}
+```
+
+
+
+- 代理式 DelegatingPasswordEncoder
+
+在对密码进行加解密过程中，只会使用到一个 PasswordEncoder，如果这个 PasswordEncoder 不满足我们的需求，那么就需要替换成另一个 PasswordEncoder。这就引出了一个问题，如何优雅地应对这种变化呢？
+
+虽然 DelegatingPasswordEncoder 也实现了 PasswordEncoder 接口，但事实上，它更多扮演了一种代理组件的角色，这点从命名上也可以看出来。DelegatingPasswordEncoder 将具体编码的实现根据要求代理给不同的算法，以此实现不同编码算法之间的兼容并协调变化。
+
+
+
+**Spring Security 加密模块**
+
+使用 Spring Security 时，通常涉及用户认证的部分会用到加解密技术。但就应用场景而言，加解密技术是一种通用的基础设施类技术，不仅可以用于用户认证，也可以用于其他任何涉及敏感数据处理的场景。因此，Spring Security 也充分考虑到了这种需求，专门提供了一个加密模式（Spring Security Crypto Module，SSCM）。
+
+请注意，尽管 PasswordEncoder 也属于这个模块的一部分，但这个模块本身是高度独立的，我们可以脱离于用户认证流程来使用这个模块。
+
+```java
+// 创建一个 8 字节的密钥，并将其编码为十六进制字符串
+String salt = KeyGenerators.string().generateKey(); 
+String password = "secret"; 
+String valueToEncrypt = "HELLO"; 
+// 使用 256 位 AES 算法对 password 字段进行加密
+BytesEncryptor e = Encryptors.standard(password, salt); 
+byte [] encrypted = e.encrypt(valueToEncrypt.getBytes()); 
+byte [] decrypted = e.decrypt(encrypted);
+```
+
+在日常开发过程中，你可以根据需要调整上述代码并嵌入到我们的系统中。
+
+# 05 | 访问授权：如何对请求的安全访问过程进行有效配置？
+
+
+
+# 06 | 权限管理：如何剖析 Spring Security 的授权原理？
+
+
+
+# 07 | 案例实战：使用 Spring Security 基础功能保护 Web 应用
 
 
 
