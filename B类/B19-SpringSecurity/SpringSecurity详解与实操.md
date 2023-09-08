@@ -414,7 +414,147 @@ byte [] decrypted = e.decrypt(encrypted);
 
 # 05 | 访问授权：如何对请求的安全访问过程进行有效配置？
 
+**Spring Security 中的权限和角色**
 
+- 基于权限进行访问控制
+
+GrantedAuthority 对象代表的就是一种权限对象，而一个 UserDetails 对象具备一个或多个 GrantedAuthority 对象。
+
+如果用代码来表示这种关联关系，可以采用如下所示的实现方法：
+
+```java
+UserDetails user = User.withUsername("jianxiang")
+     .password("123456")
+     .authorities("create", "delete")
+     .build();
+```
+
+在 Spring Security 中，提供了一组针对 GrantedAuthority 的配置方法。例如：
+
+1. hasAuthority(String)，允许具有**特定权限**的用户进行访问；
+1. hasAnyAuthority(String)，允许具有**任一权限**的用户进行访问。
+
+使用方式：
+
+```java
+// 特定权限
+httpSecurity.authorizeRequests().anyRequest().hasAuthority("CREATE");        
+// 任意一种权限
+httpSecurity.authorizeRequests().anyRequest().hasAnyAuthority("CREATE", "DELETE");
+// 表达式的返回值是 true，access() 方法就会允许用户访问
+httpSecurity.authorizeRequests().anyRequest().access("hasAuthority('CREATE')");
+// 更为复杂的场景
+String expression = "hasAuthority('CREATE') and !hasAuthority('Retrieve')"; 
+httpSecurity.authorizeRequests().anyRequest().access(expression);
+```
+
+
+
+- 基于角色进行访问控制
+
+角色可以看成是拥有多个权限的一种数据载体。我们可以使用如下方式初始化用户的角色：
+
+```java
+UserDetails user = User.withUsername("jianxiang")
+      .password("123456")
+      .authorities("ROLE_ADMIN")
+      .build();
+// 另一种简化的方法
+UserDetails user = User.withUsername("jianxiang")
+      .password("123456")
+      .roles("ADMIN")
+      .build();
+```
+
+上述代码相当于为用户“jianxiang”指定了“ADMIN”这个角色。
+
+和权限配置一样，Spring Security 也通过使用对应的 hasRole() 和 hasAnyRole() 方法来判断用户是否具有某个角色或某些角色，使用方法如下所示：
+
+```java
+httpSecurity.authorizeRequests().anyRequest().hasRole("ADMIN");
+```
+
+下表展示了常见的配置方法及其作用：
+
+| 配置方法                | 作用                               |
+| ----------------------- | ---------------------------------- |
+| anonymous()             | 允许匿名访问                       |
+| authenticated()         | 允许认证用户访问                   |
+| denyAll()               | 无条件禁止一切访问                 |
+| hasAnyAuthority(String) | 允许具有任一权限的用户进行访问     |
+| hasAnyRole(String)      | 允许具有任一角色的用户进行访问     |
+| hasAuthority(String)    | 允许具有特定权限的用户进行访问     |
+| hasIpAddress(String)    | 允许来自特定 IP 地址的用户进行访问 |
+| hasRole(String)         | 允许具有特定角色的用户进行访问     |
+| permitAll()             | 无条件允许一切访问                 |
+
+
+
+**使用配置方法控制访问权限**
+
+如何让 HTTP 请求与权限控制过程关联起来呢？Spring Security 提供了三种强大的匹配器（Matcher）来实现这一目标，分别是**MVC 匹配器、Ant 匹配器以及正则表达式匹配器**。
+
+
+
+- MVC 匹配器
+
+```java
+http.authorizeRequests() 
+    // zhangsan
+    .mvcMatchers("/hello_user").hasRole("USER") 
+    // lisi
+    .mvcMatchers("/hello_admin").hasRole("ADMIN");
+```
+
+如果你使用角色为“USER”的用户“zhangsan”来访问“/hello_admin”端点，那么将会得到如下所示的响应：
+
+```json
+{ 
+    "status":403, 
+    "error":"Forbidden", 
+    "message":"Forbidden", 
+    "path":"/hello_admin" 
+}
+```
+
+如果我们想要对某个路径下的所有子路径都指定同样的访问控制，那么只需要在该路径后面添加“*”号即可，示例代码如下所示：
+
+```java
+http.authorizeRequests() 
+    .mvcMatchers(HttpMethod.GET, "/user/*")
+    .authenticated() 
+```
+
+
+
+- Ant 匹配器
+
+Ant 匹配器的表现形式和使用方法与前面介绍的 MVC 匹配器非常相似，它也提供了如下所示的三个方法来完成请求与 HTTP 端点地址之间的匹配关系：
+
+1. antMatchers(String patterns)
+2. antMatchers(HttpMethod method)
+3. antMatchers(HttpMethod method, String patterns)
+
+
+
+- 正则表达式匹配器
+
+正则表达式匹配器也提供了如下所示的两个配置方法：
+
+1. regexMatchers(HttpMethod method, String regex)
+2. regexMatchers(String regex)
+
+使用这一匹配器的主要优势在于它能够**基于复杂的正则表达式**对请求地址进行匹配，这是 MVC 匹配器和 Ant 匹配器无法实现的，你可以看一下如下所示的这段配置代码：
+
+```java
+http.authorizeRequests()
+   .mvcMatchers("/email/{email:.*(.+@.+\\.com)}")
+   .permitAll()
+   .anyRequest()
+   .denyAll();
+```
+
+只有输入的请求是一个合法的邮箱地址才能允许访问。
 
 # 06 | 权限管理：如何剖析 Spring Security 的授权原理？
 
