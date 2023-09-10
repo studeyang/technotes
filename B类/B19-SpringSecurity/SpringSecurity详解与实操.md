@@ -670,6 +670,12 @@ public class User {
 }
 ```
 
+```java
+public enum PasswordEncoderType {
+    BCRYPT, SCRYPT
+}
+```
+
 可以看到，这里除了指定主键 id、用户名 username 和密码 password 之外，还包含了一个**加密算法枚举值 EncryptionAlgorithm**。在案例系统中，我们将提供 BCryptPasswordEncoder 和 SCryptPasswordEncoder 这两种可用的密码解密器，你可以通过该枚举值进行设置。
 
 同时，我们在 User 类中还发现了一个 Authority 列表。显然，这个列表用来指定该 User 所具备的权限信息。Authority 类的定义如下所示：
@@ -815,7 +821,7 @@ public class CustomUserDetails implements UserDetails {
 }
 ```
 
-请注意，这里的 getAuthorities() 方法中，我们将 User 对象中的 Authority 列表转换为了 Spring Security 中代表用户权限的**SimpleGrantedAuthority 列表**。
+请注意，这里的 getAuthorities() 方法中，我们将 User 对象中的 Authority 列表转换为了 Spring Security 中代表用户权限的 **SimpleGrantedAuthority 列表**。
 
 所有的自定义用户信息和权限信息都是维护在数据库中的，所以为了获取这些信息，我们需要创建数据访问层组件，这个组件就是 UserRepository，定义如下：
 
@@ -1007,11 +1013,156 @@ public class HealthRecordController {
 
 在这个主页中，我们正确获取了登录用户的用户名，并展示了个人健康档案信息。这个结果也证实了自定义用户认证体系的正确性。
 
+# ==高级主题篇==
+
+# 08 | 管道过滤：基于 Spring Security 的过滤器扩展安全性
+
+**Spring Security 过滤器架构**
+
+Spring Security 中的过滤器架构是**基于 Servlet**构建的，所以我们先从 Servlet 中的过滤器开始说起。
 
 
 
+- Servlet 与管道-过滤器模式
+
+在 Servlet 中，代表过滤器的 Filter 接口定义如下：
+
+```java
+public interface Filter {
+ 
+    public void init(FilterConfig filterConfig) throws ServletException;
+
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException;
+ 
+    public void destroy();
+}
+```
+
+一个过滤器组件所包含的业务逻辑应该位于 doFilter() 方法中，该方法带有三个参数，分别是**ServletRequest、ServletResponse 和 FilterChain**。
+
+1. ServletRequest：表示 HTTP 请求，我们使用该对象获取有关请求的详细信息。
+2. ServletResponse：表示 HTTP 响应，我们使用该对象构建响应结果，然后将其发送回客户端或沿着过滤器链向后传递。
+3. FilterChain：表示过滤器链，我们使用该对象将请求转发到链中的下一个过滤器。
 
 
 
+- Spring Security 中的过滤器链
 
+在 Spring Security 中，其核心流程的执行也是依赖于一组过滤器，这些过滤器在框架启动后会自动进行初始化，如图所示：
+
+![Drawing 1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202309102237068.png)
+
+上图中的 BasicAuthenticationFilter 用来验证用户的身份凭证；而 UsernamePasswordAuthenticationFilter 会检查输入的用户名和密码，并根据认证结果决定是否将这一结果传递给下一个过滤器。
+
+**整个 Spring Security 过滤器链的末端是一个 FilterSecurityInterceptor，它本质上也是一个 Filter**。但与其他用于完成认证操作的 Filter 不同，它的核心功能是**实现权限控制**，也就是用来判定该请求是否能够访问目标 HTTP 端点。FilterSecurityInterceptor 对于权限控制的粒度可以到方法级别，能够满足前面提到的精细化访问控制。
+
+
+
+**实现自定义过滤器**
+
+- 开发过滤器
+
+我们想象这样一种场景，业务上我们需要根据客户端请求头中是否包含某一个特定的标志位，来决定请求是否有效。如图所示：
+
+![Drawing 2.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202309102242867.png)
+
+这在现实开发过程中也是一种常见的应用场景，可以实现定制化的安全性控制。针对这种应用场景，我们可以实现如下所示的 RequestValidationFilter 过滤器：
+
+```java
+public class RequestValidationFilter implements Filter {
+ 
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain filterChain) throws IOException, ServletException {
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+        HttpServletResponse httpResponse = (HttpServletResponse) response;
+        String requestId = httpRequest.getHeader("SecurityFlag");
+        if (requestId == null || requestId.isBlank()) {
+            httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            return;
+        }
+ 
+        filterChain.doFilter(request, response);
+    }
+}
+```
+
+
+
+- 配置过滤器
+
+如果我们想要实现定制化的安全性控制策略，就可以实现类似前面介绍的 RequestValidationFilter 这样的过滤器，并放置在 BasicAuthenticationFilter 前。这样，在执行用户认证之前，我们就可以排除掉一批无效请求，效果如下所示：
+
+![Drawing 3.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202309102244500.png)
+
+在 Spring Security 中，提供了一组可以往过滤器链中添加过滤器的工具方法，包括 addFilterBefore()、addFilterAfter()、addFilterAt() 以及 addFilter() 等，它们都定义在 HttpSecurity 类中。这些方法的含义都很明确，使用起来也很简单，例如，想要实现如上图所示的效果，我们可以编写这样的代码：
+
+```java
+@Override
+protected void configure(HttpSecurity http) throws Exception {
+        http.addFilterBefore(
+                new RequestValidationFilter(),
+                BasicAuthenticationFilter.class)
+            .authorizeRequests()
+                .anyRequest()
+                .permitAll();
+}
+```
+
+
+
+**Spring Security 中的过滤器**
+
+下表列举了 Spring Security 中常用的过滤器名称、功能以及它们的顺序关系：
+
+![image.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202309102245242.png)
+
+# 09 | 攻击应对：如何实现 CSRF 保护和跨域 CORS？
+
+今天我们就来讨论在日常开发过程中常见的两个安全性话题，即 CSRF 和 CORS。
+
+**使用 Spring Security 提供 CSRF 保护**
+
+
+
+- 什么是 CSRF？
+
+
+
+- 使用 CsrfFilter
+
+
+
+- 定制化 CSRF 保护
+
+
+
+**使用 Spring Security 实现 CORS**
+
+
+
+- 什么是 CORS？
+
+
+
+- 使用 CorsFilter
+
+
+
+- 使用 @CrossOrigin 注解
+
+
+
+# 10 | 全局方法：如何确保方法级别的安全访问？
+
+
+
+# 11 | 案例实战：使用 Spring Security 高级主题保护 Web 应用
+
+
+
+# ==OAuth2 与微服务篇==
+
+
+
+# ==框架扩展篇==
 
