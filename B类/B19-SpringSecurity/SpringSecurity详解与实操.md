@@ -955,12 +955,12 @@ public class HealthRecordController {
     @Autowired
     private HealthRecordService healthRecordService;
     
-    @GetMapping("/healthrecord")
+    @GetMapping("/main")
     public String main(Authentication a, Model model) {
-        String userName = a.getName();
+    	String userName = a.getName();
         model.addAttribute("username", userName);
         model.addAttribute("healthRecords", healthRecordService.getHealthRecordsByUsername(userName));
-        return "health_record.html";
+        return "main.html";
     }
 }
 ```
@@ -1005,11 +1005,11 @@ public class HealthRecordController {
 
 现在，让我们启动 Spring Boot 应用程序，并访问[http://localhost:8080](http://localhost:8080/?fileGuid=xxQTRXtVcqtHK6j8)端点。因为访问系统的任何端点都需要认证，所以 Spring Security 会自动跳转到如下所示的登录界面：
 
-![Drawing 1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202309092344610.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023image-20230911113950836.png)
 
-我们分别输入用户名“jianxiang”和密码“12345”，系统就会跳转到健康档案主页：
+我们分别输入用户名“studeyang”和密码“12345”，系统就会跳转到健康档案主页：
 
-![Drawing 2.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202309092344815.png)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023image-20230911114211416.png)
 
 在这个主页中，我们正确获取了登录用户的用户名，并展示了个人健康档案信息。这个结果也证实了自定义用户认证体系的正确性。
 
