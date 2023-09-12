@@ -1122,35 +1122,319 @@ protected void configure(HttpSecurity http) throws Exception {
 
 **使用 Spring Security 提供 CSRF 保护**
 
+CSRF 的全称是 Cross-Site Request Forgery，翻译成中文就是**跨站请求伪造**。那么，究竟什么是跨站请求伪造？
+
 
 
 - 什么是 CSRF？
+
+你可以将 CSRF 理解为一种攻击手段，即攻击者盗用了你的身份，然后以你的名义向第三方网站发送恶意请求。我们可以使用如下所示的流程图来描述 CSRF：
+
+![Drawing 0.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202309122252508.png)
+
+具体流程如下：
+
+1. 用户浏览并登录信任的网站 A，通过用户认证后，会在浏览器中生成针对 A 网站的 Cookie；
+2. 用户在没有退出网站 A 的情况下访问网站 B，然后网站 B 向网站 A 发起一个请求；
+3. 用户浏览器根据网站 B 的请求，携带 Cookie 访问网站 A；
+4. 由于浏览器会自动带上用户的 Cookie，所以网站 A 接收到请求之后会根据用户具备的权限进行访问控制，这样相当于用户本身在访问网站 A，从而网站 B 就达到了模拟用户访问网站 A 的操作过程。
+
+从应用程序开发的角度来讲，CSRF 就是系统的一个安全漏洞，这种安全漏洞也在 Web 开发中广泛存在。
+
+进行 CSRF 保护的基本思想就是**为系统中的每一个连接请求加上一个随机值**，我们称之为 csrf_token。这样，当用户向网站 A 发送请求时，网站 A 在生成的 Cookie 中就会设置一个 csrf_token 值。
+
+在浏览器发送提交的表单数据的请求中也有一个隐藏的 csrf_token 值，这样网站 A 接收到请求后，一方面从 Cookie 中提取出 csrf_token，另一方面也从表单提交的数据中获取隐藏的 csrf_token。将两者进行比对，如果不一致就代表这就是一个伪造的请求。
 
 
 
 - 使用 CsrfFilter
 
+在 Spring Security 中，专门提供了一个 CsrfFilter 来实现对 CSRF 的保护。CsrfFilter 拦截请求，并允许使用 GET、HEAD、TRACE 和 OPTIONS 等 HTTP 方法的请求。
+
+而针对 PUT、POST、DELETE 等可能会修改数据的其他请求，CsrfFilter 则希望接**收包含 csrf_token 的消息头**。如果这个消息头不存在或包含不正确的 csrf_token 值，应用程序将拒绝该请求并将响应的状态设置为 403。
+
+```java
+@Override
+protected void doFilterInternal(HttpServletRequest request,
+             HttpServletResponse response, FilterChain filterChain)
+                     throws ServletException, IOException {
+        request.setAttribute(HttpServletResponse.class.getName(), response);
+ 
+        //从 CsrfTokenRepository 中获取 CsrfToken
+        CsrfToken csrfToken = this.tokenRepository.loadToken(request);
+        final boolean missingToken = csrfToken == null;
+ 
+        //如果找不到 CsrfToken 就生成一个并保存到 CsrfTokenRepository 中
+        if (missingToken) {
+             csrfToken = this.tokenRepository.generateToken(request);
+             this.tokenRepository.saveToken(csrfToken, request, response);
+        }
+ 
+        //在请求中添加 CsrfToken
+        request.setAttribute(CsrfToken.class.getName(), csrfToken);
+        request.setAttribute(csrfToken.getParameterName(), csrfToken);
+ 
+        if (!this.requireCsrfProtectionMatcher.matches(request)) {
+             filterChain.doFilter(request, response);
+             return;
+        }
+ 
+        //从请求中获取 CsrfToken
+        String actualToken = request.getHeader(csrfToken.getHeaderName());
+        if (actualToken == null) {
+             actualToken = request.getParameter(csrfToken.getParameterName());
+        }
+ 
+        //如果请求所携带的 CsrfToken 与从 Repository 中获取的不同，则抛出异常
+        if (!csrfToken.getToken().equals(actualToken)) {
+             if (this.logger.isDebugEnabled()) {
+                 this.logger.debug("Invalid CSRF token found for "
+                         + UrlUtils.buildFullRequestUrl(request));
+             }
+             if (missingToken) {
+                 this.accessDeniedHandler.handle(request, response,
+                         new MissingCsrfTokenException(actualToken));
+             }
+             else {
+                 this.accessDeniedHandler.handle(request, response,
+                         new InvalidCsrfTokenException(csrfToken, actualToken));
+             }
+             return;
+        }
+        
+        //正常情况下继续执行过滤器链的后续流程
+        filterChain.doFilter(request, response);
+}
+```
+
+在 Spring Security 中，专门定义了一个 CsrfToken 接口来约定它的格式：
+
+```java
+public interface CsrfToken extends Serializable {
+ 
+    //获取消息头名称
+    String getHeaderName();
+ 
+    //获取应该包含 Token 的参数名称
+    String getParameterName();
+	 
+	//获取具体的 Token 值
+    String getToken();
+}
+```
+
+在 Spring Security 中，CsrfTokenRepository 接口具有一批实现类，除了 CookieCsrfTokenRepository，还有 HttpSessionCsrfTokenRepository 等。CookieCsrfTokenRepository 的 saveToken() 方法也比较简单，就是基于 Cookie 对象进行了 CsrfToken 的设置工作，如下所示：
+
+```java
+@Override
+public void saveToken(CsrfToken token, HttpServletRequest request,
+             HttpServletResponse response) {
+        String tokenValue = token == null ? "" : token.getToken();
+        Cookie cookie = new Cookie(this.cookieName, tokenValue);
+        cookie.setSecure(request.isSecure());
+        if (this.cookiePath != null && !this.cookiePath.isEmpty()) {
+                 cookie.setPath(this.cookiePath);
+        } else {
+                 cookie.setPath(this.getRequestContext(request));
+        }
+        if (token == null) {
+             cookie.setMaxAge(0);
+        }
+        else {
+             cookie.setMaxAge(-1);
+        }
+        cookie.setHttpOnly(cookieHttpOnly);
+        if (this.cookieDomain != null && !this.cookieDomain.isEmpty()) {
+             cookie.setDomain(this.cookieDomain);
+        }
+ 
+        response.addCookie(cookie);
+}
+```
+
+从 Spring Security 4.0 开始，默认启用 CSRF 保护，以防止 CSRF 攻击应用程序。Spring Security CSRF 会针对 POST、PUT 和 DELETE 方法进行防护。因此，对于开发人员而言，实际上你并不需要做什么额外工作就能使用这个功能了。当然，如果你不想使用这个功能，也可以通过如下配置方法进行关闭：
+
+```java
+http.csrf().disable();
+```
+
 
 
 - 定制化 CSRF 保护
+
+如果你想获取 HTTP 请求中的 CsrfToken，只需要使用如下所示的代码：
+
+```java
+CsrfToken token = (CsrfToken)request.getAttribute("_csrf");
+```
+
+如果你不想使用 Spring Security 内置的存储方式，而是想基于自身需求把 CsrfToken 存储起来，要做的事情就是**实现 CsrfTokenRepository 接口**。这里我们尝试把 CsrfToken 保存到关系型数据库中，所以可以通过扩展 Spring Data 中的 JpaRepository 来定义一个 JpaTokenRepository，如下所示：
+
+```java
+public interface JpaTokenRepository extends JpaRepository<Token, Integer> {
+ 
+    Optional<Token> findTokenByIdentifier(String identifier);
+}
+```
+
+然后，我们基于 JpaTokenRepository 来构建一个 DatabaseCsrfTokenRepository，如下所示：
+
+```java
+public class DatabaseCsrfTokenRepository
+        implements CsrfTokenRepository {
+ 
+    @Autowired
+    private JpaTokenRepository jpaTokenRepository;
+ 
+    @Override
+    public CsrfToken generateToken(HttpServletRequest httpServletRequest) {
+        String uuid = UUID.randomUUID().toString();
+        return new DefaultCsrfToken("X-CSRF-TOKEN", "_csrf", uuid);
+    }
+ 
+    @Override
+    public void saveToken(CsrfToken csrfToken, HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) {
+        String identifier = httpServletRequest.getHeader("X-IDENTIFIER");
+        Optional<Token> existingToken = jpaTokenRepository.findTokenByIdentifier(identifier);
+ 
+        if (existingToken.isPresent()) {
+            Token token = existingToken.get();
+            token.setToken(csrfToken.getToken());
+        } else {
+            Token token = new Token();
+            token.setToken(csrfToken.getToken());
+            token.setIdentifier(identifier);
+            jpaTokenRepository.save(token);
+        }
+    }
+ 
+    @Override
+    public CsrfToken loadToken(HttpServletRequest httpServletRequest) {
+        String identifier = httpServletRequest.getHeader("X-IDENTIFIER");
+        Optional<Token> existingToken = jpaTokenRepository.findTokenByIdentifier(identifier);
+ 
+        if (existingToken.isPresent()) {
+            Token token = existingToken.get();
+            return new DefaultCsrfToken("X-CSRF-TOKEN", "_csrf", token.getToken());
+        }
+ 
+        return null;
+    }
+}
+```
+
+这里借助了 HTTP 请求中的“X-IDENTIFIER”请求头来确定请求的唯一标识，从而将这一唯一标识与特定的 CsrfToken 关联起来。然后我们使用 JpaTokenRepository 完成了针对关系型数据库的持久化工作。
+
+最后，想要上述代码生效，我们需要通过配置方法完成对 CSRF 的设置，如下所示，这里直接通过 csrfTokenRepository 方法集成了自定义的 DatabaseCsrfTokenRepository：
+
+```java
+@Override
+protected void configure(HttpSecurity http) throws Exception {
+        http.csrf(c -> {
+            c.csrfTokenRepository(databaseCsrfTokenRepository());
+        });
+        …
+}
+```
 
 
 
 **使用 Spring Security 实现 CORS**
 
+我们继续来看 Web 应用程序开发过程中另一个常见的需求——CORS，即跨域资源共享（Cross-Origin Resource Sharing）。
+
 
 
 - 什么是 CORS？
+
+例如，当我们从“test.com”这个域名发起请求时，浏览器为了一定的安全因素考虑，并不会允许请求去访问“api.test.com”这个域名，因为请求已经跨越了两个域名。
+
+从原理上讲，实际就是浏览器在 HTTP 请求的消息头部分新增一些字段，如下所示：
+
+```
+//浏览器自己设置的请求域名
+Origin     
+//浏览器告诉服务器请求需要用到哪些 HTTP 方法
+Access-Control-Request-Method
+//浏览器告诉服务器请求需要用到哪些 HTTP 消息头
+Access-Control-Request-Headers
+```
+
+当浏览器进行跨域请求时会和服务器端进行一次的握手协议，从响应结果中可以获取如下信息：
+
+```
+//指定哪些客户端的域名允许访问这个资源
+Access-Control-Allow-Origin 
+//服务器支持的 HTTP 方法
+Access-Control-Allow-Methods 
+//需要在正式请求中加入的 HTTP 消息头
+Access-Control-Allow-Headers 
+```
+
+因此，实现 CORS 的关键是**服务器**。只要服务器**合理设置这些响应结果中的消息头**，就相当于实现了对 CORS 的支持，从而支持跨源通信。
 
 
 
 - 使用 CorsFilter
 
+在 Spring 中存在一个 CorsFilter 过滤器，不过这个过滤器并不是 Spring Security 提供的，而是来自**Spring Web MVC**。在 CorsFilter 这个过滤器中，首先应该判断来自客户端的请求是不是一个跨域请求，然后根据 CORS 配置来判断该请求是否合法，如下所示：
+
+```java
+@Override
+protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+             FilterChain filterChain) throws ServletException, IOException {
+ 
+        if (CorsUtils.isCorsRequest(request)) {
+             CorsConfiguration corsConfiguration = this.configSource.getCorsConfiguration(request);
+             if (corsConfiguration != null) {
+                 boolean isValid = this.processor.processRequest(corsConfiguration, request, response);
+                 if (!isValid || CorsUtils.isPreFlightRequest(request)) {
+                     return;
+                 }
+             }
+        }
+ 
+        filterChain.doFilter(request, response);
+}
+```
+
+Spring Security 也在 HttpSecurity 工具类通过提供了 cors() 方法来创建 CorsConfiguration，使用方式如下所示：
+
+```java
+@Override
+protected void configure(HttpSecurity http) throws Exception {
+        http.cors(c -> {
+            CorsConfigurationSource source = request -> {
+                CorsConfiguration config = new CorsConfiguration();
+                config.setAllowedOrigins(Arrays.asList("*"));
+                config.setAllowedMethods(Arrays.asList("*"));
+                return config;
+            };
+            c.configurationSource(source);
+        });
+        …
+}
+```
+
+我们可以通过 setAllowedOrigins() 和 setAllowedMethods() 方法实现对 HTTP 响应消息头的设置。**这里将它们都设置成“\*”，意味着所有请求都可以进行跨域访问**。你也可以根据需要设置特定的域名和 HTTP 方法。
+
 
 
 - 使用 @CrossOrigin 注解
 
+通过 CorsFilter，我们实现了全局级别的跨域设置。但有时候，我们可能只需要针对某些请求实现这一功能，通过 Spring Security 也是可以做到这一点的，我们可以在特定的 HTTP 端点上使用如下所示的 @CrossOrigin 注解：
 
+```java
+@Controller
+public class TestController {
+        
+    @PostMapping("/hello")
+	@CrossOrigin("http://api.test.com:8080")
+    public String hello() {
+        return "hello";
+    }
+}
+```
 
 # 10 | 全局方法：如何确保方法级别的安全访问？
 
