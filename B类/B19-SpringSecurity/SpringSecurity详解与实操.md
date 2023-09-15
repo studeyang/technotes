@@ -1438,9 +1438,146 @@ public class TestController {
 
 # 10 | 全局方法：如何确保方法级别的安全访问？
 
+**全局方法安全机制**
 
+围绕某个业务的实现方法所开展的安全控制，这种安全控制也被称为全局方法安全（Global Method Security）机制。
+
+全局方法安全机制能为我们带来什么价值呢？通常包括两个方面，即方法调用授权和方法调用过滤。
+
+方法调用授权的含义很明确，我们可以用它来确定某个请求是否具有调用方法的权限。如果是在方法调用之前进行授权管理，就是预授权（PreAuthorization）；如果是在方法执行完成后来确定是否可以访问方法返回的结果，一般称之为后授权（PostAuthorization）。
+
+方法调用过滤本质上类似于过滤器机制，也可以分为 PreFilter 和 PostFilter 两大类。其中预过滤（PreFilter）用来对该方法的参数进行过滤，从而获取其参数接收的内容，而后过滤（PostFilter）则用来判断调用者可以在方法执行后从方法返回结果中接收的内容。
+
+默认情况下 Spring Security 并没有启用全局方法安全机制。因此，想要启用这个功能，我们需要使用**@EnableGlobalMethodSecurity 注解**。
+
+```java
+@Configuration
+@EnableGlobalMethodSecurity(prePostEnabled = true)
+public class SecurityConfig {}
+```
+
+这里我们设置了“prePostEnabled”为 true，意味着我们启用了 Pre/PostAuthorization 注解。
+
+**使用注解实现方法级别授权**
+
+针对方法级别授权，Spring Security 提供了 @PreAuthorize 和 @PostAuthorize 这两个注解，分别用于预授权和后授权。
+
+
+
+- @PreAuthorize 注解
+
+假设在 OrderService 中存在一个 getOrderByUser(String user) 方法，而出于系统安全性的考虑，我们希望用户只能获取自己创建的订单信息，也就是说我们需要校验通过该方法传入的“user”参数是否为当前认证的合法用户。这种场景下，我们就可以使用 @PreAuthorize 注解：
+
+```java
+@PreAuthorize("#name == authentication.principal.username")
+public List<Order> getOrderByUser(String user) {
+    …
+}
+```
+
+这里我们将输入的“user”参数与通过 SpEL 表达式从安全上下文中获取的“authentication.principal.username”进行比对，如果相同就执行正确的方法逻辑，反之将直接抛出异常。
+
+
+
+- @PostAuthorize 注解
+
+有时我们允许调用者正确调用方法，但希望该调用者不接受返回的响应结果。比如在那些访问第三方外部系统的应用中，我们并不能完全相信返回数据的正确性，也有对调用的响应结果进行限制的需求，@PostAuthorize 注解为我们实现这类需求提供了很好的解决方案。
+
+假设我们存在如下所示的一个 Author 对象，保存着该作者的姓名和创作的图书作品：
+
+```java
+public class Author {
+    private String name;
+    private List<String> books;
+}
+```
+
+我们假设系统中保存着两个 Author 对象，现在，我们有这样一个根据姓名获取 Author 对象的查询方法：
+
+```java
+Map<String, Author> authors =
+    Map.of(
+        "AuthorA", new Author("AuthorA ",List.of("BookA1", “BookA2)),
+        "AuthorB", new Author("AuthorB", List.of("BookB1"))
+);
+
+@PostAuthorize("returnObject.books.contains('BookA2')")
+public Author getAuthorByNames(String name) {
+    return authors.get(name);
+}
+```
+
+在这个示例中，借助于代表返回值的“returnObject”对象，如果我们使用创作了“BookA2”的“AuthorA”来调用这个方法，就能正常返回数据；如果使用“AuthorB”，就会报 403 异常。
+
+
+
+**使用注解实现方法级别过滤**
+
+- @PreFilter 注解
+
+使用预过滤，方法调用是一定会执行的，但只有那些符合过滤规则的数据才会正常传递到调用链路的下一层组件。
+
+我们设计一个新的数据模型，并构建如下所示的 Controller 层方法：
+
+```java
+@Autowired
+private ProductService productService;
+ 
+@GetMapping("/sell")
+public List<Product> sellProduct() {
+    List<Product> products = new ArrayList<>();
+ 
+    products.add(new Product("p1", "jianxiang1"));
+    products.add(new Product("p2", "jianxiang2"));
+    products.add(new Product("p3", "jianxiang3"));
+ 
+    return productService.sellProducts(products);
+}
+```
+
+然后，我们来到 Service 层组件，实现如下所示的方法：
+
+```java
+@PreFilter("filterObject.name == authentication.name")
+public List<Product> sellProducts(List<Product> products) {
+    return products;
+}
+```
+
+这里通过使用“filterObject”对象，我们可以获取输入的 Product 数据，然后将“filterObject.name”字段与从安全上下文中获取的“authentication.name”进行比对，就能将那些不属于当前认证用户的数据进行过滤。
+
+
+
+- @PostFilter 注解
+
+如果使用后过滤，方法调用也是一定会执行的，但只有那些符合过滤规则的数据才会正常返回。
+
+@PostFilter 注解的使用方法也很简单，示例如下：
+
+```java
+@PostFilter("filterObject.name == authentication.principal.username")
+public List<Product> findProducts() {
+    List<Product> products = new ArrayList<>();
+ 
+    products.add(new Product("p1", "jianxiang1"));
+    products.add(new Product("p2", "jianxiang2"));
+    products.add(new Product("p3", "jianxiang3"));
+ 
+    return products;
+}
+```
+
+我们指定了过滤的规则为"filterObject.name == authentication.principal.username"，也就是说该方法只会返回那些属于当前认证用户的数据，其他用户的数据会被自动过滤。
 
 # 11 | 案例实战：使用 Spring Security 高级主题保护 Web 应用
+
+
+
+
+
+
+
+
 
 
 
