@@ -335,13 +335,11 @@ SQL 语句的真正执行将会由 StatementHandler 实现。StatementHandler �
 
 **Reflector**
 
-Reflector 是 MyBatis 反射模块的基础。要使用反射模块操作一个 Class，都会先将该 Class 封装成一个 Reflector 对象。
-
-> [Reflector.java](https://github1s.com/studeyang/mybatis-notes/blob/master/src/main/java/org/apache/ibatis/reflection/Reflector.java)
+[Reflector](https://github.com/studeyang/mybatis-notes/blob/master/src/main/java/org/apache/ibatis/reflection/Reflector.java) 是 MyBatis 反射模块的基础。要使用反射模块操作一个 Class，都会先将该 Class 封装成一个 Reflector 对象。
 
 - 核心方法
 
-在 331 行出现了 `currentMethod.isBridge()`：
+在第 3 行出现了 `currentMethod.isBridge()`：
 
 ```java
 private void addUniqueMethods(Map<String, Method> uniqueMethods, Method[] methods)
@@ -378,7 +376,7 @@ Invoker 接口的继承关系如下图所示：
 
 ![image-20220616213607612](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206162136798.png)
 
-- ReflectorFactory
+- [ReflectorFactory](https://github.com/studeyang/mybatis-notes/blob/master/src/main/java/org/apache/ibatis/reflection/ReflectorFactory.java)
 
 通过上面的分析我们知道，Reflector 初始化过程会有一系列的反射操作，为了提升 Reflector 的初始化速度，MyBatis 提供了 ReflectorFactory 这个工厂接口对 Reflector 对象进行缓存，其中最核心的方法是用来获取 Reflector 对象的 findForClass() 方法。
 
