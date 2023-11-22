@@ -57,7 +57,7 @@ POST /products/_search
 
 整个 Match Query 的查询过程如下：
 
-![image-20220117225353805](/Users/yanglulu/Library/Application Support/typora-user-images/image-20220117225353805.png)
+![image-20220117225353805](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202311212237233.png)
 
 **结构化搜索**
 

@@ -155,7 +155,7 @@ JSX 的本质：动态创建组件的语法糖
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202209132208214.png" alt="image-20220913220824166" style="zoom:33%;" />
 
-![image-20220913220838858](/Users/yanglulu/Library/Application Support/typora-user-images/image-20220913220838858.png)
+![image-20220913220838858](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202311212235623.png)
 
 **create-react-app**
 
