@@ -20,7 +20,7 @@ OAuth 2.0 知识体系图：
 
 ![OAuth2](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201219231943.jpeg)
 
-# 01 | OAuth 2.0是要通过什么方式解决什么问题？
+# 01 | OAuth 2.0是要解决什么问题？
 
 **OAuth 2.0 是什么？**
 
