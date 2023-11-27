@@ -356,7 +356,7 @@ private String generateAccessToken(Stirng appId, String user) {
 
 **刷新令牌**
 
-刷新令牌也是给第三方软件使用的，同样需要遵循先颁发再使用的原则。因此，我们还是 从颁发和使用两个环节来学习刷新令牌。不过，这个颁发和使用流程和访问令牌有些是相 同的，所以我只会和你重点讲述其中的区别。
+刷新令牌也是给第三方软件使用的，同样需要遵循先颁发再使用的原则。因此，我们还是 从颁发和使用两个环节来学习刷新令牌。不过，这个颁发和使用流程和访问令牌有些是相同的，所以我只会和你重点讲述其中的区别。
 
 **颁发刷新令牌**
 
@@ -457,7 +457,7 @@ JWT 令牌是如何被使用的呢？在讲如何使用之前呢，我先和你�
 
 什么是令牌内检呢？授权服务颁发令牌，受保护资源服务就要验证令牌。同时呢，授权服务和受保护资源服务，它俩是“一伙的”。受保护资源来调用授权服务提供的检验令牌的服务，我们把这种校验令牌的方式称为令牌内检。
 
-有时候授权服务依赖一个数据库，然后受保护资源服务也依赖这个数据库，也就是我们说的“共享数据库”。不过，在如今已经成熟的分布式以及微服务的环境下，不同的系统之间是依靠服务而不是数据库来通信了，比如授权服务给受保护资源服务提供一个 RPC 服 务。如下图所示。
+有时候授权服务依赖一个数据库，然后受保护资源服务也依赖这个数据库，也就是我们说的“共享数据库”。不过，在如今已经成熟的分布式以及微服务的环境下，不同的系统之间是依靠服务而不是数据库来通信了，比如授权服务给受保护资源服务提供一个 RPC 服务。如下图所示。
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201221231740.png" alt="image-20201221231740063" style="zoom:50%;" />
 
@@ -482,13 +482,18 @@ JJWT 是目前 Java 开源的、比较方便的 JWT 工具，封装了 Base64URL
 ```java
 // 密钥
 String sharedTokenSecret = "hellooauthhellooauthhellooauthhellooauth";
-Key key = new SecretKeySpec(sharedTokenSecret.getBytes(),
-SignatureAlgorithm.HS256.getJcaName());
+Key key = new SecretKeySpec(sharedTokenSecret.getBytes(), SignatureAlgorithm.HS256.getJcaName());
 //生成JWT令牌
-String jwts=
-Jwts.builder().setHeaderParams(headerMap).setClaims(payloadMap).signWith(key, SignatureAlgorithm.HS256).compact();
+String jwts= Jwts.builder()
+    .setHeaderParams(headerMap)
+    .setClaims(payloadMap)
+    .signWith(key, SignatureAlgorithm.HS256)
+    .compact();
 //解析JWT令牌
-Jws<Claims> claimsJws = Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(jwts);
+Jws<Claims> claimsJws = Jwts.parserBuilder()
+    .setSigningKey(key)
+    .build()
+    .parseClaimsJws(jwts);
 JwsHeader header = claimsJws.getHeader();
 Claims body = claimsJws.getBody();
 ```
