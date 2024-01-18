@@ -1,4 +1,6 @@
 > Java 业务开发常见错误 100 例--朱晔
+>
+> 相关源码：https://github.com/JosephZhu1983/java-common-mistakes
 
 # 21 | 代码重复：搞定代码重复的三个绝招
 
@@ -285,6 +287,275 @@ ComplicatedOrderDO orderDO = new ComplicatedOrderDO();
 BeanUtils.copyProperties(orderDTO, orderDO, "id");
 return orderDO;
 ```
+
+# 22 | 接口设计：系统间对话的语言，一定要统一
+
+今天，我通过我遇到的实际案例，和你一起看看因为接口设计思路和调用方理解不一致所导致的问题，以及相关的实践经验。
+
+**接口的响应要明确表示接口的处理结果**
+
+我曾遇到过一个处理收单的收单中心项目，下单接口返回的响应体中，包含了 success、code、info、message 等属性，以及二级嵌套对象 data 结构体。在对项目进行重构的时候，我们发现真的是无从入手，接口缺少文档，代码一有改动就出错。
+
+```json
+{
+    "success": true,
+    "code": 5001,
+    "info": "Risk order detected",
+    "message": "OK",
+    "data":
+    {
+        "orderStatus": "Cancelled",
+        "orderId": -1
+    }
+}
+```
+
+这样的结果，让我们非常疑惑：
+
+- 结构体的 code 和 HTTP 响应状态码，是什么关系？
+- success 到底代表下单成功还是失败？
+- info 和 message 的区别是什么？
+- data 中永远都有数据吗？什么时候应该去查询 data？
+
+为了将接口设计得更合理，我们需要考虑如下两个原则：
+
+- 对外隐藏内部实现。虽然说收单服务调用订单服务进行真正的下单操作，但是直接接口其实是收单服务提供的，收单服务不应该“直接”暴露其背后订单服务的状态码、错误描述。
+- 设计接口结构时，明确每个字段的含义，以及客户端的处理方式。
+
+基于这两个原则，我们调整一下返回结构体：
+
+```java
+@Data
+public class APIResponse < T > {
+    private boolean success;
+    private T data;
+    private int code;
+    private String message;
+}
+```
+
+**要考虑接口变迁的版本控制策略**
+
+接口不可能一成不变，需要根据业务需求不断增加内部逻辑。如果做大的功能调整或重构，涉及参数定义的变化或是参数废弃，导致接口无法向前兼容，这时接口就需要有版本的概念。在考虑接口版本策略设计时，我们需要注意的是，最好一开始就明确版本策略，并考虑在整个服务端统一版本策略。
+
+- 第一，版本策略最好一开始就考虑。
+
+比如，确定是通过 URL Path 实现，是通过 QueryString 实现，还是通过 HTTP 头实现。
+
+```java
+//通过URL Path实现版本控制
+@GetMapping("/v1/api/user")
+    public int right1(){
+    return 1;
+}
+//通过QueryString中的version参数实现版本控制
+@GetMapping(value = "/api/user", params = "version=2")
+public int right2(@RequestParam("version") int version) {
+    return 2;
+}
+//通过请求头中的X - API - VERSION参数实现版本控制
+@GetMapping(value = "/api/user", headers = "X-API-VERSION=3")
+public int right3(@RequestHeader("X-API-VERSION") int version) {
+    return 3;
+}
+```
+
+这三种方式中，URL Path 的方式最直观也最不容易出错；
+
+- 第二，版本实现方式要统一。
+
+之前，我就遇到过一个 O2O 项目，需要针对商品、商店和用户实现 REST 接口。虽然大家约定通过 URL Path 方式实现 API 版本控制，但实现方式不统一，有的是 /api/item/v1，有的是 /api/v1/shop，还有的是 /v1/api/merchant。
+
+显然，商品、商店和商户的接口开发同学，没有按照一致的 URL 格式来实现接口的版本控制。
+
+相比于在每一个接口的 URL Path 中设置版本号，更理想的方式是在框架层面实现统一。如果你使用 Spring 框架的话，可以按照下面的方式自定义 RequestMappingHandlerMapping 来实现。
+
+首先，创建一个注解来定义接口的版本。@APIVersion 自定义注解可以应用于方法或 Controller 上：
+
+```java
+@Target({ ElementType.METHOD, ElementType.TYPE })
+@Retention(RetentionPolicy.RUNTIME)
+public @interface APIVersion {
+    String[] value();
+}
+```
+
+然后，定义一个 APIVersionHandlerMapping 类继承 RequestMappingHandlerMapping。
+
+RequestMappingHandlerMapping 的作用，是根据类或方法上的 @RequestMapping 来生成 RequestMappingInfo 的实例。我们覆盖 registerHandlerMethod 方法的实现，从 @APIVersion 自定义注解中读取版本信息，拼接上原有的、不带版本号的 URL Pattern，构成新的 RequestMappingInfo，来通过注解的方式为接口增加基于 URL 的版本号：
+
+```java
+public class APIVersionHandlerMapping extends RequestMappingHandlerMapping {
+    @Override
+    protected boolean isHandler(Class<?> beanType) {
+        return AnnotatedElementUtils.hasAnnotation(beanType, Controller.class);
+    }
+
+    @Override
+    protected void registerHandlerMethod(Object handler, Method method, RequestMappingInfo mapping) {
+        Class<?> controllerClass = method.getDeclaringClass();
+        APIVersion apiVersion = AnnotationUtils.findAnnotation(controllerClass, APIVersion.class);
+        APIVersion methodAnnotation = AnnotationUtils.findAnnotation(method, APIVersion.class);
+        //以方法上的注解优先
+        if (methodAnnotation != null) {
+            apiVersion = methodAnnotation;
+        }
+
+        String[] urlPatterns = apiVersion == null ? new String[0] : apiVersion.value();
+
+        PatternsRequestCondition apiPattern = new PatternsRequestCondition(urlPatterns);
+        PatternsRequestCondition oldPattern = mapping.getPatternsCondition();
+        PatternsRequestCondition updatedFinalPattern = apiPattern.combine(oldPattern);
+        mapping = new RequestMappingInfo(mapping.getName(), updatedFinalPattern, mapping.getMethodsCondition(),
+                mapping.getParamsCondition(), mapping.getHeadersCondition(), mapping.getConsumesCondition(),
+                mapping.getProducesCondition(), mapping.getCustomCondition());
+        super.registerHandlerMethod(handler, method, mapping);
+    }
+}
+```
+
+最后，也是特别容易忽略的一点，要通过实现 WebMvcRegistrations 接口，来生效自定义的 APIVersionHandlerMapping：
+
+```java
+@SpringBootApplication
+public class CommonMistakesApplication implements WebMvcRegistrations {
+    @Override
+    public RequestMappingHandlerMapping getRequestMappingHandlerMapping() {
+        return new APIVersionHandlerMapping();
+    }
+}
+```
+
+这样，就实现了在 Controller 上或接口方法上通过注解，来实现以统一的 Pattern 进行版本号控制：
+
+```java
+@Slf4j
+@RequestMapping("apiversion")
+@RestController
+@APIVersion("v1")
+public class APIVersoinController {
+    @GetMapping(value = "/api/user")
+    @APIVersion("v4")
+    public int right4() {
+        return 4;
+    }
+}
+```
+
+加上注解后，访问浏览器查看效果：
+
+![image-20240118231820325](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202401182318530.png)
+
+使用框架来明确 API 版本的指定策略，不仅实现了标准化，更实现了强制的 API 版本控制。对上面代码略做修改，我们就可以实现不设置 @APIVersion 接口就给予报错提示。
+
+**接口处理方式要明确同步还是异步**
+
+有一个文件上传服务 FileService，其中一个 upload 文件上传接口特别慢，原因是这个上传接口在内部需要进行两步操作，首先上传原图，然后压缩后上传缩略图。如果每一步都耗时 5 秒的话，那么这个接口返回至少需要 10 秒的时间。
+
+于是，开发同学把接口改为了异步处理，每一步操作都限定了超时时间，也就是分别把上传原文件和上传缩略图的操作提交到线程池，然后等待一定的时间：
+
+```java
+private ExecutorService threadPool = Executors.newFixedThreadPool(2);
+
+public UploadResponse upload(UploadRequest request) {
+    UploadResponse response = new UploadResponse();
+    Future<String> uploadFile = threadPool.submit(() -> uploadFile(request.getFile()));
+    Future<String> uploadThumbnailFile = threadPool.submit(() -> uploadThumbnailFile(request.getFile()));
+    try {
+        response.setDownloadUrl(uploadFile.get(1, TimeUnit.SECONDS));
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+    try {
+        response.setThumbnailDownloadUrl(uploadThumbnailFile.get(1, TimeUnit.SECONDS));
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+    return response;
+}
+```
+
+上传接口的请求和响应比较简单，传入二进制文件，传出原文件和缩略图下载地址：
+
+```java
+@Data
+public class UploadRequest {
+    private byte[] file;
+}
+@Data
+public class UploadResponse {
+    private String downloadUrl;
+    private String thumbnailDownloadUrl;
+}
+```
+
+到这里，你能看出这种实现方式的问题是什么吗？
+
+从接口命名上看虽然是同步上传操作，但其内部通过线程池进行异步上传，并因为设置了较短超时所以接口整体响应挺快。但是，一旦遇到超时，接口就不能返回完整的数据，不是无法拿到原文件下载地址，就是无法拿到缩略图下载地址，接口的行为变得不可预测：
+
+![image-20240118232625336](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202401182326480.png)
+
+所以，这种优化接口响应速度的方式并不可取，更合理的方式是，让上传接口要么是彻底的同步处理，要么是彻底的异步处理：
+
+- 所谓同步处理，接口一定是同步上传原文件和缩略图的，调用方可以自己选择调用超时，如果来得及可以一直等到上传完成，如果等不及可以结束等待，下一次再重试；
+- 所谓异步处理，接口是两段式的，上传接口本身只是返回一个任务 ID，然后异步做上传操作，上传接口响应很快，客户端需要之后再拿着任务 ID 调用任务查询接口查询上传的文件 URL。
+
+同步上传接口的实现代码如下，把超时的选择留给客户端：
+
+```java
+public SyncUploadResponse syncUpload(SyncUploadRequest request) {
+    SyncUploadResponse response = new SyncUploadResponse();
+    response.setDownloadUrl(uploadFile(request.getFile()));
+    response.setThumbnailDownloadUrl(uploadThumbnailFile(request.getFile()));
+    return response;
+}
+```
+
+接下来，我们看看异步的上传文件接口如何实现。
+
+```java
+//计数器，作为上传任务的ID
+private AtomicInteger atomicInteger = new AtomicInteger(0);
+//暂存上传操作的结果，生产代码需要考虑数据持久化
+private ConcurrentHashMap<String, SyncQueryUploadTaskResponse> downloadUrl = new ConcurrentHashMap<>();
+//异步上传操作
+public AsyncUploadResponse asyncUpload(AsyncUploadRequest request) {
+    AsyncUploadResponse response = new AsyncUploadResponse();
+    //生成唯一的上传任务ID
+    String taskId = "upload" + atomicInteger.incrementAndGet();
+    //异步上传操作只返回任务ID
+    response.setTaskId(taskId);
+    //提交上传原始文件操作到线程池异步处理
+    threadPool.execute(() -> {
+        String url = uploadFile(request.getFile());
+        downloadUrl.computeIfAbsent(taskId, id -> new SyncQueryUploadTaskResponse(id)).setDownloadUrl(url);
+    });
+    threadPool.execute(() -> {
+        String url = uploadThumbnailFile(request.getFile());
+        downloadUrl.computeIfAbsent(taskId, id -> new SyncQueryUploadTaskResponse(id)).setThumbnailDownloadUrl(url)
+    });
+    return response;
+}
+```
+
+经过改造的 FileService 不再提供一个看起来是同步上传，内部却是异步上传的 upload 方法，改为提供很明确的：
+
+- 同步上传接口 syncUpload；
+- 异步上传接口 asyncUpload，搭配 syncQueryUploadTask 查询上传结果。
+
+使用方可以根据业务性质选择合适的方法：如果是后端批处理使用，那么可以使用同步上传，多等待一些时间问题不大；如果是面向用户的接口，那么接口响应时间不宜过长，可以调用异步上传接口，然后定时轮询上传结果，拿到结果再显示。
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
