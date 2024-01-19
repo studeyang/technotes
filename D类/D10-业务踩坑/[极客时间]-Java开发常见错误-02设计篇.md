@@ -545,6 +545,164 @@ public AsyncUploadResponse asyncUpload(AsyncUploadRequest request) {
 
 使用方可以根据业务性质选择合适的方法：如果是后端批处理使用，那么可以使用同步上传，多等待一些时间问题不大；如果是面向用户的接口，那么接口响应时间不宜过长，可以调用异步上传接口，然后定时轮询上传结果，拿到结果再显示。
 
+# 23 | 缓存设计：缓存可以锦上添花也可以落井下石
+
+> [全栈工程师修炼指南](../D14-行业视角/全栈工程师修炼指南.md)--21 | 赫赫有名的双刃剑：缓存（上）
+
+使用 Redis 做缓存虽然简单好用，但使用和设计缓存并不是 set 一下这么简单，需要注意缓存的同步、雪崩、并发、穿透等问题。今天，我们就来详细聊聊。
+
+**不要把 Redis 当作数据库**
+
+通常，我们会使用 Redis 等分布式缓存数据库来缓存数据，但是千万别把 Redis 当做数据库来使用。我就见过许多案例，因为 Redis 中数据消失导致业务逻辑错误，并且因为没有保留原始数据，业务都无法恢复。
+
+**注意缓存雪崩问题**
+
+由于缓存系统的 IOPS 比数据库高很多，因此要特别小心短时间内大量缓存失效的情况。这种情况一旦发生，可能就会在瞬间有大量的数据需要回源到数据库查询，对数据库造成极大的压力，极限情况下甚至导致后端数据库直接崩溃。这就是我们常说的缓存失效，也叫作缓存雪崩。
+
+从广义上说，产生缓存雪崩的原因有两种：
+
+- 第一种是，缓存系统本身不可用，导致大量请求直接回源到数据库；
+- 第二种是，应用设计层面大量的 Key 在同一时间过期，导致大量的数据回源。
+
+第一种原因，主要涉及缓存系统本身高可用的配置，不属于缓存设计层面的问题，所以今天我主要和你说说如何确保大量 Key 不在同一时间被动过期。
+
+解决缓存 Key 同时大规模失效需要回源，导致数据库压力激增问题的方式有两种。
+
+方案一，差异化缓存过期时间，不要让大量的 Key 在同一时间过期。比如，在初始化缓存的时候，设置缓存的过期时间是 30 秒 +10 秒以内的随机延迟（扰动值）。这样，这些Key 不会集中在 30 秒这个时刻过期，而是会分散在 30~40 秒之间过期。
+
+```java
+public void rightInit1() {
+    IntStream.rangeClosed(1, 1000).forEach(i -> stringRedisTemplate.opsForValue().set("city" + i, getCityFromDb(i), 30 + ThreadLocalRandom.current().nextInt(10), TimeUnit.SECONDS));
+    log.info("Cache init finished");
+    Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+        log.info("DB QPS : {}", atomicInteger.getAndSet(0));
+    }, 0, 1, TimeUnit.SECONDS);
+}
+```
+
+方案二，让缓存不主动过期。初始化缓存数据的时候设置缓存永不过期，然后启动一个后台线程 30 秒一次定时把所有数据更新到缓存，而且通过适当的休眠，控制从数据库更新数据的频率，降低数据库压力。
+
+```java
+@PostConstruct
+public void rightInit2() throws InterruptedException {
+    CountDownLatch countDownLatch = new CountDownLatch(1);
+    Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+        IntStream.rangeClosed(1, 1000).forEach(i -> {
+            String data = getCityFromDb(i);
+            //模拟更新缓存需要一定的时间
+            try {
+                TimeUnit.MILLISECONDS.sleep(20);
+            } catch (InterruptedException e) {
+            }
+            if (!StringUtils.isEmpty(data)) {
+                //缓存永不过期，被动更新
+                stringRedisTemplate.opsForValue().set("city" + i, data);
+            }
+        });
+        log.info("Cache update finished");
+        countDownLatch.countDown();
+    }, 0, 30, TimeUnit.SECONDS);
+    Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+        log.info("DB QPS : {}", atomicInteger.getAndSet(0));
+    }, 0, 1, TimeUnit.SECONDS);
+    countDownLatch.await();
+}
+```
+
+关于这两种解决方案，我们需要特别注意以下三点：
+
+- 方案一和方案二是截然不同的两种缓存方式，如果无法全量缓存所有数据，那么只能使用方案一；
+- 即使使用了方案二，缓存永不过期，同样需要在查询的时候，确保有回源的逻辑。正如之前所说，我们无法确保缓存系统中的数据永不丢失。
+- 不管是方案一还是方案二，在把数据从数据库加入缓存的时候，都需要判断来自数据库的数据是否合法，比如进行最基本的判空检查。
+
+之前我就遇到过这样一个重大事故，某系统会在缓存中对基础数据进行长达半年的缓存，在某个时间点 DBA 把数据库中的原始数据进行了归档（可以认为是删除）操作。因为缓存中的数据一直在所以一开始没什么问题，但半年后的一天缓存中数据过期了，就从数据库中查询到了空数据加入缓存，爆发了大面积的事故。
+
+这个案例说明，缓存会让我们更不容易发现原始数据的问题，所以在把数据加入缓存之前一定要校验数据，如果发现有明显异常要及时报警。
+
+**注意缓存击穿问题**
+
+在某些 Key 属于极端热点数据，且并发量很大的情况下，如果这个 Key 过期，可能会在某个瞬间出现大量的并发请求同时回源，相当于大量的并发请求直接打到了数据库。这种情况，就是我们常说的缓存击穿或缓存并发问题。
+
+我们来重现下这个问题。在程序启动的时候，初始化一个热点数据到 Redis 中，过期时间设置为 5 秒，每隔 1 秒输出一下回源的 QPS：
+
+```java
+@PostConstruct
+public void init() {
+    //初始化一个热点数据到Redis中，过期时间设置为5秒
+    stringRedisTemplate.opsForValue().set("hotsopt", getExpensiveData(), 5, TimeUnit.SECONDS);
+    //每隔1秒输出一下回源的QPS
+    Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+        log.info("DB QPS : {}", atomicInteger.getAndSet(0));
+    }, 0, 1, TimeUnit.SECONDS);
+}
+@GetMapping("wrong")
+public String wrong() {
+    String data = stringRedisTemplate.opsForValue().get("hotsopt");
+    if (StringUtils.isEmpty(data)) {
+        data = getExpensiveData();
+        //重新加入缓存，过期时间还是5秒
+        stringRedisTemplate.opsForValue().set("hotsopt", data, 5, TimeUnit.SECONDS);
+    }
+    return data;
+}
+```
+
+可以看到，每隔 5 秒数据库都有 20 左右的 QPS：
+
+![image-20240119224819146](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202401192250306.png)
+
+如果回源操作特别昂贵，那么这种并发就不能忽略不计。这时，我们可以考虑使用锁机制来限制回源的并发。比如如下代码示例，使用 Redisson 来获取一个基于 Redis 的分布式锁，在查询数据库之前先尝试获取锁：
+
+```java
+@GetMapping("right")
+public String right() {
+    String data = stringRedisTemplate.opsForValue().get("hotsopt");
+    if (StringUtils.isEmpty(data)) {
+        RLock locker = redissonClient.getLock("locker");
+        //获取分布式锁
+        if (locker.tryLock()) {
+            try {
+                data = stringRedisTemplate.opsForValue().get("hotsopt");
+                //双重检查，因为可能已经有一个B线程过了第一次判断
+                if (StringUtils.isEmpty(data)) {
+                    //回源到数据库查询
+                    data = getExpensiveData();
+                    stringRedisTemplate.opsForValue().set("hotsopt", data, 5, TimeUnit.SECONDS);
+                }
+            } finally {
+                locker.unlock();
+            }
+        }
+    }
+    return data;
+}
+```
+
+这样，可以把回源到数据库的并发限制在 1：
+
+![image-20240119225204193](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/202401192252344.png)
+
+在真实的业务场景下，不一定要这么严格地使用双重检查分布式锁进行全局的并发限制，因为这样虽然可以把数据库回源并发降到最低，但也限制了缓存失效时的并发。可以考虑的方式是：
+
+- 方案一，使用进程内的锁进行限制，这样每一个节点都可以以一个并发回源数据库；
+- 方案二，不使用锁进行限制，而是使用类似 Semaphore 的工具限制并发数，比如限制为 10，这样既限制了回源并发数不至于太大，又能使得一定量的线程可以同时回源。
+
+**注意缓存穿透问题**
+
+
+
+**注意缓存数据同步策略**
+
+
+
+
+
+
+
+
+
+
+
 
 
 
