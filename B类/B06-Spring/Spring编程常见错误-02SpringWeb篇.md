@@ -376,7 +376,7 @@ http://localhost:8080/hi6?date=Sat, 12 Aug 1995 13:30:00 GMT
 
 在 Spring 中，要完成 String 对于 Date 的转化，ObjectToObjectConverter 并不是最好的转化器。我们可以使用更强大的 AnnotationParserConverter。在 Spring 初始化时，会构建一些针对日期型的转化器，即相应的一些 AnnotationParserConverter 的实例。但是为什么有时候用不上呢？
 
-这是因为 AnnotationParserConverter 有目标类型的要求。参考 FormattingConversionService#addFormatterForFieldAnnotation 方法的调试试图：
+这是因为 AnnotationParserConverter 有目标类型的要求。参考 FormattingConversionService#addFormatterForFieldAnnotation 方法的调试视图：
 
 ![image-20220803224321984](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202208032243112.png)
 
@@ -1416,10 +1416,9 @@ Field timeCostFilter in com.spring.puzzle.web.filter.example1.MetricsService req
 最终，WebServletHandler 通过父类 ServletComponentHandler 的模版方法模式，处理了所有被 @WebFilter 注解的类，关键代码如下：
 
 ```java
-public void doHandle(Map<String, Object> attributes, AnnotatedBeanDefinition beanDefinition,
+public void doHandle(Map<String, Object> attributes, AnnotatedBeanDefinition beanDefinition, 
                      BeanDefinitionRegistry registry) {
-    BeanDefinitionBuilder builder = BeanDefinitionBuilder
-        .rootBeanDefinition(FilterRegistrationBean.class);
+    BeanDefinitionBuilder builder = BeanDefinitionBuilder.rootBeanDefinition(FilterRegistrationBean.class);
     builder.addPropertyValue("asyncSupported", attributes.get("asyncSupported"));
     builder.addPropertyValue("dispatcherTypes", extractDispatcherTypes(attributes));
     builder.addPropertyValue("filter", beanDefinition);
@@ -1514,12 +1513,10 @@ Filter 处理中时发生异常
 我们直接查看负责请求处理的 StandardWrapperValve#invoke()，快速解决第一个问题：
 
 ```java
-public final void invoke(Request request, Response response)
-    throws IOException, ServletException {
+public final void invoke(Request request, Response response) throws IOException, ServletException {
     // 省略非关键代码
     // 创建filterChain
-    ApplicationFilterChain filterChain =
-        ApplicationFilterFactory.createFilterChain(request, wrapper, servlet);
+    ApplicationFilterChain filterChain = ApplicationFilterFactory.createFilterChain(request, wrapper, servlet);
     // 省略非关键代码
     try {
         if ((servlet != null) && (filterChain != null)) {
@@ -1543,8 +1540,7 @@ Spring 通过 ApplicationFilterFactory.createFilterChain() 创建 FilterChain，
 首先查看 ApplicationFilterFactory.createFilterChain()，来看下 FilterChain 如何被创建，如下所示：
 
 ```java
-public static ApplicationFilterChain createFilterChain(
-    ServletRequest request, Wrapper wrapper, Servlet servlet) {
+public static ApplicationFilterChain createFilterChain(ServletRequest request, Wrapper wrapper, Servlet servlet) {
     // 省略非关键代码
     ApplicationFilterChain filterChain = null;
     if (request instanceof Request) {
@@ -1557,8 +1553,7 @@ public static ApplicationFilterChain createFilterChain(
     // Add the relevant path-mapped filters to this filter chain
     for (int i = 0; i < filterMaps.length; i++) {
         // 省略非关键代码
-        ApplicationFilterConfig filterConfig = (ApplicationFilterConfig)
-            context.findFilterConfig(filterMaps[i].getFilterName());
+        ApplicationFilterConfig filterConfig = (ApplicationFilterConfig) context.findFilterConfig(filterMaps[i].getFilterName());
         if (filterConfig == null) {
             continue;
         }
@@ -1579,14 +1574,13 @@ private int pos = 0;
 private int n = 0；
 // 省略非关键代码
 void addFilter(ApplicationFilterConfig filterConfig) {
-    for(ApplicationFilterConfig filter:filters) {
-        if(filter==filterConfig) {
+    for (ApplicationFilterConfig filter : filters) {
+        if (filter == filterConfig) {
             return;
         }
     }
     if (n == filters.length) {
-        ApplicationFilterConfig[] newFilters = 
-            new ApplicationFilterConfig[n + INCREMENT];
+        ApplicationFilterConfig[] newFilters = new ApplicationFilterConfig[n + INCREMENT];
         System.arraycopy(filters, 0, newFilters, 0, n);
         filters = newFilters;
     }
@@ -1597,14 +1591,13 @@ void addFilter(ApplicationFilterConfig filterConfig) {
 到这，Spring 就完成了 FilterChain 的创建准备工作。接下来，我们继续看 FilterChain 的执行细节，即 ApplicationFilterChain 的 doFilter()：
 
 ```java
-public void doFilter(ServletRequest request, ServletResponse response)
-    throws IOException, ServletException {
-    if( Globals.IS_SECURITY_ENABLED ) {
+public void doFilter(ServletRequest request, ServletResponse response) throws IOException, ServletException {
+    if (Globals.IS_SECURITY_ENABLED) {
         //省略非关键代码
-        internalDoFilter(request,response);
+        internalDoFilter(request, response);
         //省略非关键代码
     } else {
-        internalDoFilter(request,response);
+        internalDoFilter(request, response);
     }
 }
 ```
@@ -2357,8 +2350,7 @@ throw NotAllowException
 
 下面我们将深入分析 Spring Web 对异常统一处理的逻辑，深刻理解其内部原理。首先我们来了解下 ControllerAdvice 是如何被 Spring 加载并对外暴露的。
 
-在 Spring Web 的核心配置类 WebMvcConfigurationSupport 中，被 @Bean 修饰的
-handlerExceptionResolver()，会调用 addDefaultHandlerExceptionResolvers() 来添加默认的异常解析器。
+在 Spring Web 的核心配置类 WebMvcConfigurationSupport 中，被 @Bean 修饰的 handlerExceptionResolver()，会调用 addDefaultHandlerExceptionResolvers() 来添加默认的异常解析器。
 
 ```java
 @Bean
@@ -2394,8 +2386,7 @@ public void afterPropertiesSet() {
 ```java
 private void initExceptionHandlerAdviceCache() {
     //省略非关键代码
-    List<ControllerAdviceBean> adviceBeans = 
-        ControllerAdviceBean.findAnnotatedBeans(getApplicationContext());
+    List<ControllerAdviceBean> adviceBeans = ControllerAdviceBean.findAnnotatedBeans(getApplicationContext());
     for (ControllerAdviceBean adviceBean : adviceBeans) {
         Class<?> beanType = adviceBean.getBeanType();
         if (beanType == null) {
@@ -2432,8 +2423,7 @@ private void initHandlerExceptionResolvers(ApplicationContext context) {
 接着我们再来了解下 ControllerAdvice 是如何被 Spring 消费并处理异常的。下文贴出的是核心类 DispatcherServlet 中的核心方法 doDispatch() 的部分代码：
 
 ```java
-protected void doDispatch(HttpServletRequest request, HttpServletResponse response) 
-    throws Exception {
+protected void doDispatch(HttpServletRequest request, HttpServletResponse response) throws Exception {
     //省略非关键代码
     try {
         ModelAndView mv = null;
@@ -2444,8 +2434,7 @@ protected void doDispatch(HttpServletRequest request, HttpServletResponse respon
             //省略非关键代码
         } catch (Exception ex) {
             dispatchException = ex;
-        }
-        catch (Throwable err) {
+        } catch (Throwable err) {
             dispatchException = new NestedServletException("Handler dispatch fail", err);
         }
         processDispatchResult(processedRequest, response, mappedHandler, mv, dispatchException);
@@ -2459,7 +2448,8 @@ Spring 在执行用户请求时，当在“查找”和“执行”请求对应�
 ```java
 private void processDispatchResult(
     HttpServletRequest request, HttpServletResponse response,
-    @Nullable HandlerExecutionChain mappedHandler, @Nullable ModelAndView mv,
+    @Nullable HandlerExecutionChain mappedHandler,
+    @Nullable ModelAndView mv,
     @Nullable Exception exception) throws Exception {
     boolean errorView = false;
     if (exception != null) {
@@ -2497,7 +2487,7 @@ protected ModelAndView processHandlerException(
 
 然后，processHandlerException 会从类成员变量 handlerExceptionResolvers 中获取有效的异常解析器，对异常进行解析。
 
-显然，这里的 handlerExceptionResolvers 一定包含我们声明的NotAllowExceptionHandler#NotAllowException 的异常处理器的ExceptionHandlerExceptionResolver 包装类。
+显然，这里的 handlerExceptionResolvers 一定包含我们声明的 NotAllowExceptionHandler#NotAllowException 的异常处理器的ExceptionHandlerExceptionResolver 包装类。
 
 - 问题修正
 
@@ -2521,8 +2511,7 @@ public void doFilter(ServletRequest request, ServletResponse response, FilterCha
         String token = httpServletRequest.getHeader("token");
     if (!"111111".equals(token)) {
         System.out.println("throw NotAllowException");
-        resolver.resolveException(httpServletRequest, httpServletResponse, 
-                                  null, new NotAllowException());
+        resolver.resolveException(httpServletRequest, httpServletResponse, null, new NotAllowException());
         return;
     }
     chain.doFilter(request, response);
@@ -2544,7 +2533,7 @@ throw NotAllowException
 
 **案例 2：特殊的 404 异常**
 
-为了防止一些异常的访问，我们需要记录所有 404 状态的访问记录，并返回一个我们的自定义结果。于是我们添加了一个 ExceptionHandlerController，它被声明成@RestControllerAdvice 来全局捕获 Spring MVC 中抛出的异常。
+为了防止一些异常的访问，我们需要记录所有 404 状态的访问记录，并返回一个我们的自定义结果。于是我们添加了一个 ExceptionHandlerController，它被声明成 @RestControllerAdvice 来全局捕获 Spring MVC 中抛出的异常。
 
 ```java
 @RestControllerAdvice
@@ -2586,12 +2575,10 @@ protected void doDispatch(HttpServletRequest request, HttpServletResponse respon
 首先调用 getHandler() 获取当前请求的处理器，如果获取不到，则调用 noHandlerFound()：
 
 ```java
-protected void noHandlerFound(HttpServletRequest request, HttpServletResponse response) 
-    throws Exception {
+protected void noHandlerFound(HttpServletRequest request, HttpServletResponse response) throws Exception {
     if (this.throwExceptionIfNoHandlerFound) {
-        throw new NoHandlerFoundException(
-            request.getMethod(), getRequestUri(request),
-            new ServletServerHttpRequest(request).getHeaders());
+        throw new NoHandlerFoundException(request.getMethod(), getRequestUri(request),
+                                          new ServletServerHttpRequest(request).getHeaders());
     } else {
         response.sendError(HttpServletResponse.SC_NOT_FOUND);
     }
