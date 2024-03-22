@@ -76,7 +76,39 @@ win+R 键输入 regedit
 
 # 05 | 插件
 
-下划线转驼峰：https://www.bejson.com/convert/camel_underscore/
+- 下划线转驼峰
+
+https://www.bejson.com/convert/camel_underscore/
+
+- 生成Setter
+
+![image-20240322140853159](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/image-20240322140853159.png)
+
+- 同步 Restful 接口至 Apipost
+
+![image-20240322140941714](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/image-20240322140941714.png)
+
+- MyBatis
+
+![image-20240322141109788](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/image-20240322141109788.png)
+
+- Git
+
+![image-20240322141139394](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/image-20240322141139394.png)
+
+- Maven 依赖分析
+
+![image-20240322141207435](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/image-20240322141207435.png)
+
+- POJO to Json
+
+![image-20240322141255734](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/image-20240322141255734.png)
+
+- 工程代码量统计工具
+
+![image-20240322141324426](https://technotes.oss-cn-shenzhen.aliyuncs.com/2023/image-20240322141324426.png)
+
+
 
 # 06 | 使用Git Bash Terminal
 
