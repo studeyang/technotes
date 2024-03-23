@@ -32,6 +32,6 @@
 
 - **最佳实践**
   - [Intellij Idea最佳实践](D类/D13-最佳实践/Intellij-Idea最佳实践.md)
-  - [Java8 Stream最佳实践](D类/D13-最佳实践/Java8-Stream最佳实践.md)
+  - [一些惊奇的代码](D类/D13-最佳实践/一些惊奇的代码.md)
   - [Postman最佳实践](D类/D13-最佳实践/Postman最佳实践.md)
   - [RestTemplate最佳实践](D类/D13-最佳实践/RestTemplate最佳实践.md)
