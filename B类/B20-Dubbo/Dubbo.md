@@ -1,3 +1,5 @@
+> 参考资料：https://cn.dubbo.apache.org/zh-cn/overview/what/
+
 # 一、快速开始
 
 > 示例代码: https://github.com/apache/dubbo-samples/tree/master/2-advanced/dubbo-samples-dubbo
@@ -286,7 +288,293 @@ Dubbo 实现了按需精准订阅地址信息。比如一个消费者应用依�
 
 Dubbo 中的每个服务都有一条完全独立的路由链，每个服务的路由链组成可能不同，处理的规则各异，各个服务间互不影响。
 
-对单条路由链而言，即使每次输入的地址集合相同，根据每次请求上下文的不同，生成的地址子集结果也可能不同。
+### 场景一：超时时间
+
+**场景描述**
+
+支持动态调整服务超时时间的能力，在无需重启应用的情况下调整服务的超时时间，这对于临时解决一些服务上下游依赖不稳定而导致的调用失败问题非常有效。
+
+**场景举例**
+
+商城项目通过 `org.apache.dubbo.samples.UserService` 提供用户信息管理服务，访问 `http://localhost:8080/` 打开商城并输入任意账号密码，点击 `Login` 即可以正常登录到系统。
+
+![timeout1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406012230131.png)
+
+有些场景下，User 服务的运行速度会变慢，比如存储用户数据的数据库负载过高导致查询变慢，这时就会出现 `UserService` 访问超时的情况，导致登录失败。
+
+![timeout2.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406012230005.png)
+
+**配置详情**
+
+为了解决突发的登录超时问题，我们只需要适当增加 `UserService` 服务调用的等待时间即可。
+
+规则 key：`org.apache.dubbo.samples.UserService`
+
+规则体：
+
+```yaml
+configVersion: v3.0
+enabled: true
+configs:
+  - side: provider
+    parameters:
+      timeout: 2000
+```
+
+`side: provider` 配置会将规则发送到服务提供方实例，所有 `UserService` 服务实例会基于新的 timeout 值进行重新发布，并通过注册中心通知给所有消费方。
+
+### 场景二：服务重试
+
+**场景描述**
+
+在服务初次调用失败后，通过重试能有效的提升总体调用成功率。
+
+> 但也要注意重试可能带来的响应时间增长，系统负载升高等，另外，重试一般适用于只读服务，或者具有幂等性保证的写服务。
+
+**场景举例**
+
+成功登录商城项目后，商城会默认在首页展示当前登录用户的详细信息。
+
+![retry1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406012238001.png)
+
+但有些时候，提供用户详情的 Dubbo 服务也会由于网络不稳定等各种原因变的不稳定，比如我们提供用户详情的 User 服务就很大概率会调用失败，导致用户无法看到账户的详细信息。
+
+![retry2.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406012239001.png)
+
+**配置详情**
+
+访问用户详情的过程可以设置成异步的，只要最终数据能加载出来，适当的增加等待时间并不是大的问题。因此，我们可以考虑通过对每次用户访问增加重试次数的方式，提高服务详情服务的整体访问成功率。
+
+![retry3.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406012241399.png)
+
+规则 key：`org.apache.dubbo.samples.UserService`
+
+规则体：
+
+```yaml
+configVersion: v3.0
+enabled: true
+configs:
+  - side: consumer
+    parameters:
+      retries: 5
+```
+
+`side: consumer` 配置会将规则发送到服务消费方实例，所有 `UserService` 服务实例会基于新的 timeout 值进行重新发布，并通过注册中心通知给所有消费方。
+
+### 场景三：访问日志
+
+**场景描述**
+
+访问日志可以很好的记录某台机器在某段时间内处理的所有服务请求信息，包括请求接收时间、远端 IP、请求参数、响应结果等，运行态动态的开启访问日志对于排查问题非常有帮助。
+
+**场景举例**
+
+商城的所有用户服务都由 `User` 应用的 UserService 提供，通过这个任务，我们为 `User` 应用的某一台或几台机器开启访问日志，以便观察用户服务的整体访问情况。
+
+Dubbo 通过 `accesslog` 标记识别访问日志的开启状态，我们可以指定日志文件的输出位置，也可以单独打开某台机器的访问日志。
+
+**配置详情**
+
+规则 key：shop-user
+
+规则体：
+
+```yaml
+configVersion: v3.0
+enabled: true
+configs:
+  - side: provider
+    parameters:
+      accesslog: true
+```
+
+accesslog 的有效值如下：
+
+- `true` 或 `default` 时，访问日志将随业务 logger 一同输出，此时可以在应用内提前配置 `dubbo.accesslog` appender 调整日志的输出位置和格式
+- 具体的文件路径如 `/home/admin/demo/dubbo-access.log`，这样访问日志将打印到指定的文件内
+
+在 Admin 界面，还可以单独指定开启某一台机器的访问日志：
+
+```yaml
+configVersion: v3.0
+enabled: true
+configs:
+  - match
+     address:
+       oneof:
+        - wildcard: "{ip}:*"
+    side: provider
+    parameters:
+      accesslog: true
+```
+
+其中，`{ip}` 替换为具体的机器地址即可。
+
+### 场景四：区域调用
+
+**场景描述**
+
+当应用部署在多个不同机房/区域的时候，应用之间相互调用就会出现跨区域的情况，而跨区域调用会增加响应时间，影响用户体验。
+
+同机房/区域优先是指应用调用服务时，优先调用同机房/区域的服务提供者，避免了跨区域带来的网络延时，从而减少了调用的响应时间。
+
+**场景举例**
+
+Detail 应用和 Comment 应用都有双区域部署，其中 Detail v1 与 Comment v1 部署在区域 Beijing，Detail v2 与 Comment v2 部署在区域 Hangzhou 区域。
+
+为了保证服务调用的响应速度，我们需要增加同区域优先的调用规则，确保 Beijing 区域内的 Detail v1 始终默认调用 Comment v1，Hangzhou 区域内的 Detail v2 始终调用 Comment v2。
+
+![region1](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406012252388.png)
+
+当同区域内的服务出现故障或不可用时，则允许跨区域调用。
+
+![region2](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406012252153.png)
+
+**配置详情**
+
+规则 key：`org.apache.dubbo.samples.CommentService`
+
+规则体：
+
+```yaml
+configVersion: v3.0
+enabled: true
+force: false
+key: org.apache.dubbo.samples.CommentService
+conditions:
+  - '=> region = $region'
+```
+
+这里使用的是条件路由，`region` 为我们示例中的区域标识，会自动的识别当前发起调用的一方所在的区域值，当请求到达 `hangzhou` 区域部署的 Detail 后，从 Detail 发出的请求自动筛选 URL 地址中带有 `region=hangzhou` 标识的 Comment 地址，如果发现有可用的地址子集则将请求发出，如果没有匹配条件的地址，则随机发往任意可用区地址。
+
+`force: false` 也是关键，这允许在同区域无有效地址时，可以跨区域调用服务。
+
+### 场景五：环境隔离
+
+**场景描述**
+
+在生产发布过程中，为了保障新版本得到充分的验证，我们需要搭建一套完全隔离的线上灰度环境用来部署新版本服务，线上灰度环境能完全模拟生产运行情况，但只有固定的带有特定标记的线上流量会被导流到灰度环境，充分验证新版本的同时将线上变更风险降到最低。
+
+利用 Dubbo 提供的标签路由能力，可以非常灵活的实现流量隔离能力。
+
+**场景举例**
+
+我们决定为商城系统建立一套完整的线上灰度验证环境，灰度环境和线上环境共享一套物理集群，需要我们通过 Dubbo 标签路由从逻辑上完全隔离出一套环境，做到灰度流量和线上流量互不干扰。
+
+![gray1](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406012302094.png)
+
+首先，为 User、Detail、Comment、Order 几个应用都部署灰度环境实例，我们为这部分实例都带有 `env=gray` 的环境标。
+
+**配置详情**
+
+我们需要通过 Admin 为 `shop-detail`、`shop-comment`、`shop-order`、`shop-user` 四个应用分别设置标签归组规则，以 `shop-detail` 为例：
+
+规则 key：`shop-detail`
+
+规则体：
+
+```yaml
+configVersion: v3.0
+force: true
+enabled: true
+key: shop-detail
+tags:
+  - name: gray
+    match:
+      - key: env
+        value:
+          exact: gray
+```
+
+其中，`name` 为灰度环境的流量匹配条件，只有请求上下文中带有 `dubbo.tag=gray` 的流量才会被转发到隔离环境地址子集。请求上下文可通过 `RpcContext.getClientAttachment().setAttachment("dubbo.tag", "gray")` 传递。
+
+`match` 指定了地址子集筛选条件，示例中我们匹配了所有地址 URL 中带有 `env=gray` 标签的地址列表（商城示例中 v2 版本部署的实例都带已经被打上这个标签）。
+
+`force` 指定了是否允许流量跳出灰度隔离环境，这决定了某个服务发现灰度隔离环境没有可用地址时的行为，默认值为 `false` 表示会 fallback 到不属于任何隔离环境 (不带标签) 的普通地址集（不会 fallback 到任何已经归属其他隔离环境的 ip 地址）。示例中设置 `froce: true` 表示当灰度环境地址子集为空时，服务调用失败（No provider exception）。
+
+### 场景六：参数路由
+
+**场景描述**
+
+
+
+**场景举例**
+
+
+
+**配置详情**
+
+规则 key：`xxx`
+
+规则体：
+
+```yaml
+
+```
+
+### 场景七：权重比例
+
+**场景描述**
+
+
+
+**场景举例**
+
+
+
+**配置详情**
+
+规则 key：`xxx`
+
+规则体：
+
+```yaml
+
+```
+
+### 场景八：服务降级
+
+**场景描述**
+
+
+
+**场景举例**
+
+
+
+**配置详情**
+
+规则 key：`xxx`
+
+规则体：
+
+```yaml
+
+```
+
+### 场景九：机器导流
+
+**场景描述**
+
+
+
+**场景举例**
+
+
+
+**配置详情**
+
+规则 key：`xxx`
+
+规则体：
+
+```yaml
+
+```
+
+
+
 
 ## 3.4 观测服务
 
