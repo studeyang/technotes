@@ -497,83 +497,173 @@ tags:
 
 **场景描述**
 
-
+根据请求参数值转发流量，是一种非常灵活且实用的流量管控策略。比如微服务实践中，根据参数（如用户 ID）路由流量，将一小部分用户请求转发到最新发布的产品版本，以验证新版本的稳定性、获取用户的产品体验反馈等，是生产实践中常用的一种有效的灰度机制。
 
 **场景举例**
 
+为了增加用户粘性，我们为商城示例系统新增了 VIP 用户服务，现在商城有两类用户：普通用户和 VIP 用户，其中 VIP 用户可以看到比普通用户更低的商品价格。
 
+在当前部署的示例系统中，只有 detail v2 版本才能识别 VIP 用户并提供特价服务，因此，我们要确保 VIP 用户 `dubbo` 始终访问 detail v2 实例，以便享受稳定的 VIP 服务。
+
+![arguments2](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406022220868.png)
+
+商品详情服务由 Detail 应用中的 `org.apache.dubbo.samples.DetailService` 服务提供，`DetailService` 显示商品详情的 `getItem` 方法定义如下，第二个参数为用户名。
+
+```java
+public interface DetailService {
+    Item getItem(long sku, String username);
+}
+```
+
+因此，接下来我们就为 `DetailService` 服务的 `getItem` 方法增加参数路由规则，如果用户参数是 `dubbo` 就转发到 v2 版本的服务。
 
 **配置详情**
 
-规则 key：`xxx`
+规则 key：`org.apache.dubbo.samples.DetailService`
 
 规则体：
 
 ```yaml
-
+configVersion: v3.0
+key: org.apache.dubbo.samples.DetailService
+scope: service
+force: false
+enabled: true
+priority: 1
+conditions:
+  - method=getItem & arguments[1]=dubbo => detailVersion=v2
 ```
+
+- `method=getItem & arguments[1]=dubbo` 表示流量规则匹配 `getItem` 方法调用的第二个参数，当参数值为 `dubbo` 时做进一步的地址子集筛选。
+- `detailVersion=v2` 将过滤出所有带有 `detailVersion=v2` 标识的 URL 地址子集（在示例部署中，我们所有 detail v2 的实例都已经打上了 `detailVersion=v2` 标签）。
+- `force: false` 表示如果没有 `detailVersion=v2` 的地址，则随机访问所有可用地址。
 
 ### 场景七：权重比例
 
 **场景描述**
 
+Dubbo 提供了基于权重的负载均衡算法，可以实现按比例的流量分布：权重高的提供者机器收到更多的请求流量，而权重低的机器收到相对更少的流量。
 
+这对于一些典型场景非常有用：
+
+- 当某一组机器负载过高，通过动态调低权重可有效减少新请求流入，改善整体成功率的同时给高负载机器提供喘息之机。
+- 刚刚发布的新版本服务，先通过赋予新版本低权重控制少量比例的流量进入，待验证运行稳定后恢复正常权重，并完全替换老版本。
+- 服务多区域部署或非对等部署时，通过高、低权重的设置，控制不同部署区域的流量比例。
 
 **场景举例**
 
+示例项目中，我们发布了 Order 服务 v2 版本，并在 v2 版本中优化了下单体验：用户订单创建完成后，显示订单收货地址信息。
 
+![weight1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406022227476.png)
+
+现在如果你体验疯狂下单 (不停的点击 “Buy Now”)，会发现 v1 与 v2 总体上是 50% 概率出现，说明两者目前具有相同的默认权重。但我们为了保证商城系统整体稳定性，接下来会先控制引导 20% 流量到 v2 版本，80% 流量依然访问 v1 版本。
+
+订单创建服务由 `org.apache.dubbo.samples.OrderService` 接口提供，接下来通过动态规则调整新版本 `OrderService` 实例的权重值。
 
 **配置详情**
 
-规则 key：`xxx`
+规则 key：`org.apache.dubbo.samples.OrderService`
 
 规则体：
 
 ```yaml
+configVersion: v3.0
+scope: service
+key: org.apache.dubbo.samples.OrderService
+configs:
+  - side: provider
+    match:
+      param:
+        - key: orderVersion
+          value:
+            exact: v2
+    parameters:
+      weight: 25
+```
 
+以下匹配条件表示权重规则对所有带有 `orderVersion=v2` 标签的实例生效（Order 服务的所有 v2 版本都已经带有这个标签）。
+
+```yaml
+match:
+  param:
+    - key: orderVersion
+      value:
+        exact: v2
+```
+
+`weight: 25` 是因为 v1 版本的默认权重是 `100`，这样 v2 和 v1 版本接收到的流量就变成了 25:100 即 1:4 的比例。
+
+```yaml
+parameters:
+  weight: 25
 ```
 
 ### 场景八：服务降级
 
 **场景描述**
 
+由于微服务系统的分布式特性，一个服务往往需要依赖非常多的外部服务来实现某一项功能，因此，一个服务的稳定性不但取决于其自身，同时还取决于所有外部依赖的稳定性。
 
+我们可以根据这些依赖的重要程度将它们划分为强依赖和弱依赖：强依赖是指那些无论如何都要保证稳定性的服务，如果它们不可用则当前服务也就不可用；弱依赖项指当它们不可用之后当前服务仍能正常工作的依赖项，弱依赖不可用只是影响功能的部分完整性。
+
+服务降级的核心目标就是针对这些弱依赖项。在弱依赖不可用或调用失败时，通过返回降级结果尽可能的维持功能完整性。
 
 **场景举例**
 
+正常情况下，商品详情页会展示来自顾客的商品评论信息。评论信息的缺失在很多时候并不会影响用户浏览和购买商品，因此，我们定义评论信息属于商品详情页面的弱依赖。
 
+接下来，我们就模拟在大促前夕常用的一个策略，通过服务降级提前关闭商品详情页对于评论服务的调用（返回一些本地预先准备好的历史评论数据），来降低集群整体负载水位并提高响应速度。
+
+![mock0.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406022237629.png)
+
+评论数据由 Comment 应用的 `org.apache.dubbo.samples.CommentService` 服务提供，接下来我们就为 `CommentService` 配置降级规则。
 
 **配置详情**
 
-规则 key：`xxx`
+规则 key：`org.apache.dubbo.samples.CommentService`
 
 规则体：
 
 ```yaml
-
+configVersion: v3.0
+enabled: true
+configs:
+  - side: consumer
+    parameters:
+      mock: force:return Mock Comment
 ```
 
 ### 场景九：机器导流
 
 **场景描述**
 
+自动的地址发现和负载均衡机制有很多优势，它让我们构建可伸缩的分布式微服务系统成为可能，但这种动态的流量分配也带来很多复杂性。
 
+一个典型问题是我们无法再预测一次请求具体会落到那一台提供者机器上，但有时能预期或控制请求固定的发往某一台提供者机器在一些场景下会非常有用处，比如当开发者在测试甚至线上环境排查一些复杂问题时，如果能在某一台指定的机器上稳定复现问题现象，对于最终的问题排查肯定会带来很大帮助。
 
 **场景举例**
 
+本任务我们将以 User 服务作为示例，将商城中 Frontend 应用对用户详情方法的调用 `UserService#getInfo` 全部导流到一台固定实例上去。
 
+![host1.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406022241412.png)
+
+首先，确定部署 User 应用的实际机器列表。然后，为 `org.apache.dubbo.samples.UserService` 服务的 `getInfo` 方法调用设置条件路由规则，所有这个方法的调用全部转发到一台指定机器。
 
 **配置详情**
 
-规则 key：`xxx`
+规则 key：`org.apache.dubbo.samples.UserService`
 
 规则体：
 
 ```yaml
-
+configVersion: v3.0
+enabled: true
+force: false
+conditions:
+  - 'method=getInfo => host = {your ip address}'
 ```
 
-
+替换 `{your ip address}` 为 User 实际的部署地址。
 
 
 ## 3.4 观测服务
