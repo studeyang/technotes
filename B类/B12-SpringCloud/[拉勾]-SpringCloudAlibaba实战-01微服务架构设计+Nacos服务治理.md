@@ -24,9 +24,9 @@ Spring Cloud Alibaba 就是在这种背景下诞生的，Spring Cloud Alibaba �
 
 - 模块二 Nacos 服务治理
 
-  Nacos 注册中心是整个微服务架构的核心，我将详细介绍 Nacos的安装、使用与集群搭建过程，同时结合图文介绍 Nacos 服务发现的底层原理。
+  Nacos 注册中心是整个微服务架构的核心，我将详细介绍 Nacos 的安装、使用与集群搭建过程，同时结合图文介绍 Nacos 服务发现的底层原理。
 
-- 模块三 微服务通信
+- 模块三 微服务通信。
 
   当服务间要产生彼此通信，在 Spring Cloud Alibaba 中支持 RPC 与 RESTful 两种方案，对应产品为 Dubbo 与 OpenFeign ，本阶段我将给出这些组件的最佳实践以及原理分析。
 
@@ -46,7 +46,7 @@ Spring Cloud Alibaba 就是在这种背景下诞生的，Spring Cloud Alibaba �
 
 只要是会用 Java，了解过 Spring Boot 框架，就不存在门槛可以放心“食用”。
 
-# 模块一：微服务架构设计
+# ==模块一：微服务架构设计==
 
 # 01 | 一探究竟：从架构的演变看微服务化架构
 
@@ -107,7 +107,7 @@ WebService 跨进程调用时，需要双方持有相同的传输对象才可以
 
 微服务架构有一个关键组件名为注册中心，所有的 IP 地址以及节点的状态都是由注册中心来维护的。
 
-![image-20210804215459904](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804215459.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210804215459.png" alt="image-20210804215459904" style="zoom:67%;" />
 
 - 问题三：系统间的调用关系复杂
 
@@ -231,7 +231,7 @@ XX 微服务用来
 
 - 对数据响应要求高的系统
 
-# 模块二：Nacos 服务治理
+# ==模块二：Nacos 服务治理==
 
 # 03 | 顶层设计：微服务生态与 Spring Cloud Alibaba
 
@@ -372,7 +372,7 @@ server.port=9000
 
 下图阐述了微服务与 Nacos 服务器之间的通信过程。在微服务启动后每过5秒，会由微服务内置的 Nacos 客户端主动向 Nacos 服务器发起心跳包（HeartBeat）。
 
-![image-20210805233326517](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210805233326.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210805233326.png" alt="image-20210805233326517" style="zoom:67%;" />
 
 心跳包会包含当前服务实例的名称、IP、端口、集群名、权重等信息。
 
@@ -386,7 +386,7 @@ Nacos Server 每过 20 秒对“实例 Map”中的所有“非健康”实例�
 
 **如何在生产环境部署 Nacos 集群**
 
-![image-20210806230205479](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210806230210.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210806230210.png" alt="image-20210806230205479" style="zoom:50%;" />
 
 Nacos 集群架构的设计要点：
 
@@ -456,5 +456,4 @@ server.port=9000
 第四步，所有可用的 Follower 在收到指令后进行“ack应答”，通知 Leader 消息已收到；
 
 第五步，当 Leader 接收过半数 Follower 节点的 “ack 应答”后，返回给微服务“注册成功”的响应信息。
-
 

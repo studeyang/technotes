@@ -1,6 +1,6 @@
 > 来源：拉勾教育《Spring Cloud Alibaba实战》
 
-# 模块三 微服务通信
+# ==模块三 微服务通信==
 
 # 06 | 负载均衡：Ribbon 如何保证微服务的高可用
 
@@ -542,7 +542,7 @@ public class ElapsedFilter implements GlobalFilter, Ordered {
 2021-01-10 12:36:01.765  INFO 14052 --- [ctor-http-nio-4] com.lagou.gateway.filter.ElapsedFilter   : /0:0:0:0:0:0:0:1:57873 | /test-service/test | cost 821ms
 ```
 
-# 模块四 系统保护
+# ==模块四 系统保护==
 
 # 10 | 系统保护：微服务架构雪崩效应与服务限流
 
@@ -571,7 +571,7 @@ Sentinel 以流量为切入点，从流量控制、熔断降级、系统负载�
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810231651.png" alt="image-20210810231651809" style="zoom:67%;" />
 
-Sentinel 分为两个部分：Sentinel Dashboard和Sentinel 客户端。
+Sentinel 分为两个部分：Sentinel Dashboard 和 Sentinel 客户端。
 
 如何部署 Sentinel Dashboard（仪表盘）？
 
@@ -661,7 +661,7 @@ public class SentinelSampleController {
 
 同一秒内再次刷新便会出现 “Blocked by Sentinel (flow limiting)”，代表服务已被限流降级。
 
-![image-20210810232823597](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810232823.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210810232823.png" alt="image-20210810232823597" style="zoom:50%;" />
 
 # 11 | 限流与熔断：Sentinel 在项目中的最佳实践
 
@@ -677,11 +677,11 @@ Sentinel 的执行流程分为三个阶段：
 
 请求是以心跳包的方式定时向 Dashboard 发送，包含 Sentinel Core 的 AppName、IP、端口信息。
 
-> 这里有个重要细节：Sentinel Core为了能够持续接收到来自 Dashboard 的数据，会在微服务实例设备上监听 8719 端口，在心跳包上报时也是上报这个 8719 端口，而非微服务本身的 80 端口。
+> 这里有个重要细节：Sentinel Core 为了能够持续接收到来自 Dashboard 的数据，会在微服务实例设备上监听 8719 端口，在心跳包上报时也是上报这个 8719 端口，而非微服务本身的 80 端口。
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811225452.png" alt="image-20210811225452372" style="zoom:50%;" />
 
-在 Sentinel Dashboard 接收到心跳包后，来自 Sentinel Core的AppName、IP、端口信息会被封装为 MachineInfo 对象放入 ConcurrentHashMap 保存在 JVM的内存中，以备后续使用。
+在 Sentinel Dashboard 接收到心跳包后，来自 Sentinel Core 的 AppName、IP、端口信息会被封装为 MachineInfo 对象放入 ConcurrentHashMap 保存在 JVM 的内存中，以备后续使用。
 
 第二步，推送新规则。
 
@@ -693,7 +693,7 @@ Sentinel 的执行流程分为三个阶段：
 
 Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterceptor，这个拦截器默认对所有请求 /** 进行拦截，然后开始请求的链式处理流程。
 
-在对于每一个处理请求的节点被称为 Slot（槽），通过多个槽的连接形成处理链，在请求的流转过程中，如果有任何一个 Slot 验证未通过，都会产生 BlockException，请求处理链便会中断，并返回“Blocked by sentinel" 异常信息。
+在对于每一个处理请求的节点被称为 Slot（槽），通过多个槽的连接形成处理链，在请求的流转过程中，如果有任何一个 Slot 验证未通过，都会产生 BlockException，请求处理链便会中断，并返回 “Blocked by sentinel" 异常信息。
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811230332.png" alt="img" style="zoom:67%;" />
 
@@ -711,7 +711,7 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
 **使用 Sentinel Dashboard 进行限流设置**
 
-第一，在 Sentinel Dashboard 中“簇点链路”,找到需要限流的 URI，点击“+流控”进入流控设置。
+第一，在 Sentinel Dashboard 中“簇点链路”，找到需要限流的 URI，点击“+流控”进入流控设置。
 
 ![image-20210811231550033](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811231550.png)
 
@@ -748,9 +748,9 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
   如果按下图配置，将入口资源设为“/check”，则只会针对 check 接口的调用链路生效。
 
-  ![image-20210811232921202](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811232921.png)
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811232921.png" alt="image-20210811232921202" style="zoom: 67%;" />
 
-  当访问 check 接口的 QPS 超过 1 时，List 接口就会被限流。而另一条链路从 scan 接口到List 接口的链路则不会受到任何影响。
+  当访问 check 接口的 QPS 超过 1 时，List 接口就会被限流。而另一条链路从 scan 接口到 List 接口的链路则不会受到任何影响。
 
 流控效果是指在达到流控条件后，对当前请求如何处理。流控效果有三种：快速失败、Warm UP（预热）、排队等待。
 
@@ -762,43 +762,43 @@ Sentinel Core 为服务限流、熔断提供了核心拦截器 SentinelWebInterc
 
   ![image-20210811233406680](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811233406.png)
 
-- 排队等待：排队等待是采用匀速放行的方式对请求进行处理。如下所示，假设现在有100个请求瞬间进入，那么会出现以下几种情况：
+- 排队等待：排队等待是采用匀速放行的方式对请求进行处理。如下所示，假设现在有 100 个请求瞬间进入，那么会出现以下几种情况：
 
   单机 QPS 阈值=1，代表每 1 秒只能放行 1 个请求，其他请求队列等待，共需 100 秒处理完毕；
 
   单机 QPS 阈值=4，代表 250 毫秒匀速放行 1 个请求，其他请求队列等待，共需 25 秒处理完毕；
 
-  ![image-20210811233847710](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811233847.png)
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811233847.png" alt="image-20210811233847710" style="zoom:67%;" />
 
   如果某一个请求在队列中处于等待状态超过 2000 毫秒，则直接抛出 BlockException。
 
 **使用 Sentinel Dashboard 进行熔断降级设置**
 
-在股市中，熔断条件就是大盘跌幅超过 5%，而熔断的措施便是强制停止交易 15 分钟，之后尝试恢复交易，如仍出现继续下跌，便会再次触发熔断直接闭市。但假设 15分钟后，大盘出现回涨，便认为事故解除继续正常交易。这是现实生活中的熔断。
+在股市中，熔断条件就是大盘跌幅超过 5%，而熔断的措施便是强制停止交易 15 分钟，之后尝试恢复交易，如仍出现继续下跌，便会再次触发熔断直接闭市。但假设 15 分钟后，大盘出现回涨，便认为事故解除继续正常交易。这是现实生活中的熔断。
 
-下图清晰的说明了 Sentinel的熔断过程：
+下图清晰的说明了 Sentinel 的熔断过程：
 
-![image-20210811224812688](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811224812.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811224812.png" alt="image-20210811224812688" style="zoom: 50%;" />
 
 Sentinel Dashboard 可以设置三种不同的熔断模式：慢调用比例、异常比例、异常数。
 
 - 慢调用比例是指当接口在 1 秒内“慢处理”数量超过一定比例，则触发熔断。
 
-  ![image-20210811234457180](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234457.png)
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234457.png" alt="image-20210811234457180" style="zoom:50%;" />
 
-  ![image-20210811234712010](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234712.png)
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234712.png" alt="image-20210811234712010" style="zoom: 67%;" />
 
 - 异常比例是指 1 秒内按接口调用产生异常的比例（异常调用数/总数量）触发熔断。
 
-  ![image-20210811234529852](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234529.png)
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234529.png" alt="image-20210811234529852" style="zoom:50%;" />
 
-  ![image-20210811234738056](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234738.png)
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234738.png" alt="image-20210811234738056" style="zoom:67%;" />
 
 - 异常数是指在 1 分钟内异常的数量超过阈值则触发熔断。
 
-  ![image-20210811234809488](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234809.png)
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234809.png" alt="image-20210811234809488" style="zoom:50%;" />
 
-  ![image-20210811234826401](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234826.png)
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210811234826.png" alt="image-20210811234826401" style="zoom:67%;" />
 
 # 12 | 配置中心：基于 Nacos 集中管理应用配置
 
@@ -806,7 +806,7 @@ Sentinel Dashboard 可以设置三种不同的熔断模式：慢调用比例、�
 
 当引入配置中心后，微服务的架构会产生如下变化。
 
-![image-20210812223749823](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210812223749.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20210812223749.png" alt="image-20210812223749823" style="zoom:67%;" />
 
 **微服务接入 Nacos 配置中心**
 
