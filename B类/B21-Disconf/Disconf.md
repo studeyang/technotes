@@ -145,18 +145,7 @@ public class StaticConfig {
 }
 ```
 
-### 2.5 过滤要进行托管的配置
-
-有时候你不想托管所有的配置文件，可以：
-
-resources/disconf.properties
-
-```properties
-# 忽略哪些分布式配置，用逗号分隔
-disconf.ignore=jdbc-mysql.properties
-```
-
-### 2.6 强大的WEB配置平台控制
+### 2.5 强大的WEB配置平台控制
 
 在WEB配置平台上，您可以
 
@@ -170,19 +159,50 @@ disconf.ignore=jdbc-mysql.properties
 
 配置文件 disconf.properties 说明：
 
-| 配置项                                          | 说明                                                         | 是否必填 | 默认值                                                       |
-| ----------------------------------------------- | ------------------------------------------------------------ | -------- | ------------------------------------------------------------ |
-| disconf.conf_server_host                        | 配置服务器的 HOST,用逗号分隔 ，示例：127.0.0.1:8000,127.0.0.1:8000 | 是       | 必填                                                         |
-| disconf.app                                     | APP 请采用 产品线_服务名 格式                                | 否       | 优先读取命令行参数，然后再读取此文件的值                     |
-| disconf.version                                 | 版本号, 请采用 X_X_X_X 格式                                  | 否       | 默认为 DEFAULT_VERSION。优先读取命令行参数，然后再读取此文件的值，最后才读取默认值。 |
-| disconf.enable.remote.conf                      | 是否使用远程配置文件，true(默认)会从远程获取配置， false则直接获取本地配置 | 否       | false                                                        |
-| disconf.env                                     | 环境                                                         | 否       | 默认为 DEFAULT_ENV。优先读取命令行参数，然后再读取此文件的值，最后才读取默认值 |
-| disconf.ignore                                  | 忽略的分布式配置，用空格分隔                                 | 否       | 空                                                           |
-| disconf.debug                                   | 调试模式。调试模式下，ZK超时或断开连接后不会重新连接（常用于client单步debug）。非调试模式下，ZK超时或断开连接会自动重新连接。 | 否       | false                                                        |
-| disconf.conf_server_url_retry_times             | 获取远程配置 重试次数，默认是3次                             | 否       | 3                                                            |
-| disconf.conf_server_url_retry_sleep_seconds     | 获取远程配置 重试时休眠时间，默认是5秒                       | 否       | 5                                                            |
-| disconf.user_define_download_dir                | 用户定义的下载文件夹, 远程文件下载后会放在这里。注意，此文件夹必须有有权限，否则无法下载到这里 | 否       | ./disconf/download                                           |
-| disconf.enable_local_download_dir_in_class_path | 下载的文件会被迁移到classpath根路径下，强烈建议将此选项置为 true(默认是true) | 否       | true                                                         |
+```properties
+# 说明：必填。配置服务器的 HOST, 用逗号分隔
+disconf.conf_server_host=127.0.0.1:8000,127.0.0.1:8000
+
+# 说明：APP 请采用 产品线_服务名 格式
+# 默认值：优先读取命令行参数，然后再读取此文件的值
+disconf.app=
+
+# 说明：版本号, 请采用 X_X_X_X 格式
+# 默认值：DEFAULT_VERSION。优先读取命令行参数，然后再读取此文件的值，最后才读取默认值。
+disconf.version=
+
+# 说明：是否使用远程配置文件，true会从远程获取配置， false则直接获取本地配置
+# 默认值：true
+disconf.enable.remote.conf=
+
+# 说明：环境
+# 默认值：DEFAULT_ENV。优先读取命令行参数，然后再读取此文件的值，最后才读取默认值
+disconf.env=
+
+# 说明：忽略的分布式配置，用空格分隔
+# 默认值：空
+disconf.ignore=
+
+# 说明：调试模式。调试模式下，ZK超时或断开连接后不会重新连接（常用于client单步debug）。非调试模式下，ZK超时或断开连接会自动重新连接。
+# 默认值：false
+disconf.debug=
+
+# 说明：获取远程配置 重试次数
+# 默认值：3
+disconf.conf_server_url_retry_times=
+
+# 说明：获取远程配置 重试时休眠时间
+# 默认值：5
+disconf.conf_server_url_retry_sleep_seconds=
+
+# 说明：用户定义的下载文件夹, 远程文件下载后会放在这里。注意，此文件夹必须有有权限，否则无法下载到这里
+# 默认值：./disconf/download
+disconf.user_define_download_dir=
+
+# 说明：下载的文件会被迁移到classpath根路径下，强烈建议将此选项置为 true
+# 默认值：true
+disconf.enable_local_download_dir_in_class_path=
+```
 
 所有配置均可以通过 命令行 `-Dname=value` 参数传入。
 
@@ -220,6 +240,8 @@ disconf的模块架构图：
 - A4：根据仓库里的配置文件、配置项，去ZK上监控节点。
 - A5：根据XML配置定义，到 disconf-web 平台里下载配置文件，放在仓库里，并监控ZK结点。
 - A6：A1-A5均是处理静态类数据。A6是处理动态类数据，包括：实例化配置的回调函数类；将配置的值注入到配置实体里。
+
+> 配置仓库指的是什么？
 
 更新配置事件B：以下按顺序发生。
 
