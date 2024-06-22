@@ -81,22 +81,24 @@ public interface CustomerMapper {
     <!-- 定义select语句，CustomerMapper接口中的findWithAddress()方法会执行该SQL，
         查询结果通过customerMap这个映射生成Customer对象-->
     <select id="findWithAddress" resultMap="customerMap">
-        SELECT c.*,a.id as address_id, a.* FROM t_customer as c join t_address as a
-        on c.id = a.customer_id
+        SELECT c.*,a.id as address_id, a.* 
+        FROM t_customer as c 
+        JOIN t_address as a ON c.id = a.customer_id
         WHERE c.id = #{id:INTEGER}
     </select>
     <!-- CustomerMapper接口中的findByOrderId()方法会执行该SQL，
         查询结果通过customerSimpleMap这个映射生成Customer对象-->
     <select id="findByOrderId" resultMap="customerSimpleMap">
-        SELECT * FROM t_customer as c join t_order as t
-        on c.id = t.customer_id
+        SELECT * 
+        FROM t_customer as c 
+        JOIN t_order as t ON c.id = t.customer_id
         WHERE t.customer_id = #{id:INTEGER}
     </select>
     <!-- 定义insert语句，CustomerMapper接口中的save()方法会执行该SQL，
         数据库生成的自增id会自动填充到传入的Customer对象的id字段中-->
     <insert id="save" keyProperty="id" useGeneratedKeys="true">
-      insert into t_customer (id, name, phone)
-      values (#{id},#{name},#{phone})
+        insert into t_customer (id, name, phone)
+        values (#{id},#{name},#{phone})
     </insert>
 </mapper>
 ```
@@ -133,20 +135,24 @@ public interface OrderItemMapper {
     <!-- 定义select语句，OrderItemMapper接口中的find()方法会执行该SQL，
         查询结果通过orderItemtMap这个映射生成OrderItem对象-->
     <select id="find" resultMap="orderItemtMap">
-        SELECT i.*,p.*,p.id as product_id FROM t_order_item as i join t_product as p
-        on i.product_id = p.id WHERE id = #{id:INTEGER}
+        SELECT i.*,p.*,p.id as product_id 
+        FROM t_order_item as i 
+        JOIN t_product as p ON i.product_id = p.id 
+        WHERE id = #{id:INTEGER}
     </select>
     <!-- 定义select语句，OrderItemMapper接口中的findAll()方法会执行该SQL，
         查询结果通过orderItemtMap这个映射生成OrderItem对象-->
     <select id="findByOrderId" resultMap="orderItemtMap">
-        SELECT i.*,p.* FROM t_order_item as i join t_product as p
-        on i.product_id = p.id WHERE i.order_id = #{order_id:INTEGER}
+        SELECT i.*,p.* 
+        FROM t_order_item as i 
+        JOIN t_product as p on i.product_id = p.id 
+        WHERE i.order_id = #{order_id:INTEGER}
     </select>
     <!-- 定义insert语句，OrderItemMapper接口中的save()方法会执行该SQL，
         数据库生成的自增id会自动填充到传入的OrderItem对象的id字段中-->
     <insert id="save" keyProperty="orderItem.id" useGeneratedKeys="true">
-      insert into t_order_item (amount, product_id, order_id)
-      values (#{orderItem.amount}, #{orderItem.product.id}, #{orderId})
+        insert into t_order_item (amount, product_id, order_id)
+        values (#{orderItem.amount}, #{orderItem.product.id}, #{orderId})
     </insert>
 </mapper>
 ```
@@ -267,7 +273,7 @@ public class CustomerService {
 
 MyBatis 分为三层架构，分别是基础支撑层、核心处理层和接口层，如下图所示：
 
-![image-20220615212517663](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206152125788.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206152125788.png" alt="image-20220615212517663" style="zoom:67%;" />
 
 **基础支撑层**
 
@@ -287,7 +293,7 @@ MyBatis 基础支撑层可以划分为上图所示的九个基础模块。
 
 - 缓存模块：MyBatis 提供了一级缓存和二级缓存。
 
-  ![image-20220615213830981](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206152138111.png)
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206152138111.png" alt="image-20220615213830981" style="zoom: 67%;" />
 
 - 解析器模块：MyBatis 中有 mybatis-config.xml，Mapper.xml 两部分配置文件需要进行解析。
 
@@ -297,7 +303,7 @@ MyBatis 基础支撑层可以划分为上图所示的九个基础模块。
 
 核心处理层是 MyBatis 核心实现所在，其中涉及 MyBatis 的初始化以及执行一条 SQL 语句的全流程。
 
-![image-20220615212517663](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206152125788.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206152125788.png" alt="image-20220615212517663" style="zoom:67%;" />
 
 - 配置解析
 
@@ -311,7 +317,7 @@ MyBatis 中的 scripting 模块就是负责动态生成 SQL 的核心模块。�
 
 在 MyBatis 中，要执行一条 SQL 语句，会涉及非常多的组件，比较核心的有：Executor、StatementHandler、ParameterHandler 和 ResultSetHandler。下图展示了 MyBatis 执行一条 SQL 语句的核心过程：
 
-![image-20220615212854829](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206152128946.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206152128946.png" alt="image-20220615212854829" style="zoom:67%;" />
 
 Executor 会调用事务管理模块实现事务的相关控制，同时会通过缓存模块管理一级缓存和二级缓存。
 
@@ -362,7 +368,7 @@ private void addUniqueMethods(Map<String, Method> uniqueMethods, Method[] method
 
 - Invoker
 
-在 Reflector 对象的初始化过程中，所有属性的 getter/setter 方法都会被封装成 MethodInvoker 对象，没有 getter/setter 的字段也会生成对应的 Get/SetFieldInvoker 对象。下面我们就来看看这个 Invoker 接口的定义：
+在 Reflector 对象的初始化过程中，所有属性的 getter/setter 方法都会被封装成 MethodInvoker 对象，没有 getter/setter 的字段也会生成对应的 GetFieldInvoker/SetFieldInvoker 对象。下面我们就来看看这个 Invoker 接口的定义：
 
 ```java
 public interface Invoker {
@@ -374,7 +380,7 @@ public interface Invoker {
 
 Invoker 接口的继承关系如下图所示：
 
-![image-20220616213607612](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206162136798.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206162136798.png" alt="image-20220616213607612" style="zoom: 50%;" />
 
 - [ReflectorFactory](https://github.com/studeyang/mybatis-notes/blob/master/src/main/java/org/apache/ibatis/reflection/ReflectorFactory.java)
 
@@ -523,7 +529,7 @@ ResultSetLogger 代理了 ResultSet 的方法执行，记录了 ResultSet 中的
 
 MyBatis 提供了两种类型的数据源实现，分别是 PooledDataSource 和 UnpooledDataSource，继承关系如下图所示：
 
-![image-20220621224022707](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206212240915.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206212240915.png" alt="image-20220621224022707" style="zoom:67%;" />
 
 针对不同的 DataSource 实现，MyBatis 提供了不同的工厂实现来进行创建，如下图所示，这是工厂方法模式的一个典型应用场景。
 
@@ -535,7 +541,7 @@ MyBatis 对数据库事务抽象了一层 Transaction 接口，它可以管理�
 
 DataSourceFactory 接口中最核心的方法是 getDataSource() 方法，该方法用来生成一个 DataSource 对象。
 
-![image-20220621224402718](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206212244883.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202206212244883.png" alt="image-20220621224402718" style="zoom:67%;" />
 
 在 UnpooledDataSourceFactory 这个实现类的初始化过程中，会直接创建 UnpooledDataSource 对象，其中的 dataSource 字段会指向该 UnpooledDataSource 对象。接下来调用的 setProperties() 方法会根据传入的配置信息，完成对该 UnpooledDataSource 对象相关属性的设置。
 
@@ -628,7 +634,7 @@ config（Configuration 类型）：指向 MyBatis 全局唯一的 Configuration 
 knownMappers（Map<Class<?>, MapperProxyFactory<?>> 类型）：维护了所有解析到的 Mapper 接口以及 MapperProxyFactory 工厂对象之间的映射关系。
 ```
 
-在我们使用 CustomerMapper.find() 方法执行数据库查询的时候，MyBatis 会先从MapperRegistry 中获取 CustomerMapper 接口的代理对象，这里就使用到 MapperRegistry.getMapper()方法，它会拿到 MapperProxyFactory 工厂对象，并调用其 newInstance() 方法创建 Mapper 接口的代理对象。
+在我们使用 CustomerMapper.find() 方法执行数据库查询的时候，MyBatis 会先从 MapperRegistry 中获取 CustomerMapper 接口的代理对象，这里就使用到 MapperRegistry.getMapper() 方法，它会拿到 MapperProxyFactory 工厂对象，并调用其 newInstance() 方法创建 Mapper 接口的代理对象。
 
 **MapperProxyFactory**
 
@@ -1281,19 +1287,19 @@ MyBatis 插件模块中最核心的接口就是 Interceptor 接口，它是所�
 
 ```java
 public interface Interceptor {
-  // 插件实现类中需要实现的拦截逻辑
-  Object intercept(Invocation invocation) throws Throwable;
-  // 在该方法中会决定是否触发intercept()方法
-  default Object plugin(Object target) {
-    return Plugin.wrap(target, this);
-  }
-  default void setProperties(Properties properties) {
-    // 在整个MyBatis初始化过程中用来初始化该插件的方法
-  }
+    // 插件实现类中需要实现的拦截逻辑
+    Object intercept(Invocation invocation) throws Throwable;
+    // 在该方法中会决定是否触发intercept()方法
+    default Object plugin(Object target) {
+        return Plugin.wrap(target, this);
+    }
+    default void setProperties(Properties properties) {
+        // 在整个MyBatis初始化过程中用来初始化该插件的方法
+    }
 }
 ```
 
-MyBatis允许我们自定义 Interceptor 拦截 SQL 语句执行过程中的某些关键逻辑，允许拦截的方法有：
+MyBatis 允许我们自定义 Interceptor 拦截 SQL 语句执行过程中的某些关键逻辑，允许拦截的方法有：
 
 - Executor 类中的 update()、query()、flushStatements()、commit()、rollback()、getTransaction()、close()、isClosed()方法；
 - ParameterHandler 中的 setParameters()、getParameterObject() 方法；
@@ -1330,7 +1336,7 @@ public class DemoPlugin implements Interceptor {
 </plugins>
 ```
 
-MyBatis 会在初始化流程中解析 mybatis-config.xml 全局配置文件，其中的 \<plugin\> 节点就会被处理成相应的 Interceptor 对象，同时调用 setProperties() 方法完成配置的初始化，最后MyBatis 会将 Interceptor 对象添加到Configuration.interceptorChain 这个全局的 Interceptor 列表中保存。
+MyBatis 会在初始化流程中解析 mybatis-config.xml 全局配置文件，其中的 \<plugin\> 节点就会被处理成相应的 Interceptor 对象，同时调用 setProperties() 方法完成配置的初始化，最后 MyBatis 会将 Interceptor 对象添加到 Configuration.interceptorChain 这个全局的 Interceptor 列表中保存。
 
 > 本段：我们再来看 Interceptor 是如何拦截目标类中的目标方法的。
 
