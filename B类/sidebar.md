@@ -106,5 +106,7 @@
 - **SpringSecurity**
   - [SpringSecurity详解与实操](B类/B19-SpringSecurity/SpringSecurity详解与实操.md)
 
-- **Dubbo**
-  - [Dubbo](B类/B20-Dubbo/Dubbo.md)
+- **其他**
+  - [Dubbo](B类/B20-其他/Dubbo.md)
+  - [ApacheCamel](B类/B20-其他/ApacheCamel.md)
+  - [Disconf](B类/B20-其他/Disconf.md)
