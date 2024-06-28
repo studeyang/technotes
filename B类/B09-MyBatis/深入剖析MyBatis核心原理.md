@@ -1301,12 +1301,12 @@ public interface Interceptor {
 
 MyBatis 允许我们自定义 Interceptor 拦截 SQL 语句执行过程中的某些关键逻辑，允许拦截的方法有：
 
-- Executor 类中的 update()、query()、flushStatements()、commit()、rollback()、getTransaction()、close()、isClosed()方法；
+- Executor 类中的 update()、query()、flushStatements()、commit()、rollback()、getTransaction()、close()、isClosed() 方法；
 - ParameterHandler 中的 setParameters()、getParameterObject() 方法；
-- ResultSetHandler中的 handleOutputParameters()、handleResultSets()方法；
-- StatementHandler 中的parameterize()、prepare()、batch()、update()、query()方法。
+- ResultSetHandler中的 handleOutputParameters()、handleResultSets() 方法；
+- StatementHandler 中的 parameterize()、prepare()、batch()、update()、query() 方法。
 
-下面我们就结合一个 MyBatis 插件示例，介绍一下 MyBatis 中 Interceptor 接口的具体使用方式。这里我们首先定义一个DemoPlugin 类，定义如下：
+下面我们就结合一个 MyBatis 插件示例，介绍一下 MyBatis 中 Interceptor 接口的具体使用方式。这里我们首先定义一个 DemoPlugin 类，定义如下：
 
 ```java
 @Intercepts({
