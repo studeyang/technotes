@@ -9,7 +9,7 @@
 
 **第一步：生成项目**
 
-```shell
+```
 mvn archetype:generate -B -DarchetypeGroupId=org.apache.camel.archetypes -DarchetypeArtifactId=camel-archetype-java -DarchetypeVersion=3.18.4 -Dpackage=org.apache.camel.learn -DgroupId=org.apache.camel.learn -DartifactId=first-camel-integration -Dversion=1.0.0-SNAPSHOT
 ```
 
@@ -17,13 +17,13 @@ mvn archetype:generate -B -DarchetypeGroupId=org.apache.camel.archetypes -Darche
 
 构建项目：
 
-```shell
+```
 mvn clean package
 ```
 
 运行项目：
 
-```shell
+```
 mvn camel:run -Dcamel.main.durationMaxMessages=2
 ```
 
