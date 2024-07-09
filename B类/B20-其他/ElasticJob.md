@@ -4,7 +4,9 @@
 
 ## 1.1 简介
 
-使用 ElasticJob 能够让开发工程师不再担心任务的线性吞吐量提升等非功能需求，使他们能够更加专注于面向业务编码设计； 同时，它也能够解放运维工程师，使他们不必再担心任务的可用性和相关管理需求，只通过轻松的增加服务节点即可达到自动化运维的目的。
+使用 ElasticJob 能够让开发工程师不再担心任务的线性吞吐量提升等非功能需求，使他们能够更加专注于面向业务编码设计； 
+
+同时，它也能够解放运维工程师，使他们不必再担心任务的可用性和相关管理需求，只通过轻松的增加服务节点即可达到自动化运维的目的。
 
 ElasticJob 定位为轻量级无中心化解决方案，使用 jar 的形式提供分布式任务的协调服务。
 
@@ -69,7 +71,6 @@ public class MyJob implements SimpleJob {
         }
     }
 }
-
 ```
 
 **3、作业配置**
@@ -105,7 +106,7 @@ public class MyJobDemo {
 
 ## 3.1 调度模型
 
-ElasticJob 是面向进程内的线程级调度框架。通过它，作业能够透明化的与业务应用系统相结合。 它能够方便的与 Spring 、Dubbo 等 Java 框架配合使用，在作业中可自由使用 Spring 注入的 Bean，如数据源连接池、Dubbo 远程服务等，更加方便的贴合业务开发。
+ElasticJob 是面向进程内的线程级调度框架。
 
 ## 3.2 弹性调度
 
@@ -113,7 +114,7 @@ ElasticJob 是面向进程内的线程级调度框架。通过它，作业能够
 
 ### 分片
 
-ElasticJob 中任务分片项的概念，使得任务可以在分布式的环境下运行，每台任务服务器只运行分配给该服务器的分片。 随着服务器的增加或宕机，ElasticJob 会近乎实时的感知服务器数量的变更，从而重新为分布式的任务服务器分配更加合理的任务分片项，使得任务可以随着资源的增加而提升效率。
+每台任务服务器只运行分配给该服务器的分片。 随着服务器的增加或宕机，ElasticJob 会近乎实时的感知服务器数量的变更，从而重新为分布式的任务服务器分配更加合理的任务分片项。
 
 任务的分布式执行，需要将一个任务拆分为多个独立的任务项，然后由分布式的服务器分别执行某一个或几个分片项。
 
@@ -123,7 +124,32 @@ ElasticJob 中任务分片项的概念，使得任务可以在分布式的环境
 
 ### 分片项
 
-ElasticJob 并不直接提供数据处理的功能，而是将分片项分配至各个运行中的作业服务器，开发者需要自行处理分片项与业务的对应关系。 分片项为数字，始于 0 而终于分片总数减 1。
+分片项为数字，始于 0 而终于分片总数减 1。
+
+ElasticJob 将分片项分配至各个运行中的作业服务器，开发者需要自行处理分片项与业务的对应关系。
+
+再回到上面的 Job 示例：
+
+```java
+public class MyJob implements SimpleJob {
+    
+    @Override
+    public void execute(ShardingContext context) {
+        switch (context.getShardingItem()) {
+            case 0: 
+                // do something by sharding item 0
+                break;
+            case 1: 
+                // do something by sharding item 1
+                break;
+            case 2: 
+                // do something by sharding item 2
+                break;
+            // case n: ...
+        }
+    }
+}
+```
 
 ### 个性化分片参数
 
@@ -220,45 +246,171 @@ leader节点是内部使用的节点，如果对作业框架原理不感兴趣�
 
 ElasticJob 不会在本次执行过程中进行重新分片，而是等待下次调度之前才开启重新分片流程。 当作业执行过程中服务器宕机，失效转移允许将该次未完成的任务在另一作业节点上补偿执行。
 
-### 概念
+举例说明，若作业以每小时为间隔执行，每次执行耗时 30 分钟。如下如图所示。
 
-失效转移是当前执行作业的临时补偿执行机制，在下次作业运行时，会通过重分片对当前作业分配进行调整。 举例说明，若作业以每小时为间隔执行，每次执行耗时 30 分钟。如下如图所示。
+![定时作业](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407092346004.png)
+
+图中表示作业分别于 12:00，13:00 和 14:00 执行。图中显示的当前时间点为 13:00 的作业执行中。
+
+如果作业的其中一个分片服务器在 13:10 的时候宕机，那么剩余的 20 分钟应该处理的业务未得到执行，并且需要在 14:00 时才能再次开始执行下一次作业。 也就是说，在不开启失效转移的情况下，位于该分片的作业有 50 分钟空档期。如下如图所示。
+
+![作业宕机](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407092346631.png)
+
+在开启失效转移功能之后，ElasticJob 的其他服务器能够在感知到宕机的作业服务器之后，补偿执行该分片作业。如下图所示。
+
+![补偿执行](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407092346006.png)
+
+在资源充足的情况下，作业仍然能够在 13:30 完成执行。
 
 ### 执行机制
 
+作业服务在本次任务执行结束后，会向注册中心问询待执行的失效转移分片项，如果有，则开始补偿执行。 也称为异步执行。
 
+当其他服务器感知到有失效转移的作业需要处理时，且该作业服务器已经完成了本次任务，则会实时的拉取待失效转移的分片项，并开始补偿执行。 也称为实时执行。
 
 ### 适用场景
 
+在一次运行耗时较长且间隔较长的作业场景，失效转移是提升作业运行实时性的有效手段；
 
+ 对于间隔较短的作业，会产生大量与注册中心的网络通信，对集群的性能产生影响。 而且间隔较短的作业并未见得关注单次作业的实时性，可以通过下次作业执行的重分片使所有的分片正确执行，因此不建议短间隔作业开启失效转移。
 
 
 
 ## 3.4 错过任务重执行
 
+ElasticJob 不允许作业在同一时间内叠加执行。 当作业的执行时长超过其运行间隔，错过任务重执行能够保证作业在完成上次的任务后继续执行逾期的作业。
 
+举例说明，若作业以每小时为间隔执行，每次执行耗时 30 分钟。如下如图所示。
+
+![定时作业](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407092340427.png)
+
+图中表示作业分别于 12:00，13:00 和 14:00 执行。图中显示的当前时间点为 13:00 的作业执行中。
+
+如果 12：00 开始执行的作业在 13:10 才执行完毕，那么本该由 13:00 触发的作业则错过了触发时间，需要等待至 14:00 的下次作业触发。 如下如图所示。
+
+![错过作业](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407092341999.png)
+
+在开启错过任务重执行功能之后，ElasticJob 将会在上次作业执行完毕后，立刻触发执行错过的作业。如下图所示。
+
+![错过作业重执行](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407092341057.png)
+
+在 13：00 和 14:00 之间错过的作业将会重新执行。
 
 ## 3.5 作业开放生态
 
+ElasticJob 的作业可划分为基于 class 类型和基于 type 类型两种。
 
+Class 类型的作业由开发者直接使用，需要由开发者实现该作业接口实现业务逻辑。典型代表：Simple 类型、Dataflow 类型。 Type 类型的作业只需提供类型名称即可，开发者无需实现该作业接口，而是通过外置配置的方式使用。典型代表：Script 类型、HTTP 类型。
 
+# 四、用户手册
 
+## 4.1 使用手册
 
+### 作业 API
 
+1、简单作业
 
+```java
+public class MyElasticJob implements SimpleJob {
+    
+    @Override
+    public void execute(ShardingContext context) {
+        switch (context.getShardingItem()) {
+            case 0: 
+                // do something by sharding item 0
+                break;
+            case 1: 
+                // do something by sharding item 1
+                break;
+            case 2: 
+                // do something by sharding item 2
+                break;
+            // case n: ...
+        }
+    }
+}
+```
 
+2、数据流作业
 
+```java
+public class MyElasticJob implements DataflowJob<Foo> {
+    
+    @Override
+    public List<Foo> fetchData(ShardingContext context) {
+        switch (context.getShardingItem()) {
+            case 0: 
+                List<Foo> data = // get data from database by sharding item 0
+                return data;
+            case 1: 
+                List<Foo> data = // get data from database by sharding item 1
+                return data;
+            case 2: 
+                List<Foo> data = // get data from database by sharding item 2
+                return data;
+            // case n: ...
+        }
+    }
+    
+    @Override
+    public void processData(ShardingContext shardingContext, List<Foo> data) {
+        // process data
+        // ...
+    }
+}
+```
 
+3、脚本作业
 
+支持 shell，python，perl 等所有类型脚本。
 
+```shell
+#!/bin/bash
+echo sharding execution context is $*
+```
 
+作业运行时将输出：
 
+```
+sharding execution context is {"jobName":"scriptElasticDemoJob","shardingTotalCount":10,"jobParameter":"","shardingItem":0,"shardingParameter":"A"}
+```
 
+4、HTTP作业
 
+（3.0.0-beta 提供）
 
+```java
 
+public class HttpJobMain {
+    
+    public static void main(String[] args) {
+        
+        new ScheduleJobBootstrap(regCenter, "HTTP", JobConfiguration.newBuilder("javaHttpJob", 1)
+                .setProperty(HttpJobProperties.URI_KEY, "http://xxx.com/execute")
+                .setProperty(HttpJobProperties.METHOD_KEY, "POST")
+                .setProperty(HttpJobProperties.DATA_KEY, "source=ejob")
+                .cron("0/5 * * * * ?").shardingItemParameters("0=Beijing").build()).schedule();
+    }
+}
+```
 
+```java
+@Controller
+@Slf4j
+public class HttpJobController {
+    
+    @RequestMapping(path = "/execute", method = RequestMethod.POST)
+    public void execute(String source, @RequestHeader String shardingContext) {
+        log.info("execute from source : {}, shardingContext : {}", source, shardingContext);
+    }
+}
+```
 
+execute接口将输出：
+
+```
+execute from source : ejob, shardingContext : {"jobName":"scriptElasticDemoJob","shardingTotalCount":3,"jobParameter":"","shardingItem":0,"shardingParameter":"Beijing"}
+```
 
 
 
