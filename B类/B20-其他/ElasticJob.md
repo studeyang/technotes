@@ -308,6 +308,8 @@ Class 类型的作业由开发者直接使用，需要由开发者实现该作�
 
 ### 作业 API
 
+#### 作业开发
+
 1、简单作业
 
 ```java
@@ -412,7 +414,358 @@ execute接口将输出：
 execute from source : ejob, shardingContext : {"jobName":"scriptElasticDemoJob","shardingTotalCount":3,"jobParameter":"","shardingItem":0,"shardingParameter":"Beijing"}
 ```
 
+#### 使用 Java API
+
+作业配置：
+
+ElasticJob 采用构建器模式创建作业配置对象。
+
+```java
+JobConfiguration jobConfig = JobConfiguration.newBuilder("myJob", 3)
+    .cron("0/5 * * * * ?")
+    .shardingItemParameters("0=Beijing,1=Shanghai,2=Guangzhou")
+    .build();
+```
+
+作业启动：
+
+ElasticJob 调度器分为定时调度和一次性调度两种类型。 每种调度器启动时均需要注册中心配置、作业对象（或作业类型）以及作业配置这 3 个参数。
+
+```java
+// 定时调度
+public class JobDemo {
+    
+    public static void main(String[] args) {
+        // 调度基于 class 类型的作业
+        new ScheduleJobBootstrap(createRegistryCenter(), new MyJob(), createJobConfiguration()).schedule();
+        // 调度基于 type 类型的作业
+        new ScheduleJobBootstrap(createRegistryCenter(), "MY_TYPE", createJobConfiguration()).schedule();
+    }
+    
+    private static CoordinatorRegistryCenter createRegistryCenter() {
+        CoordinatorRegistryCenter regCenter = new ZookeeperRegistryCenter(new ZookeeperConfiguration("zk_host:2181", "elastic-job-demo"));
+        regCenter.init();
+        return regCenter;
+    }
+    
+    private static JobConfiguration createJobConfiguration() {
+        // 创建作业配置
+        ...
+    }
+}
+```
+
+```java
+// 一次性调度
+public class JobDemo {
+    
+    public static void main(String[] args) {
+        OneOffJobBootstrap jobBootstrap = new OneOffJobBootstrap(createRegistryCenter(), new MyJob(), createJobConfiguration());
+        // 可多次调用一次性调度
+        jobBootstrap.execute();
+        jobBootstrap.execute();
+        jobBootstrap.execute();
+    }
+    
+    private static CoordinatorRegistryCenter createRegistryCenter() {
+        CoordinatorRegistryCenter regCenter = new ZookeeperRegistryCenter(new ZookeeperConfiguration("zk_host:2181", "elastic-job-demo"));
+        regCenter.init();
+        return regCenter;
+    }
+    
+    private static JobConfiguration createJobConfiguration() {
+        // 创建作业配置
+        ...
+    }
+}
+```
+
+配置作业导出端口：
+
+使用 ElasticJob 过程中可能会碰到一些分布式问题，导致作业运行不稳定。
+
+由于无法在生产环境调试，通过 dump 命令可以把作业内部相关信息导出，方便开发者调试分析；
+
+```java
+public class JobMain {
+    
+    public static void main(final String[] args) {
+        SnapshotService snapshotService = new SnapshotService(regCenter, 9888).listen();
+    }
+    
+    private static CoordinatorRegistryCenter createRegistryCenter() {
+        // 创建注册中心
+    }
+}
+```
+
+配置错误处理策略：
+
+```java
+// 记录日志策略: 记录作业异常日志，但不中断作业执行
+public class JobDemo {
+    
+    public static void main(String[] args) {
+        //  定时调度作业
+        new ScheduleJobBootstrap(createRegistryCenter(), new MyJob(), createScheduleJobConfiguration()).schedule();
+        // 一次性调度作业
+        new OneOffJobBootstrap(createRegistryCenter(), new MyJob(), createOneOffJobConfiguration()).execute();
+    }
+    
+    private static JobConfiguration createScheduleJobConfiguration() {
+        // 创建定时作业配置，并且使用记录日志策略
+        return JobConfiguration.newBuilder("myScheduleJob", 3).cron("0/5 * * * * ?").jobErrorHandlerType("LOG").build();
+    }
+
+    private static JobConfiguration createOneOffJobConfiguration() {
+        // 创建一次性作业配置，并且使用记录日志策略
+        return JobConfiguration.newBuilder("myOneOffJob", 3).jobErrorHandlerType("LOG").build();
+    }
+
+    private static CoordinatorRegistryCenter createRegistryCenter() {
+        // 配置注册中心
+        ...
+    }
+}
+```
+
+```java
+// 抛出异常策略: 抛出系统异常并中断作业执行
+private static JobConfiguration createOneOffJobConfiguration() {
+    // 创建一次性作业配置，并且使用抛出异常策略
+    return JobConfiguration.newBuilder("myOneOffJob", 3).jobErrorHandlerType("THROW").build();
+}
+```
+
+```java
+// 忽略异常策略: 忽略系统异常且不中断作业执行
+private static JobConfiguration createOneOffJobConfiguration() {
+    // 创建一次性作业配置， 并且使用忽略异常策略
+    return JobConfiguration.newBuilder("myOneOffJob", 3).jobErrorHandlerType("IGNORE").build();
+}
+```
+
+```java
+// 邮件通知策略: 发送邮件消息通知，但不中断作业执行
+<dependency>
+    <groupId>org.apache.shardingsphere.elasticjob</groupId>
+    <artifactId>elasticjob-error-handler-email</artifactId>
+    <version>${latest.release.version}</version>
+</dependency>
+
+private static JobConfiguration createOneOffJobConfiguration() {
+    // 创建一次性作业配置， 并且使用邮件通知策略
+    JobConfiguration jobConfig = JobConfiguration.newBuilder("myOneOffJob", 3).jobErrorHandlerType("EMAIL").build();
+    setEmailProperties(jobConfig);
+    return jobConfig;
+}
+
+private static void setEmailProperties(final JobConfiguration jobConfig) {
+    // 设置邮件的配置
+    jobConfig.getProps().setProperty(EmailPropertiesConstants.HOST, "host");
+    jobConfig.getProps().setProperty(EmailPropertiesConstants.PORT, "465");
+    jobConfig.getProps().setProperty(EmailPropertiesConstants.USERNAME, "username");
+    jobConfig.getProps().setProperty(EmailPropertiesConstants.PASSWORD, "password");
+    jobConfig.getProps().setProperty(EmailPropertiesConstants.FROM, "from@xxx.xx");
+    jobConfig.getProps().setProperty(EmailPropertiesConstants.TO, "to1@xxx.xx,to1@xxx.xx");
+}
+```
+
+```java
+// 企业微信通知策略: 发送企业微信消息通知，但不中断作业执行
+<dependency>
+    <groupId>org.apache.shardingsphere.elasticjob</groupId>
+    <artifactId>elasticjob-error-handler-wechat</artifactId>
+    <version>${latest.release.version}</version>
+</dependency>
+
+private static JobConfiguration createOneOffJobConfiguration() {
+    // 创建一次性作业配置， 并且使用企业微信通知策略
+    JobConfiguration jobConfig = JobConfiguration.newBuilder("myOneOffJob", 3).jobErrorHandlerType("WECHAT").build();
+    setWechatProperties(jobConfig);
+    return jobConfig;
+}
+
+private static void setWechatProperties(final JobConfiguration jobConfig) {
+    // 设置企业微信的配置
+    jobConfig.getProps().setProperty(WechatPropertiesConstants.WEBHOOK, "you_webhook");
+}
+```
+
+```java
+// 钉钉通知策略: 发送钉钉消息通知，但不中断作业执行
+<dependency>
+    <groupId>org.apache.shardingsphere.elasticjob</groupId>
+    <artifactId>elasticjob-error-handler-dingtalk</artifactId>
+    <version>${latest.release.version}</version>
+</dependency>
+
+private static JobConfiguration createOneOffJobConfiguration() {
+    // 创建一次性作业配置， 并且使用钉钉通知策略
+    JobConfiguration jobConfig = JobConfiguration.newBuilder("myOneOffJob", 3).jobErrorHandlerType("DINGTALK").build();
+    setDingtalkProperties(jobConfig);
+    return jobConfig;
+}
+
+private static void setDingtalkProperties(final JobConfiguration jobConfig) {
+    // 设置钉钉的配置
+    jobConfig.getProps().setProperty(DingtalkPropertiesConstants.WEBHOOK, "you_webhook");
+    jobConfig.getProps().setProperty(DingtalkPropertiesConstants.KEYWORD, "you_keyword");
+    jobConfig.getProps().setProperty(DingtalkPropertiesConstants.SECRET, "you_secret");
+}
+```
+
+
+#### 使用 Spring Boot Starter
+
+作业配置：
+
+```java
+@Component
+public class SpringBootDataflowJob implements DataflowJob<Foo> {
+    
+    @Override
+    public List<Foo> fetchData(final ShardingContext shardingContext) {
+        // 获取数据
+    }
+    
+    @Override
+    public void processData(final ShardingContext shardingContext, final List<Foo> data) {
+        // 处理数据
+    }
+}
+```
+
+```yaml
+elasticjob:
+  regCenter:
+    # Zookeeper
+    serverLists: localhost:6181
+    namespace: elasticjob-springboot
+  jobs:
+    dataflowJob:
+      elasticJobClass: org.apache.shardingsphere.elasticjob.dataflow.job.DataflowJob
+      cron: 0/5 * * * * ?
+      shardingTotalCount: 3
+      shardingItemParameters: 0=Beijing,1=Shanghai,2=Guangzhou
+    scriptJob:
+      elasticJobType: SCRIPT
+      cron: 0/10 * * * * ?
+      shardingTotalCount: 3
+      props:
+        script.command.line: "echo SCRIPT Job: "
+```
+
+作业启动：
+
+定时调度作业在 Spring Boot 应用程序启动完成后会自动启动，无需其他额外操作。
+
+一次性调度的作业的执行权在开发者手中，开发者可以在需要调用作业的位置注入 `OneOffJobBootstrap`， 通过 `execute()` 方法执行作业。
+
+```yaml
+elasticjob:
+  jobs:
+    myOneOffJob:
+      jobBootstrapBeanName: myOneOffJobBean
+      ....
+```
+
+```java
+@RestController
+public class OneOffJobController {
+
+    // 通过 "@Autowired" 注入
+    @Autowired
+    @Qualifier(name = "myOneOffJobBean")
+    private OneOffJobBootstrap myOneOffJob2;
+
+    @GetMapping("/execute2")
+    public String executeOneOffJob2() {
+        myOneOffJob2.execute();
+        return "{\"msg\":\"OK\"}";
+    }
+}
+```
+
+配置错误处理策略：
+
+```yaml
+elasticjob:
+  regCenter:
+    ...
+  jobs:
+    ...
+    jobErrorHandlerType: LOG #记录日志策略
+    jobErrorHandlerType: THROW #抛出异常策略
+    jobErrorHandlerType: IGNORE #忽略异常策略
+```
+
+```yaml
+#邮件通知策略（pom依赖同上）
+elasticjob:
+  regCenter:
+    ...
+  jobs:
+    ...
+    jobErrorHandlerType: EMAIL 
+    props:
+      email:
+        host: host
+        port: 465
+        username: username
+        password: password
+        useSsl: true
+        subject: ElasticJob error message
+        from: from@xxx.xx
+        to: to1@xxx.xx,to2@xxx.xx
+        cc: cc@xxx.xx
+        bcc: bcc@xxx.xx
+        debug: false
+```
+
+```yaml
+#企业微信通知策略（pom依赖同上）
+elasticjob:
+  regCenter:
+    ...
+  jobs:
+    ...
+    jobErrorHandlerType: WECHAT 
+    props:
+      wechat:
+        webhook: you_webhook
+        connectTimeout: 3000
+        readTimeout: 5000
+```
+
+```yaml
+#钉钉通知策略（pom依赖同上）
+elasticjob:
+  regCenter:
+    ...
+  jobs:
+    ...
+    jobErrorHandlerType: DINGTALK 
+    props:
+      dingtalk:
+        webhook: you_webhook
+        keyword: you_keyword
+        secret: you_secret
+        connectTimeout: 3000
+        readTimeout: 5000
+```
+
+
+#### 使用 Spring XML
 
 
 
+### 作业监听器
 
+
+
+### 事件追踪
+
+
+
+### 操作 API
