@@ -1,106 +1,22 @@
 > 参考资料：https://shardingsphere.apache.org/elasticjob/current/cn/overview/
 
-# 一、概览
+# 一、概况
 
 ## 1.1 简介
 
-ElasticJob 定位为轻量级无中心化解决方案，使用 jar 的形式提供分布式任务的协调服务。
+ElasticJob 定位为轻量级无中心化解决方案，使用 jar 的形式提供分布式任务协调服务（下文统称为“作业服务器”）。
+
+ElasticJob 没有作业调度中心，各个作业服务器在到达相应时间点时各自触发调度。
 
 ![image-20240703223744793](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407032237856.png)
 
-## 1.2 功能
+## 1.2 概念
 
-- 弹性调度
-  - 支持任务在分布式场景下的分片和高可用
-  - 能够水平扩展任务的吞吐量和执行效率
-  - 任务处理能力随资源配备弹性伸缩
-- 资源分配
-  - 在适合的时间将适合的资源分配给任务并使其生效
-  - 相同任务聚合至相同的执行器统一处理
-  - 动态调配追加资源至新分配的任务
-- 作业治理
-  - 失效转移
-  - 错过作业重新执行
-  - 自诊断修复
-- 作业依赖(TODO)
-  - 基于有向无环图（DAG）的作业间依赖
-  - 基于有向无环图（DAG）的作业分片间依赖
-- 作业开放生态
-  - 可扩展的作业类型统一接口
-  - 丰富的作业类型库，如数据流、脚本、HTTP、文件、大数据等
-  - 易于对接业务作业，能够与 Spring 依赖注入无缝整合
-- 可视化管控端
-  - 作业管控端
-  - 作业执行历史数据追踪
-  - 注册中心管理
+ElasticJob 系统有三个角色：作业服务器，注册中心，主作业服务器。
 
-# 二、快速入门
+注册中心仅用于作业注册和监控信息的存储；主作业服务器仅用于处理分片和清理分片等功能。
 
-**1、引入 Maven 依赖**
-
-```xml
-<dependency>
-    <groupId>org.apache.shardingsphere.elasticjob</groupId>
-    <artifactId>elasticjob-bootstrap</artifactId>
-    <version>${latest.release.version}</version>
-</dependency>
-```
-
-**2、作业开发**
-
-```java
-public class MyJob implements SimpleJob {
-    
-    @Override
-    public void execute(ShardingContext context) {
-        switch (context.getShardingItem()) {
-            case 0: 
-                // do something by sharding item 0
-                break;
-            case 1: 
-                // do something by sharding item 1
-                break;
-            case 2: 
-                // do something by sharding item 2
-                break;
-            // case n: ...
-        }
-    }
-}
-```
-
-**3、作业配置**
-
-```java
-JobConfiguration jobConfig = JobConfiguration.newBuilder("MyJob", 3)
-        .cron("0/5 * * * * ?").build();
-```
-
-**4、作业调度**
-
-```java
-public class MyJobDemo {
-    
-    public static void main(String[] args) {
-        new ScheduleJobBootstrap(createRegistryCenter(), new MyJob(), createJobConfiguration()).schedule();
-    }
-    
-    private static CoordinatorRegistryCenter createRegistryCenter() {
-        CoordinatorRegistryCenter regCenter = new ZookeeperRegistryCenter(new ZookeeperConfiguration("zk_host:2181", "my-job"));
-        regCenter.init();
-        return regCenter;
-    }
-    
-    private static JobConfiguration createJobConfiguration() {
-        // 创建作业配置
-    }
-}
-
-```
-
-# 三、概念
-
-## 3.1 分片
+### 分片
 
 任务执行时，会将一个任务拆分为多个独立的 Task 任务项，然后由分布式的任务服务器分别执行某一个或几个分片项。
 
@@ -108,7 +24,7 @@ public class MyJobDemo {
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407032257259.png" alt="image-20240703225714203" style="zoom:50%;" />
 
-## 3.2 分片项
+### 分片项
 
 分片项为数字，始于 0 而终于分片总数减 1，上图中 Task 0 ~ Task 3。
 
@@ -137,11 +53,11 @@ public class MyJob implements SimpleJob {
 }
 ```
 
-## 3.3 个性化分片参数
+### 个性化分片参数
 
 个性化参数可以和分片项匹配对应关系，用于将分片项的数字转换为更加可读的业务代码。
 
-回到【快速入门】章节的作业配置，可以通过如下方式来设定分片参数：
+通过如下方式来设定分片参数：
 
 ```java
 JobConfiguration jobConfig = JobConfiguration.newBuilder("myJob", 3)
@@ -150,15 +66,20 @@ JobConfiguration jobConfig = JobConfiguration.newBuilder("myJob", 3)
     .build();
 ```
 
-# 四、功能
+# 二、功能
 
-## 4.1 简单作业
+ElasticJob 的作业类型有 class 和 type 两种类型。class 的作业类型有Simple、Dataflow 这两种，type 的作业类型有 Script、HTTP 这两种。用户可通过实现 SPI 接口自行扩展作业类型。
+
+## 2.1 简单作业
+
+简单作业需实现 SimpleJob 接口。与 Quartz 原生接口相似，不同的是 ElasticJob 提供了弹性扩缩容和分片等功能。
 
 ```java
 public class MyElasticJob implements SimpleJob {
     
     @Override
     public void execute(ShardingContext context) {
+        // 获取分片总数
         switch (context.getShardingItem()) {
             case 0: 
                 // do something by sharding item 0
@@ -175,13 +96,16 @@ public class MyElasticJob implements SimpleJob {
 }
 ```
 
-## 4.2 数据流作业
+## 2.2 数据流作业
+
+用于处理数据流，需实现 DataflowJob 接口。 该接口提供了 2 个方法，分别用于抓取 (fetchData) 和处理 (processData) 数据。
 
 ```java
 public class MyElasticJob implements DataflowJob<Foo> {
     
     @Override
     public List<Foo> fetchData(ShardingContext context) {
+        // 获取运行在本作业服务器的分片序列号
         switch (context.getShardingItem()) {
             case 0: 
                 List<Foo> data = // get data from database by sharding item 0
@@ -204,9 +128,17 @@ public class MyElasticJob implements DataflowJob<Foo> {
 }
 ```
 
-## 4.3 脚本作业
+可通过属性配置 `streaming.process` 开启或关闭流式处理。
 
-支持 shell，python，perl 等所有类型脚本。
+如果开启流式处理，则作业只有在 fetchData 方法的返回值为 null 或集合容量为空时，才停止抓取，否则作业将一直运行下去； 如果关闭流式处理，则作业只会在每次作业执行过程中执行一次 fetchData 和 processData 方法，随即完成本次作业。
+
+如果采用流式作业处理方式，建议 processData 在处理数据后更新其状态，避免 fetchData 再次抓取到，从而使得作业永不停止。
+
+## 2.3 脚本作业
+
+支持 shell，python，perl 等所有类型脚本。可通过属性配置 `script.command.line` 配置待执行脚本，无需编码。 执行脚本路径可包含参数，参数传递完毕后，作业框架会自动追加最后一个参数为作业运行时信息。
+
+例如如下脚本：
 
 ```shell
 #!/bin/bash
@@ -219,9 +151,11 @@ echo sharding execution context is $*
 sharding execution context is {"jobName":"scriptElasticDemoJob","shardingTotalCount":10,"jobParameter":"","shardingItem":0,"shardingParameter":"A"}
 ```
 
-## 4.4 HTTP作业
+## 2.4 HTTP作业
 
 （3.0.0-beta 提供）
+
+可通过属性配置`http.url`,`http.method`,`http.data`等配置待请求的http信息。 分片信息以 Header 形式传递，key 为`shardingContext`，值为 json 格式。
 
 ```java
 public class HttpJobMain {
@@ -237,6 +171,8 @@ public class HttpJobMain {
 }
 ```
 
+HTTP 接口定义如下。
+
 ```java
 @Controller
 @Slf4j
@@ -249,13 +185,13 @@ public class HttpJobController {
 }
 ```
 
-execute接口将输出：
+execute 接口将输出：
 
 ```
 execute from source : ejob, shardingContext : {"jobName":"scriptElasticDemoJob","shardingTotalCount":3,"jobParameter":"","shardingItem":0,"shardingParameter":"Beijing"}
 ```
 
-## 4.5 失效转移
+## 2.5 失效转移
 
 ElasticJob 不会在本次执行过程中进行重新分片，而是等待下次调度之前才开启重新分片流程。 当作业执行过程中服务器宕机，失效转移允许将该次未完成的任务在另一作业节点上补偿执行。
 
@@ -287,7 +223,7 @@ ElasticJob 不会在本次执行过程中进行重新分片，而是等待下次
 
 对于间隔较短的作业，会产生大量与注册中心的网络通信，对集群的性能产生影响。 而且间隔较短的作业并未见得关注单次作业的实时性，可以通过下次作业执行的重分片使所有的分片正确执行，因此不建议短间隔作业开启失效转移。
 
-## 4.6 错过任务重执行
+## 2.6 错过任务重执行
 
 ElasticJob 不允许作业在同一时间内叠加执行。 当作业的执行时长超过其运行间隔，错过任务重执行能够保证作业在完成上次的任务后继续执行逾期的作业。
 
@@ -307,9 +243,73 @@ ElasticJob 不允许作业在同一时间内叠加执行。 当作业的执行�
 
 在 13：00 和 14:00 之间错过的作业将会重新执行。
 
-# 五、实现原理
+# 三、快速入门
 
-## 5.1 高可用
+## 3.1 引入 Maven 依赖
+
+```xml
+<dependency>
+    <groupId>org.apache.shardingsphere.elasticjob</groupId>
+    <artifactId>elasticjob-bootstrap</artifactId>
+    <version>${latest.release.version}</version>
+</dependency>
+```
+
+## 3.2 作业开发
+
+```java
+public class MyJob implements SimpleJob {
+    
+    @Override
+    public void execute(ShardingContext context) {
+        switch (context.getShardingItem()) {
+            case 0: 
+                // do something by sharding item 0
+                break;
+            case 1: 
+                // do something by sharding item 1
+                break;
+            case 2: 
+                // do something by sharding item 2
+                break;
+            // case n: ...
+        }
+    }
+}
+```
+
+## 3.3 作业配置
+
+```java
+JobConfiguration jobConfig = JobConfiguration.newBuilder("MyJob", 3)
+        .cron("0/5 * * * * ?").build();
+```
+
+## 3.4 作业调度
+
+```java
+public class MyJobDemo {
+    
+    public static void main(String[] args) {
+        new ScheduleJobBootstrap(createRegistryCenter(), new MyJob(), createJobConfiguration()).schedule();
+    }
+    
+    private static CoordinatorRegistryCenter createRegistryCenter() {
+        CoordinatorRegistryCenter regCenter = new ZookeeperRegistryCenter(new ZookeeperConfiguration("zk_host:2181", "my-job"));
+        regCenter.init();
+        return regCenter;
+    }
+    
+    private static JobConfiguration createJobConfiguration() {
+        // 创建作业配置
+    }
+}
+
+```
+
+# 四、实现原理
+
+## 4.1 高可用
 
 当作业服务器在运行中宕机时，注册中心会通过临时节点感知，并将在下次运行时将分片转移至仍存活的服务器，以达到作业高可用的效果。 
 
@@ -317,25 +317,13 @@ ElasticJob 不允许作业在同一时间内叠加执行。 当作业的执行�
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407032313345.png" alt="image-20240703231303299" style="zoom:50%;" />
 
-ElasticJob 系统有三个角色：作业节点，注册中心，主作业节点。
-
-ElasticJob 并无作业调度中心节点，而是各个作业节点在到达相应时间点时各自触发调度。
-
-注册中心仅用于作业注册和监控信息的存储。
-
-主作业节点仅用于处理分片和清理等功能。
-
-## 5.2 弹性分布式实现
-
 ### 主服务器选举
 
 主服务器一旦下线，则重新触发选举，选举过程中会阻塞任务执行，只有主服务器选举完成，才会执行其他任务。
 
 ### 重新分片
 
-主节点选举、服务器上下线、分片总数变更均会更新重新分片标记。
-
-定时任务触发时，如需重新分片，则通过主服务器分片，分片过程中阻塞，分片结束后才可执行任务。如分片过程中主服务器下线，则先选举主服务器，再分片。
+主节点选举、服务器上下线、分片总数变更均会更新重新分片标记。如分片过程中主服务器下线，则先选举主服务器，再分片。
 
 为了维持作业运行时的稳定性，运行过程中只会标记分片状态，不会重新分片。分片仅可能发生在下次任务触发前。
 
@@ -343,7 +331,7 @@ ElasticJob 并无作业调度中心节点，而是各个作业节点在到达相
 
 在某台服务器执行完毕后主动抓取未分配的分片，并且在某台服务器下线后主动寻找可用的服务器执行任务。
 
-## 5.3 注册中心数据结构
+## 4.2 注册中心数据结构
 
 ```
 命名空间
@@ -375,11 +363,11 @@ ElasticJob 并无作业调度中心节点，而是各个作业节点在到达相
 
 | 子节点名 | 临时节点 | 描述                                                         |
 | :------- | :------- | :----------------------------------------------------------- |
-| instance | 否       | 执行该分片项的作业运行实例主键                               |
+| instance |          | 执行该分片项的作业运行实例主键                               |
 | running  | 是       | 分片项正在运行的状态 仅配置 monitorExecution 时有效          |
 | failover | 是       | 如果该分片项被失效转移分配给其他作业服务器，则此节点值记录执行此分片的作业服务器 IP |
-| misfire  | 否       | 是否开启错过任务重新执行                                     |
-| disabled | 否       | 是否禁用此分片项                                             |
+| misfire  |          | 是否开启错过任务重新执行                                     |
+| disabled |          | 是否禁用此分片项                                             |
 
 ### servers 节点
 
@@ -400,21 +388,21 @@ leader节点是内部使用的节点，如果对作业框架原理不感兴趣�
 | failover\items\分片项 | 否       | 一旦有作业崩溃，则会向此节点记录 当有空闲作业服务器时，会从此节点抓取需失效转移的作业项 |
 | failover\items\latch  | 否       | 分配失效转移分片项时占用的分布式锁 为 curator 的分布式锁使用 |
 
-## 5.4 流程图
+## 4.4 作业启动
 
-### 作业启动
+作业服务器启动后，在运行任务前需要做以下准备：发起主节点选举、设置分片标记、注册作业全局信息、注册作业服务器信息。
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407032323436.jpg)
 
-### 作业执行
+## 4.5 作业执行
+
+定时任务触发时，如需重新分片，则通过主服务器分片，分片过程中阻塞，分片结束后才可执行任务。
 
 ![作业执行](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407032324815.jpg)
 
-# 六、使用手册（Java API）
+# 五、使用手册（Java API）
 
-## 6.1 作业开发
-
-## 6.2 作业配置
+## 5.1 作业配置
 
 ElasticJob 采用构建器模式创建作业配置对象。
 
@@ -425,7 +413,7 @@ JobConfiguration jobConfig = JobConfiguration.newBuilder("myJob", 3)
     .build();
 ```
 
-## 6.3 作业启动
+## 5.2 作业启动
 
 ElasticJob 调度器分为定时调度和一次性调度两种类型。 每种调度器启动时均需要注册中心配置、作业对象（或作业类型）以及作业配置这 3 个参数。
 
@@ -478,7 +466,7 @@ public class JobDemo {
 }
 ```
 
-## 6.4 配置作业导出端口
+## 5.4 配置作业导出端口
 
 使用 ElasticJob 过程中可能会碰到一些分布式问题，导致作业运行不稳定。
 
@@ -497,7 +485,7 @@ public class JobMain {
 }
 ```
 
-## 6.5 配置错误处理策略
+## 5.5 配置错误处理策略
 
 记录日志策略: 记录作业异常日志，但不中断作业执行
 
@@ -621,19 +609,19 @@ private static void setDingtalkProperties(final JobConfiguration jobConfig) {
 
 
 
-## 6.6 作业监听器
+## 5.6 作业监听器
 
 
 
-## 6.7 事件追踪
+## 5.7 事件追踪
 
 
 
-## 6.8 操作 API
+## 5.8 操作 API
 
 
 
-# 七、使用手册（Spring Boot Starter）
+# 六、使用手册（Spring Boot Starter）
 
 ## 7.1 作业开发
 
@@ -775,7 +763,7 @@ elasticjob:
 ```
 
 
-# 八、使用手册（Spring XML）
+# 七、使用手册（Spring XML）
 
 
 
