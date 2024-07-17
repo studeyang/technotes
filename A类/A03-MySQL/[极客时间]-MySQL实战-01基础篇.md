@@ -805,7 +805,10 @@ select * from geek where c=N order by b limit 1;
 既然要全库只读，为什么不使用 set global readonly=true 的方式呢？主要有两个原因：
 
 1. 在有些系统中，readonly 的值会被用来做其他逻辑，比如用来判断一个库是主库还是备库。因此，修改 global 变量的方式影响面更大。
+
 2. 在异常处理机制上有差异。如果执行 FTWRL 命令之后由于客户端发生异常断开，那么 MySQL 会自动释放这个全局锁，整个库回到可以正常更新的状态。而将整个库设置为 readonly 之后，如果客户端发生异常，则数据库就会一直保持 readonly 状态，这样会导致整个库长时间处于不可写状态，风险较高。
+
+   > 客户端发生异常断开后不能重连吗？
 
 即使没有被全局锁住，加字段也不是就能一帆风顺的，因为你还会碰到接下来我们要介绍的表级锁。
 
@@ -817,7 +820,7 @@ MySQL 里面表级别的锁有两种：一种是表锁，一种是元数据锁�
 
   表锁的语法是 lock tables … read/write。与 FTWRL 类似，可以用 unlock tables 主动释放锁，也可以在客户端断开的时候自动释放。需要注意，lock tables 语法除了会限制别的线程的读写外，也限定了本线程接下来的操作。
 
-  举个例子, 如果在某个线程 A 中执行 lock tables t1 read, t2 write; 这个语句，则其他线程写 t1、读写 t2 的语句都会被阻塞。同时，线程 A 在执行 unlock tables 之前，也只能执行读 t1、读写 t2 的操作。连写 t1 都不允许，自然也不能访问其他表。
+  举个例子，如果在某个线程 A 中执行 lock tables t1 read, t2 write; 这个语句，则其他线程写 t1、读写 t2 的语句都会被阻塞。同时，线程 A 在执行 unlock tables 之前，也只能执行读 t1、读写 t2 的操作。连写 t1 都不允许，自然也不能访问其他表。
 
   > 在还没有出现更细粒度的锁的时候，表锁是最常用的处理并发的方式。而对于 InnoDB 这种支持行锁的引擎，一般不使用 lock tables 命令来控制并发，毕竟锁住整个表的影响面还是太大。
 
@@ -868,6 +871,8 @@ ALTER TABLE tbl_name NOWAIT add column ...
 ALTER TABLE tbl_name WAIT N add column ... 
 ```
 
+> WAIT N 一直超时的话，字段会一直加不成功吗？
+
 **思考题**
 
 备份一般都会在备库上执行，你在用 single-transaction 方法做逻辑备份的过程中，如果主库上的一个小表做了一个 DDL，比如给一个表上加了一列。这时候，从备库上会看到什么现象呢？
@@ -878,15 +883,15 @@ ALTER TABLE tbl_name WAIT N add column ...
 /* 设置 RR 隔离级别 */
 Q1:SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 /* 确保得到一致性视图 */
-Q2:START TRANSACTION  WITH CONSISTENT SNAPSHOT;
+Q2:START TRANSACTION WITH CONSISTENT SNAPSHOT;
 /* other tables */
-Q3:SAVEPOINT sp;  /* 设置一个保存点 */
+Q3:SAVEPOINT sp; /* 设置一个保存点 */
 /* 时刻 1 */
 Q4:show create table `t1`; /* 拿到表结构 */
 /* 时刻 2 */
 Q5:SELECT * FROM `t1`; /* 正式导数据 */
 /* 时刻 3 */
-Q6:ROLLBACK TO SAVEPOINT sp; /* 回滚到 sp , 释放 t1 的 MDL 锁 */
+Q6:ROLLBACK TO SAVEPOINT sp; /* 回滚到 sp, 释放 t1 的 MDL 锁 */
 /* 时刻 4 */
 /* other tables */
 ```
@@ -898,7 +903,9 @@ Q6:ROLLBACK TO SAVEPOINT sp; /* 回滚到 sp , 释放 t1 的 MDL 锁 */
 
 # 07 | 行锁功过：怎么减少行锁对性能的影响？
 
-MySQL 的行锁是在引擎层由各个引擎自己实现的。但并不是所有的引擎都支持行锁，比如 MyISAM 引擎就不支持行锁。不支持行锁意味着并发控制只能使用表锁，对于这种引擎的表，同一张表上任何时刻只能有一个更新在执行，这就会影响到业务并发度。InnoDB 是支持行锁的，这也是 MyISAM 被 InnoDB 替代的重要原因之一。
+MySQL 的行锁是在引擎层由各个引擎自己实现的。但并不是所有的引擎都支持行锁，比如 MyISAM 引擎就不支持行锁。不支持行锁意味着并发控制只能使用表锁，对于这种引擎的表，同一张表上任何时刻只能有一个更新在执行，这就会影响到业务并发度。
+
+InnoDB 是支持行锁的，这也是 MyISAM 被 InnoDB 替代的重要原因之一。
 
 **从两阶段锁说起**
 
@@ -929,7 +936,7 @@ MySQL 的行锁是在引擎层由各个引擎自己实现的。但并不是所�
 
 所以，正常情况下我们还是要采用第二种策略，即：主动死锁检测，而且 innodb_deadlock_detect 的默认值本身就是 on。主动死锁检测在发生死锁的时候，是能够快速发现并进行处理的，但是它也是有额外负担的。
 
-你可以想象一下这个过程：每当一个事务被锁的时候，就要看看它所依赖的线程有没有被别人锁住，如此循环，最后判断是否出现了循环等待，也就是死锁。
+你可以想象一下这个过程：每当一个事务被锁住的时候，就要看看它所依赖的线程有没有被别人锁住，如此循环，最后判断是否出现了循环等待，也就是死锁。
 
 **死锁检测带来的问题**
 
