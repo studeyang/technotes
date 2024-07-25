@@ -739,7 +739,7 @@ delete 命令其实只是把记录的位置，或者数据页标记为了“可�
 
 显然，花时间最多的步骤是往临时表插入数据的过程，如果在这个过程中，有新的数据要写入到表 A 的话，就会造成数据丢失。因此，在整个 DDL 过程中，表 A 中不能有更新。也就是说，这个 DDL 不是 Online 的。
 
-而在MySQL 5.6 版本开始引入的 Online DDL，对这个操作流程做了优化。引入了 Online DDL 之后，重建表的流程：
+而在 MySQL 5.6 版本开始引入的 Online DDL，对这个操作流程做了优化。引入了 Online DDL 之后，重建表的流程：
 
 1. 建立一个临时文件；
 2. 用数据页中表 A 的记录生成 B+ 树，存储到临时文件中；
@@ -800,7 +800,7 @@ inplace 跟 Online 这两个逻辑之间的关系是什么？
 2. 这个表执行 alter table t engine=InnoDB；
 3. 发现执行完成后，空间不仅没变小，还稍微大了一点儿，比如变成了 1.01TB。
 
-你觉得可能是什么原因呢 ？
+你觉得可能是什么原因呢？
 
 # 14 | count(*)这么慢，我该怎么办？
 
@@ -1783,7 +1783,7 @@ commit;
 
 如下图所示就是基本的主备切换流程。
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/全字段排序.jpg" style="zoom:67%;" />
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/MySQL%20主备切换流程.jpg)
 
 （图1：MySQL 主备切换流程）
 
@@ -1803,7 +1803,7 @@ commit;
 
 下图中画出的就是一个 update 语句在节点 A 执行，然后同步到节点 B 的完整流程图。
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/mixed%20格式和%20now().png)
+![image-20240725232754829](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407252327986.png)
 
 （图2：主备流程图）
 
@@ -1860,7 +1860,7 @@ show binlog events in 'master.000001';
 
 命令看 binlog 中的内容。
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/MySQL%20主备切换流程.jpg)
+![statement 格式 binlog 示例](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407252328970.png)
 
 （图3：statement 格式 binlog 示例）
 
@@ -1874,7 +1874,7 @@ show binlog events in 'master.000001';
 
 为了说明 statement 和 row 格式的区别，我们来看一下这条 delete 命令的执行效果图：
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/主备流程图.png" style="zoom:67%;" />
+![delete 执行 warnings](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407252326181.png)
 
 （图4：delete 执行 warnings）
 
@@ -1889,7 +1889,7 @@ show binlog events in 'master.000001';
 
 那么，如果我把 binlog 的格式改为 binlog_format=‘row’， 是不是就没有这个问题了呢？我们先来看看这时候 binog 中的内容吧。
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/表%20t%20的磁盘文件.png" style="zoom:50%;" />
+![row 格式 binlog 示例](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407252326926.png)
 
 （图5：row 格式 binlog 示例）
 
@@ -1939,7 +1939,7 @@ mysqlbinlog -vv data/master.000001 --start-position=8900;
 
 如果执行的是 update 语句的话，binlog 里面会记录修改前整行的数据和修改后的整行数据。所以，如果你误执行了 update 语句的话，只需要把这个 event 前后的两行信息对调一下，再去数据库里面执行，就能恢复这个更新操作了。
 
-其实，由 delete、insert 或者 update 语句导致的数据操作错误，需要恢复到操作之前状态的情况，也时有发生。MariaDB 的[Flashback](https://mariadb.com/kb/en/library/flashback/)工具就是基于上面介绍的原理来回滚数据的。
+其实，由 delete、insert 或者 update 语句导致的数据操作错误，需要恢复到操作之前状态的情况，也时有发生。MariaDB 的 [Flashback](https://mariadb.com/kb/en/library/flashback/) 工具就是基于上面介绍的原理来回滚数据的。
 
 虽然 mixed 格式的 binlog 现在已经用得不多了，但这里我还是要再借用一下 mixed 格式来说明一个问题，来看一下这条 SQL 语句：
 
@@ -1951,7 +1951,7 @@ insert into t values(10,10, now());
 
 先不要着急说结果，我们一起来看一下这条语句执行的效果。
 
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/引入(city,name,age)联合索引后，查询语句的执行流程.jpg" style="zoom: 67%;" />
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/mixed%20格式和%20now().png)
 
 （图7：mixed 格式和 now()）
 
@@ -1985,7 +1985,7 @@ mysqlbinlog master.000001  --start-position=2738 --stop-position=2973 | mysql -h
 
 因此，我们可以认为正常情况下主备的数据是一致的。也就是说，图 1 中 A、B 两个节点的内容是一致的。其实，图 1 中我画的是 M-S 结构，但实际生产上使用比较多的是双 M 结构，也就是图 9 所示的主备切换流程。
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/分区表间隙锁示例.png)
+![image-20240725232508917](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202407252325077.png)
 
 （图 9：MySQL 主备切换流程 -- 双 M 结构）
 
