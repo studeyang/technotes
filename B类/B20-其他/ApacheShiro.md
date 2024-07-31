@@ -7,20 +7,20 @@
 
 ## 1.1 什么是 Apache Shiro？
 
-Apache Shiro 是一个功能强大且易于使用的 Java 安全框架，表现在身份验证、授权、加密和会话管理，可用于保护任何应用程序，小到命令行应用程序、移动应用程序，大到 Web 和企业应用程序。
+Apache Shiro 是一个功能强大且易于使用的 Java 安全框架，表现在身份认证、授权、加密和会话管理，可用于保护任何应用程序，小到命令行应用程序、移动应用程序，大到 Web 和企业应用程序。
 
 应用程序安全性的 4 个基石：
 
 - 身份验证 - 证明用户身份，通常称为用户“登录”
 - 授权 - 访问控制
-- 密码 - 保护或隐藏数据免遭窥探
+- 加密 - 保护或隐藏数据免遭窥探
 - 会话管理 - 每个用户的时间敏感状态
 
 ## 1.2 核心概念
 
 ### 主题（Subject）
 
-“主题”一词是一个安全术语，基本上意味着“当前正在执行的用户”。它只是不被称为“用户”，因为“用户”一词通常与人类相关联。在安全领域，术语“主题”可以指人类，也可以指第三方进程、守护程序帐户或任何类似的东西。它只是意味着“当前正在与软件交互的事物”。不过，大多数情况下，您可以将其视为 Shiro 的“用户”概念。
+“主题”一词是一个安全术语，基本上意味着“当前正在执行的用户”。它只是不被称为“用户”，因为“用户”一词通常与人类相关联。在安全领域，术语“主题”可以指人类，也可以指第三方进程、守护帐户或任何类似的东西。它只是意味着“当前正在与软件交互的事物”。不过，大多数情况下，您可以将其视为 Shiro 的“用户”概念。
 
 *获取主题：*
 
@@ -30,7 +30,13 @@ Subject currentUser = SecurityUtils.getSubject();
 
 ### 安全管理器（SecurityManager）
 
-Subject 代表当前用户的安全操作，SecurityManager 管理所有用户的安全操作。它是 Shiro 架构的核心，充当一种“伞”对象，引用许多形成对象图的内部嵌套安全组件。然而，一旦配置了 SecurityManager 及其内部对象图，通常就不再管它了，应用程序开发人员几乎将所有时间都花在了 Subject API 上。
+主体的“幕后”对应的是 SecurityManager。主题（Subject）代表一个用户的安全操作，SecurityManager 管理所有用户的安全操作。它是 Shiro 的核心，充当一种“伞”对象，它引用了许多内部嵌套安全组件。然而，一旦配置了 SecurityManager，通常就不再管它了，应用程序开发人员几乎将所有时间都花在了主题（Subject）API 上。
+
+那么如何配置 SecurityManager 呢？这取决于您的应用程序环境。例如，Web 应用程序通常会在 web.xml 中指定 Shiro Servlet Filter。
+
+每个应用程序通常只有一个 SecurityManager 实例，它本质上是一个单例。默认的 SecurityManager 实现是 POJO，可以通过任何与 POJO 兼容的配置机制进行配置：普通 Java 代码、Spring XML、YAML、.properties 和 .ini 文件等。
+
+Shiro 基于文本 INI 配置，提供了默认的“共同点”解决方案。 INI 易于阅读、使用简单，并且需要很少的依赖项。
 
 *使用 INI 配置 Shiro：*
 
@@ -41,11 +47,23 @@ cm.hashAlgorithm = SHA-512
 cm.hashIterations = 1024
 # Base64 encoding (less text):
 cm.storedCredentialsHexEncoded = false
+iniRealm.credentialsMatcher = $cm
 
 [users]
 jdoe = TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJpcyByZWFzb2
 asmith = IHNpbmd1bGFyIHBhc3Npb24gZnJvbSBvdGhlciBhbXNoZWQsIG5vdCB
 ```
+
+我们看到了将用于配置 SecurityManager 实例的 INI 配置。 INI 有两个部分：[main] 和 [users]。
+
+[main] 部分是您配置 SecurityManager 对象以及 SecurityManager 使用对象（如领域）的地方。在此示例中，我们正在配置两个对象：
+
+1. cm 对象，它是 Shiro 的 HashedCredentialsMatcher 类的实例。
+2. iniRealm 对象，它是 SecurityManager 用来表示用户帐户的组件。
+
+在 [users] 部分，您可以指定用户帐户列表，方便测试。
+
+INI 配置是配置 Shiro 的一种简单方法。有关 INI 配置的更多详细信息，请参阅 Shiro 的文档。
 
 *加载 shiro.ini 配置文件：*
 
@@ -60,6 +78,12 @@ SecurityManager securityManager = factory.getInstance();
 //3. Make it accessible
 SecurityUtils.setSecurityManager(securityManager);
 ```
+
+在这个简单示例中有三步过程：
+
+1. 加载 INI 配置；
+2. 根据配置创建 SecurityManager 实例；
+3. 使 SecurityManager 单例可供应用程序访问。
 
 ### 领域（Realms）
 
@@ -252,15 +276,104 @@ String encodedPassword =
 
 ### 密码（Ciphers）
 
+密码是一种可以使用密钥逆向转换数据的加密算法。我们使用密码来保证数据安全，特别是在传输或存储数据时，此时数据特别容易被窥探。
 
+如果您曾经使用过 JDK Cryptography API，特别是 javax.crypto.Cipher 类，您就会知道它可能是一头难以驯服的野兽。
 
+Shiro 试图通过引入其 CipherService API 来简化加密密码的整个过程。 CipherService 是大多数开发人员在保护数据时想要的，它是一种简单、无状态、线程安全的 API，可以在一个方法调用中完整地加密或解密数据。您所需要做的就是提供您的密钥，然后您可以根据需要进行加密或解密。
 
+例如，可以使用 256 位 AES 加密，如下面的清单所示。
 
+*Apache Shiro 的加密 API：*
 
+```java
+AesCipherService cipherService = new AesCipherService();
+cipherService.setKeySize(256);
 
+//创建一个测试密钥：
+byte[] testKey = cipherService.generateNewKey();
 
+//加密文件的字节：
+byte[] encrypted = cipherService.encrypt(fileBytes, testKey);
+```
 
+Shiro 的 CipherService API 还有其他好处，例如能够支持基于流的加密/解密（如加密音频或视频）。
 
+## 1.7 Web 支持
 
+最后，我们将简要地介绍 Shiro 的 Web 支持。为 Web 应用程序设置 Shiro 非常简单，唯一需要做的就是在 web.xml 中定义 Shiro Servlet Filter。
 
+*web.xml 中的 ShiroFilter：*
+
+```xml
+<filter>
+    <filter-name>ShiroFilter</filter-name>
+    <filter-class>
+        org.apache.shiro.web.servlet.IniShiroFilter
+    </filter-class>
+    <!-- no init-param means load the INI config
+        from classpath:shiro.ini --> 
+</filter>
+
+<filter-mapping>
+    <filter-name>ShiroFilter</filter-name>
+     <url-pattern>/*</url-pattern>
+</filter-mapping>
+```
+
+此过滤器可以读取上述 shiro.ini 配置。配置完成后，Shiro Filter 将过滤每个请求。
+
+### 特定 URL 的过滤器链
+
+Shiro 支持特定的过滤规则。它允许您为任何匹配的 URL 指定临时过滤器链。这意味着您在使用 Shiro 过滤安全规则时具有很大的灵活性，比单独在 web.xml 中定义过滤器要灵活得多。清单 15 显示了 Shiro INI 中的配置片段。
+
+*清单 15. 特定路径的过滤器链：*
+
+```ini
+[urls]
+/assets/** = anon
+/user/signup = anon
+/user/** = user
+/rpc/rest/** = perms[rpc:invoke], authc
+/** = authc
+```
+
+[urls] 部分可供 Web 应用程序使用。对于每一行，等号左侧的值表示上下文相关的 Web 应用程序路径，右侧的值定义了一个过滤器链，过滤器链是一个有序的 Servlet 过滤器列表（多个以逗号分隔）。您在上面看到的过滤器名称（anon、user、perms、authc）是 Shiro 提供的开箱即用的安全相关过滤器。
+
+您可以在 web.xml 中仅定义 Shiro 过滤器，并在 shiro.ini 中定义所有其他过滤器和过滤器链，以获得比 web.xml 更简洁且易于理解的过滤器链定义机制。
+
+### JSP 标签库
+
+Shiro 还提供了一个 JSP 标签库，允许您根据当前主题（Subject）的状态控制 JSP 页面的输出。一个常见的例子是在用户登录后显示 “Hello \<username\>” 文本。但如果他们是匿名的，您可能想显示其他内容，例如 “Hello! Register today!”
+
+清单 16 显示了如何使用 Shiro 的 JSP 标记来支持这一点。
+
+*清单 16. JSP 标记库示例：*
+
+```xml
+<%@ taglib prefix="shiro" uri="http://shiro.apache.org/tags" %>
+...
+<p>Hello
+<shiro:user>
+    <!-- shiro:principal prints out the Subject’s main
+        principal - in this case, a username -->
+    <shiro:principal/>!
+</shiro:user>
+<shiro:guest>
+    <!-- not logged in - considered a guest. Show
+        the register link -->
+    ! <a href=”register.jsp”>Register today!</a>
+</shiro:guest>
+</p> 
+```
+
+还有其他标签，允许您根据他们的角色、分配的权限以及他们是否经过身份验证。
+
+Shiro 支持许多其他特定于 Web 的功能，例如简单的“记住我”服务、REST 和 BASIC 身份验证，当然还有透明的 HttpSession 支持。
+
+### 网络会话管理
+
+最后，有趣的是 Shiro 对 Web 环境中会话的支持。
+
+对于 Web 应用程序，Shiro 默认会话结用的是我们都习惯的 Servlet 容器会话。也就是说，当您调用方法 subject.getSession() 和 subject.getSession(boolean) 时，Shiro 将返回由 Servlet 容器的 HttpSession 实例支持的 Session 实例。
 
