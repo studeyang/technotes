@@ -377,3 +377,218 @@ Shiro 支持许多其他特定于 Web 的功能，例如简单的“记住我”
 
 对于 Web 应用程序，Shiro 默认会话结用的是我们都习惯的 Servlet 容器会话。也就是说，当您调用方法 subject.getSession() 和 subject.getSession(boolean) 时，Shiro 将返回由 Servlet 容器的 HttpSession 实例支持的 Session 实例。
 
+# 二、10 分钟教程
+
+## 2.1 快速入门
+
+> 参考：https://github.com/apache/shiro/blob/main/samples/quickstart/src/main/java/Quickstart.java
+
+```java
+public class Quickstart {
+
+    private static final transient Logger log = LoggerFactory.getLogger(Quickstart.class);
+
+    public static void main(String[] args) {
+
+        // 配置 Shiro SecurityManager 最简单的方法
+        // 领域、用户、角色和权限使用简单的 INI 配置。
+        SecurityManager securityManager = new BasicIniEnvironment("classpath:shiro.ini").getSecurityManager();
+
+        // 创建 SecurityManager
+        // 可作为 JVM 单例访问，但大多数应用程序不会这样做
+        // 而是依赖其容器配置或 web.xml
+        SecurityUtils.setSecurityManager(securityManager);
+
+        // 现在一个简单的 Shiro 环境已经搭建完毕，让我们看看可以做什么
+
+        // 获取当前用户
+        Subject currentUser = SecurityUtils.getSubject();
+
+        // 使用 Session 做一些事情（不依赖 Web 或 EJB 容器！！！）
+        Session session = currentUser.getSession();
+        session.setAttribute("someKey", "aValue");
+        String value = (String) session.getAttribute("someKey");
+        if (value.equals("aValue")) {
+            log.info("Retrieved the correct value! [" + value + "]");
+        }
+
+        // 让我们登录当前用户，以便我们可以检查角色和权限
+        if (!currentUser.isAuthenticated()) {
+            UsernamePasswordToken token = new UsernamePasswordToken("lonestarr", "vespa");
+            token.setRememberMe(true);
+            try {
+                currentUser.login(token);
+            } catch (UnknownAccountException uae) {
+                log.info("There is no user with username of " + token.getPrincipal());
+            } catch (IncorrectCredentialsException ice) {
+                log.info("Password for account " + token.getPrincipal() + " was incorrect!");
+            } catch (LockedAccountException lae) {
+                log.info("The account for username " + token.getPrincipal() + " is locked.  " +
+                        "Please contact your administrator to unlock it.");
+            }
+            // ...在这里捕获更多异常
+            catch (AuthenticationException ae) {
+                //unexpected condition?  error?
+            }
+        }
+
+        // 打印他们的身份主体（在本例中为用户名）
+        log.info("User [" + currentUser.getPrincipal() + "] logged in successfully.");
+
+        // 测试角色
+        if (currentUser.hasRole("schwartz")) {
+            log.info("May the Schwartz be with you!");
+        } else {
+            log.info("Hello, mere mortal.");
+        }
+
+        // 测试类型化权限（不是实例级）
+        if (currentUser.isPermitted("lightsaber:wield")) {
+            log.info("You may use a lightsaber ring.  Use it wisely.");
+        } else {
+            log.info("Sorry, lightsaber rings are for schwartz masters only.");
+        }
+
+        // 一个（非常强大的）实例级别权限
+        if (currentUser.isPermitted("winnebago:drive:eagle5")) {
+            log.info("You are permitted to 'drive' the winnebago with license plate (id) 'eagle5'.  " +
+                    "Here are the keys - have fun!");
+        } else {
+            log.info("Sorry, you aren't allowed to drive the 'eagle5' winnebago!");
+        }
+
+        // 全部完成 - 注销！
+        currentUser.logout();
+
+        System.exit(0);
+    }
+}
+```
+
+上面的`Quickstart.java` 包含了可以让您熟悉 API 的所有代码。现在让我们把它分成几个部分，这样你就可以很容易地理解发生了什么。
+
+在几乎所有环境中，您都可以通过以下调用获取当前用户：
+
+```java
+Subject currentUser = SecurityUtils.getSubject();
+```
+
+现在您有了一个`Subject` ，您可以用它做什么？
+
+如果您想让用户在应用程序的当前会话期间使用某些内容，您可以获取他们的会话：
+
+```java
+Session session = currentUser.getSession();
+session.setAttribute( "someKey", "aValue" );
+```
+
+`Session`是一个特定于 Shiro 的实例，它提供了您所习惯的常规 HttpSession 的大部分功能，但还有一些额外的好处和一个很大的区别：它不需要 HTTP 环境！
+
+如果部署在 Web 应用程序内部，默认情况下`Session`将基于`HttpSession`。但是，在非 Web 环境中，Shiro 默认将自动使用其企业会话管理。
+
+上面的`Subject`实例代表当前用户，但当前用户是谁？好吧，在登录之前他们是匿名的。所以，让我们这样做：
+
+```java
+if ( !currentUser.isAuthenticated() ) {
+    //collect user principals and credentials in a gui specific manner
+    //such as username/password html form, X509 certificate, OpenID, etc.
+    //We'll use the username/password example here since it is the most common.
+    //(do you know what movie this is from? ;)
+    UsernamePasswordToken token = new UsernamePasswordToken("lonestarr", "vespa");
+    //this is all you have to do to support 'remember me' (no config - built in!):
+    token.setRememberMe(true);
+    currentUser.login(token);
+}
+```
+
+但是，如果登录失败怎么办？您可以捕获各种特定的异常，这些异常会告诉您到底发生了什么，并允许您进行相应的处理：
+
+```java
+try {
+    currentUser.login( token );
+    //if no exception, that's it, we're done!
+} catch ( UnknownAccountException uae ) {
+    //username wasn't in the system, show them an error message?
+} catch ( IncorrectCredentialsException ice ) {
+    //password didn't match, try again?
+} catch ( LockedAccountException lae ) {
+    //account for that username is locked - can't login.  Show them a message?
+}
+    // ... more types exceptions to check if you want ...
+} catch ( AuthenticationException ae ) {
+    //unexpected condition - error?
+}
+```
+
+现在我们已经有一个登录用户了，我们还能做什么？
+
+说说他们是谁：
+
+```java
+//print their identifying principal (in this case, a username):
+log.info( "User [" + currentUser.getPrincipal() + "] logged in successfully." );
+```
+
+我们还可以测试一下它们是否具有特定的角色：
+
+```java
+if ( currentUser.hasRole( "schwartz" ) ) {
+    log.info("May the Schwartz be with you!" );
+} else {
+    log.info( "Hello, mere mortal." );
+}
+```
+
+我们还可以查看他们是否有权对某种类型的实体进行操作：
+
+```java
+if ( currentUser.isPermitted( "lightsaber:wield" ) ) {
+    log.info("You may use a lightsaber ring.  Use it wisely.");
+} else {
+    log.info("Sorry, lightsaber rings are for schwartz masters only.");
+}
+```
+
+此外，我们可以执行强大的实例级权限检查，能够查看用户是否有能力访问特定类型的实例：
+
+```java
+if ( currentUser.isPermitted( "winnebago:drive:eagle5" ) ) {
+    log.info("You are permitted to 'drive' the 'winnebago' with license plate (id) 'eagle5'.  " +
+                "Here are the keys - have fun!");
+} else {
+    log.info("Sorry, you aren't allowed to drive the 'eagle5' winnebago!");
+}
+```
+
+最后，当用户使用完应用程序后，可以注销：
+
+```java
+currentUser.logout(); //removes all identifying information and invalidates their session too.
+```
+
+您可能会问：谁负责在登录期间获取用户数据（用户名和密码、角色和权限等），以及谁在运行时实际执行这些安全检查？好吧，您可以通过实现 Shiro 的 Realm 配置来实现。
+
+## 2.2 认证（Authentication）
+
+
+
+## 2.3 授权（Authorization）
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
