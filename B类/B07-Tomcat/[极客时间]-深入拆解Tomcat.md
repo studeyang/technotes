@@ -384,8 +384,8 @@ Context 表示一个 Web 应用程序；Wrapper 表示一个 Servlet；Host 代�
     </connector>    
     <engine>        <!-- 容器组件，一个Engine组件处理Service中的所有请求，包含多个Host -->
       <host>        <!-- 容器组件，处理特定的Host下客户请求，可包含多个Context -->
-         <context>  <!-- 容器组件，为特定的Web应用处理所有的客户请求 -->
-         </context>
+        <context>  <!-- 容器组件，为特定的Web应用处理所有的客户请求 -->
+        </context>
       </host>
     </engine>
   </service>
@@ -395,13 +395,13 @@ Context 表示一个 Web 应用程序；Wrapper 表示一个 Servlet；Host 代�
 如果想要配置多个Host，可参考下面代码。
 
 ```xml
-<server port=“8005” shutdown=“SHUTDOWN”>
-  <service name=“Catalina”>
-    <engine defaulthost=“localhost” name=“Catalina”>
-      <host appbase=“webapps” autodeploy=“true” name=“localhost” unpackwars=“true”></host>
-      <host appbase=“webapps1” autodeploy=“true” name=“www.domain1.com” unpackwars=“true”></host>
-      <host appbase=“webapps2” autodeploy=“true” name=“www.domain2.com” unpackwars=“true”></host>
-      <host appbase=“webapps3” autodeploy=“true” name=“www.domain3.com” unpackwars=“true”></host>
+<server port="8005" shutdown="SHUTDOWN">
+  <service name="Catalina">
+    <engine defaulthost="localhost" name="Catalina">
+      <host appbase="webapps" autodeploy="true" name="localhost" unpackwars="true"></host>
+      <host appbase="webapps1" autodeploy="true" name="www.domain1.com" unpackwars="true"></host>
+      <host appbase="webapps2" autodeploy="true" name="www.domain2.com" unpackwars="true"></host>
+      <host appbase="webapps3" autodeploy="true" name="www.domain3.com" unpackwars="true"></host>
     </engine>
   </service>
 </server>
@@ -466,9 +466,9 @@ Valve 表示一个处理点，比如权限认证和记录日志。
 
 ```java
 public interface Valve {
-  public Valve getNext();
-  public void setNext(Valve valve);
-  public void invoke(Request request, Response response)
+    public Valve getNext();
+    public void setNext(Valve valve);
+    public void invoke(Request request, Response response);
 }
 ```
 
@@ -476,10 +476,10 @@ invoke 方法就是来处理请求的。
 
 ```java
 public interface Pipeline extends Contained {
-  public void addValve(Valve valve);
-  public Valve getBasic();
-  public void setBasic(Valve valve);
-  public Valve getFirst();
+    public void addValve(Valve valve);
+    public Valve getBasic();
+    public void setBasic(Valve valve);
+    public Valve getFirst();
 }
 ```
 
