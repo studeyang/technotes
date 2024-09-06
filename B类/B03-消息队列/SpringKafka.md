@@ -171,11 +171,9 @@ public class Config {
 
 ## 2.1 连接Kafka
 
+### 1、Factory Listeners
 
-
-### Factory Listeners
-
-从版本 2.5 开始，可以使用`Listener`配置`DefaultKafkaProducerFactory`和`DefaultKafkaConsumerFactory` ，以便在创建或关闭生产者或消费者时接收通知。
+从版本 2.5 开始，可以使用`Listener`配置`DefaultKafkaProducerFactory`和`DefaultKafkaConsumerFactory`，以便在创建或关闭生产者或消费者时接收通知。
 
 *Producer Factory Listener*
 
@@ -205,15 +203,15 @@ interface Listener<K, V> {
 }
 ```
 
-### 默认Client ID前缀
+### 2、默认Client ID前缀
 
-从版本 3.2 开始，对于使用`spring.application.name`属性定义应用程序名称的 Spring Boot 应用程序，该名称现在用作这些客户端类型自动生成的客户端 ID 的默认前缀：
+从版本 3.2 开始，使用 `spring.application.name` 定义的服务名，现在用作自动生成的客户端 ID 的默认前缀。包括以下客户端类型：
 
 - 不使用消费者组的消费者客户端
 - 生产者客户端
 - admin clients
 
-这使得在服务器端识别这些客户端以进行故障排除或应用配额变得更加容易。
+这让服务端能够识别这些客户端，以进行故障排查或应用配额。
 
 *表 1. 使用*`spring.application.name=myapp` *Spring Boot 应用程序生成的示例客户端 ID*
 
@@ -230,7 +228,7 @@ interface Listener<K, V> {
 
 ## 2.3 发送消息
 
-### 使用`KafkaTemplate`
+### 1、使用KafkaTemplate
 
 `KafkaTemplate`包装了生产者并提供了将数据发送到 Kafka 主题的便捷方法。
 
@@ -334,7 +332,7 @@ public void sendToKafka(final MyOutputData data) {
 }
 ```
 
-### 使用`RoutingKafkaTemplate`
+### 2、使用RoutingKafkaTemplate
 
 从版本 2.5 开始，您可以使用`RoutingKafkaTemplate`根据目标`topic`名称在运行时选择生产者。
 
@@ -375,7 +373,7 @@ public class Application {
 }
 ```
 
-### 使用`DefaultKafkaProducerFactory`
+### 3、使用DefaultKafkaProducerFactory
 
 ```java
 @Bean
@@ -389,7 +387,7 @@ public KafkaTemplate<Integer, CustomValue> kafkaTemplate() {
 }
 ```
 
-### 使用`ReplyingKafkaTemplate`
+### 4、使用ReplyingKafkaTemplate
 
 2.1.3版本引入了`KafkaTemplate`的子类来提供请求/回复语义。该类名为`ReplyingKafkaTemplate` ，并且有两个附加方法；下面显示了方法签名：
 
@@ -467,7 +465,7 @@ public class KRequestingApplication {
 
 ## 2.4 接收消息
 
-### 消息监听器
+### 1、消息监听器
 
 ```java
 //当使用自动提交或容器管理的提交方法之一时，使用此接口处理从 Kafka 消费者poll()操作接收到的单个ConsumerRecord实例。
@@ -500,7 +498,7 @@ public interface BatchAcknowledgingMessageListener<K, V> {
     void onMessage(List<ConsumerRecord<K, V>> data, Acknowledgment acknowledgment);
 }
 
-//当使用自动提交或容器管理的提交方法之一时，使用此接口处理从 Kafka 消费者poll()操作接收到的所有ConsumerRecord实例。使用此接口时不支持AckMode.RECORD ，因为监听器会获得完整的批次。提供对Consumer对象的访问。
+//当使用自动提交或容器管理的提交方法之一时，使用此接口处理从 Kafka 消费者poll()操作接收到的所有ConsumerRecord实例。使用此接口时不支持AckMode.RECORD，因为监听器会获得完整的批次。提供对Consumer对象的访问。
 public interface BatchConsumerAwareMessageListener<K, V> extends BatchMessageListener<K, V> {
     void onMessage(List<ConsumerRecord<K, V>> data, Consumer<?, ?> consumer);
 }
@@ -511,7 +509,7 @@ public interface BatchAcknowledgingConsumerAwareMessageListener<K, V> extends Ba
 }
 ```
 
-### 消息监听器容器
+### 2、消息监听器容器
 
 提供了两个`MessageListenerContainer`实现：
 
@@ -572,7 +570,7 @@ public ConcurrentMessageListenerContainer(ConsumerFactory<K, V> consumerFactory,
 
 侦听器容器实现`SmartLifecycle` ，并且`autoStartup`默认情况下为`true` 。容器在后期启动 ( `Integer.MAX-VALUE - 100` )。实现`SmartLifecycle`来处理来自侦听器的数据的其他组件应在早期阶段启动。 `- 100`为后续阶段留出了空间，使组件能够在容器之后自动启动。
 
-### 提交 Offsets
+### 3、提交 Offsets
 
 提供了几个用于提交偏移量的选项。如果`enable.auto.commit`消费者属性为`true` ，Kafka会根据其配置自动提交偏移量。如果为`false` ，则容器支持多种`AckMode`设置（在下一个列表中描述）。默认`AckMode`是`BATCH` 。从版本 2.3 开始，框架将`enable.auto.commit`设置为`false` ，除非在配置中明确设置。以前，如果未设置该属性，则使用 Kafka 默认值 ( `true` )。
 
@@ -586,7 +584,7 @@ public ConcurrentMessageListenerContainer(ConsumerFactory<K, V> consumerFactory,
 - `MANUAL`: 消息侦听器负责`acknowledge()` `Acknowledgment` 。之后，应用与`BATCH`相同的语义。
 - `MANUAL_IMMEDIATE`: 当侦听器调用`Acknowledgment.acknowledge()`方法时立即提交偏移量。
 
-### 异步`@KafkaListener`返回类型
+### 4、异步@KafkaListener返回类型
 
 从版本 3.2 开始， `@KafkaListener` （和`@KafkaHandler` ）方法可以指定异步返回类型，从而异步发送回复。返回类型包括`CompletableFuture<?>` 、 `Mono<?>`和 Kotlin `suspend`函数。
 
@@ -606,7 +604,7 @@ public Mono<Void> listen(String data) {
 }
 ```
 
-### `@KafkaListener`注解
+### 5、@KafkaListener注解
 
 `@KafkaListener`注解用于将 bean 方法指定为侦听器容器的侦听器。这个 Bean 被包裹在一个 `MessagingMessageListenerAdapter` 配置了各种功能，例如用于转换数据的转换器（如有必要）以匹配方法参数。
 
@@ -918,7 +916,7 @@ public class Listener {
 })
 ```
 
-### 获取Consumer `group.id`
+### 6、获取Consumer group.id
 
 当在多个容器中运行相同的侦听器代码时，能够确定记录来自哪个容器（由其`group.id`消费者属性标识）可能会很有用。
 
@@ -930,30 +928,4 @@ public void listener(@Payload String payload, @Header(KafkaHeaders.GROUP_ID) Str
     ...
 }
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
