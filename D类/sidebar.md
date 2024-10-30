@@ -20,21 +20,17 @@
   - [中台](D类/D08-杂谈/[极客时间]-说透中台.md)
   - [海量数据处理](D类/D08-杂谈/[advanced-java]-海量数据处理.md)
   - [Info公开课](D类/D08-杂谈/InfoQ公开课.md)
-  - [RestTemplate使用样例](D类/D08-杂谈/RestTemplate使用样例.md)
-  - [Java8 Stream常见用法](D类/D08-杂谈/Java8%20Stream常见用法.md)
-  - [JettBrainIDEA使用](D类/D08-杂谈/JettBrainIDEA使用.md)
-
+  
 - **架构方案**
   - [企业级高可用延时消息设计](D类/D09-架构方案/企业级高可用延时消息设计.md)
 
 - **业务踩坑**
   - [Java开发常见错误-代码篇](D类/D10-业务踩坑/[极客时间]-Java开发常见错误-01代码篇.md)
-
+  - [Java开发常见错误-设计篇](D类/D10-业务踩坑/[极客时间]-Java开发常见错误-02设计篇.md)
+  
 - **最佳实践**
-  - [Intellij Idea最佳实践](D类/D13-最佳实践/Intellij-Idea最佳实践.md)
-  - [一些惊奇的代码](D类/D13-最佳实践/一些惊奇的代码.md)
-  - [Postman最佳实践](D类/D13-最佳实践/Postman最佳实践.md)
-  - [RestTemplate最佳实践](D类/D13-最佳实践/RestTemplate最佳实践.md)
-
+  - [Intellij Idea最佳实践](D类/D13-实践与笔记/01-Intellij-Idea最佳实践.md)
+  - [Postman最佳实践](D类/D13-实践与笔记/02-Postman最佳实践.md)
+  
 - **行业规范**
-  - [技术文档写作规范](D类/D17-行业规范/技术文档写作规范.md)
+  - [技术文档写作规范](D类/D14-行业视角/技术文档写作规范.md)
