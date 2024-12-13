@@ -22,11 +22,11 @@ The following links provide more context around Hystrix and the challenges that 
 
 Hystrix 提供了以下服务
 
-- 引入第三方的 client 类库，通过延迟与失败的检测，来保护服务与服务之间的调用（网络间调用最为典型）
-- 阻止复杂的分布式系统中出现级联故障
-- 快速失败与快速恢复机制
-- 提供兜底方案（fallback）并在适当的时机优雅降级
-- 提供实时监控、报警与操作控制
+- **延迟与失败检测。**引入第三方的 client 类库，通过延迟与失败的检测，来保护服务与服务之间的调用（网络间调用最为典型）
+- **阻止级联故障。**阻止复杂的分布式系统中出现级联故障
+- **快速失败与快速恢复机制**
+- **降级。**提供兜底方案（fallback）并在适当的时机优雅降级
+- **监控告警。**提供实时监控、告警与操作控制
 
 ### 1.3 Hystrix 解决了什么问题？
 
@@ -76,16 +76,16 @@ Hystrix 通过以下设计原则来运作:
 - 提供低延迟的配置变更
 - 防止客户端执行失败，不仅仅是执行网络请求的客户端
 
-### 1.5 Hystrix 如何时间它的目标？
+### 1.5 Hystrix 如何实现它的目标？
 
 如下：
 
-- 将远程请求或简单的方法调用包装成 `HystrixCommand` 或者 `HystrixObservableCommand` 对象，启动一个单独的线程来运行。(示例：[命令模式](http://en.wikipedia.org/wiki/Command_pattern))。
+- 将远程请求或简单的方法调用包装成 `HystrixCommand` 或者 `HystrixObservableCommand` 对象，启动一个单独的线程来运行。(示例：[命令模式](http://en.wikipedia.org/wiki/Command_pattern))
 - 你可以为服务调用定义一个超时时间，可以为默认值，或者你自定义设置该属性，使得99.5%的请求时间都在该时间以下。
 - 为每一个依赖的服务都分配一个线程池，当该线程池满了之后，直接拒绝，这样就防止某一个依赖的服务出问题阻塞了整个系统的其他服务。
-- 记录成功数、失败数、超时数以及拒绝数等指标
+- 记录成功数、失败数、超时数以及拒绝数等指标。
 - 设置一个熔断器，将所有请求在一段时间内打到这个熔断器提供的方法上，触发条件可以是手动的，也可以根据失败率自动调整。
-- 实时监控配置与属性的变更
+- 实时监控配置与属性的变更。
 
 当你启用 Hystrix 封装了原有的远程调用请求后，整个流程图变为下图所示。
 
@@ -99,7 +99,7 @@ Hystrix 通过以下设计原则来运作:
 
 Maven
 
-```
+```xml
 <dependency>
     <groupId>com.netflix.hystrix</groupId>
     <artifactId>hystrix-core</artifactId>
@@ -115,7 +115,7 @@ lvy
 
 如果你想下载 Jar 包而不是构建在一个工程里，如下：
 
-```
+```xml
 <?xml version="1.0"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
@@ -172,8 +172,11 @@ public class CommandHelloWorld extends HystrixCommand<String> {
 该 commond 类可以用以下方法使用：
 
 ```java
+// 1
 String s = new CommandHelloWorld("Bob").execute();
+// 2
 Future<String> s = new CommandHelloWorld("Bob").queue();
+// 3
 Observable<String> s = new CommandHelloWorld("Bob").observe();
 ```
 
@@ -249,9 +252,7 @@ clean build 方式的输出如下
 
 下图展示了当你用使用 Hystrix 封装后的客户端请求一个服务时的流程：
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/hystrix-command-flow-chart-640.png)
-
-[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/hystrix-command-flow-chart.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/hystrix-command-flow-chart.png)
 
 The following sections will explain this flow in greater detail:
 
@@ -294,7 +295,7 @@ HystrixObservableCommand command = new HystrixObservableCommand(arg1, arg2);
 - [`observe()`](http://netflix.github.io/Hystrix/javadoc/com/netflix/hystrix/HystrixObservableCommand.html#observe()) — subscribes to the `Observable` that represents the response(s) from the dependency and returns an `Observable` that replicates that source `Observable`
 - [`toObservable()`](http://netflix.github.io/Hystrix/javadoc/com/netflix/hystrix/HystrixObservableCommand.html#toObservable()) — returns an `Observable` that, when you subscribe to it, will execute the Hystrix command and emit its responses
 
-```
+```java
 K             value   = command.execute();
 Future<K>     fValue  = command.queue();
 Observable<K> ohValue = command.observe();         //hot observable
@@ -373,9 +374,7 @@ The result of a failed or nonexistent fallback will differ depending on how you 
 
 If the Hystrix command succeeds, it will return the response or responses to the caller in the form of an `Observable`. Depending on how you have invoked the command in step 2, above, this `Observable` may be transformed before it is returned to you:
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/hystrix-return-flow-640.png) 
-
-[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/hystrix-return-flow.png)
+![](https://github.com/Netflix/Hystrix/wiki/images/hystrix-return-flow.png)
 
 - `execute()` — obtains a `Future` in the same manner as does `.queue()` and then calls `get()` on this `Future` to obtain the single value emitted by the `Observable`
 - `queue()` — converts the `Observable` into a `BlockingObservable` so that it can be converted into a `Future`, then returns this `Future`
@@ -422,7 +421,7 @@ Clients (libraries, network calls, etc) execute on separate threads. This isolat
 
 Hystrix uses separate, per-dependency thread pools as a way of constraining any given dependency so latency on the underlying executions will saturate the available threads only in that pool.
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/request-example-with-latency-640.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/request-example-with-latency-1280.png)
 
 [*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/request-example-with-latency-1280.png)
 
@@ -481,9 +480,7 @@ The Netflix API processes 10+ billion Hystrix Command executions per day using t
 
 The following diagram represents one `HystrixCommand` being executed at 60 requests-per-second on a single API instance (of about 350 total threaded executions per second per server):
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/thread-cost-60rps-640.png)
-
-[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/thread-cost-60rps-original.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/thread-cost-60rps-original.png)
 
 At the median (and lower) there is no cost to having a separate thread.
 
@@ -520,9 +517,7 @@ You can front a `HystrixCommand` with a request collapser ([`HystrixCollapser`](
 
 The following diagram shows the number of threads and network connections in two scenarios: first without and then with request collapsing (assuming all connections are “concurrent” within a short time window, in this case 10ms).
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/collapser-640.png)
-
-[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/collapser-1280.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/collapser-1280.png)
 
 **Sequence Diagram**
 
@@ -574,9 +569,7 @@ If, however, a particular command is heavily utilized concurrently and can batch
 
 **Collapser Flow**
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/collapser-flow-640.png)
-
-[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/collapser-flow-1280.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/collapser-flow-1280.png)
 
 
 
@@ -586,9 +579,7 @@ If, however, a particular command is heavily utilized concurrently and can batch
 
 Here is an example flow involving an HTTP request lifecycle and two threads doing work within that request:
 
-![img](https://github.com/Netflix/Hystrix/wiki/images/request-cache-640.png)
-
-[*(Click for larger view)*](https://github.com/Netflix/Hystrix/wiki/images/request-cache-1280.png)
+![img](https://github.com/Netflix/Hystrix/wiki/images/request-cache-1280.png)
 
 The benefits of request caching are:
 
