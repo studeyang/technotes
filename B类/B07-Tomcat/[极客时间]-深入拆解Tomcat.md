@@ -1,6 +1,5 @@
-# 目录
-
-![](深入拆解Tomcat-01整体架构.png)
+> 来源：极客时间《深入拆解Tomcat》--李号双
+>
 
 # 开篇词 | Java程序员如何快速成长？
 
@@ -24,7 +23,7 @@
 
 **Web 容器是什么？**
 
-Servlet 可以简单理解为运行在服务端的 Java 小程序，但是 Servlet 没有 main 方法，不能独立运行，因此必须把它部署到容器中，由容器来实例化并调用 Servlet。
+随着互联网的发展，我们已经不满足于仅仅浏览静态页面，还希望通过一些交互操作，来获取动态结果，于是 Sun 公司推出了 Servlet 技术。Servlet 可以简单理解为运行在服务端的 Java 小程序，但是 Servlet 没有 main 方法，不能独立运行，因此必须把它部署到容器中，由容器来实例化并调用 Servlet。
 
 而 Tomcat 和 Jetty 就是一个 Servlet 容器。为了方便使用，它们也具有 HTTP 服务器的功能，因此**Tomcat 或者 Jetty 就是一个“HTTP 服务器 + Servlet 容器”，我们也叫它们 Web 容器。**
 
@@ -61,22 +60,22 @@ Web 框架的本质是，开发者在使用某种语言编写 Web 应用时，�
 
 # 02 | HTTP协议
 
-HTTP 和 HTML 有什么区别？
+在开始学习 Web 容器之前，我想先问你一个问题：HTTP 和 HTML 有什么区别？
 
 HTTP 是通信的方式，HTML 才是通信的目的，就好比 HTTP 是信封，信封里面的信（HTML）才是内容；但是没有信封，信也没办法寄出去。
 
 **HTTP 的本质**
+
+HTTP 协议是浏览器与服务器之间的数据传送协议。下面我通过一个例子来告诉你 HTTP 的本质是什么。
 
 假如浏览器需要从远程 HTTP 服务器获取一个 HTML 文本，在这个过程中，浏览器实际上要做两件事情：
 
 - 与服务器建立 Socket 连接；
 - 生成**请求数据**并通过 Socket 发送出去。
 
-这个请求数据到底长什么样呢？都请求些什么内容呢？或者换句话说，浏览器需要告诉服务端什么信息呢？
+这个请求数据到底长什么样呢？都请求些什么内容呢？首先，作为浏览器最基本的是，你要让服务端知道你的意图，你是想获取内容还是提交内容？其次你需要告诉服务端你想要哪个内容。
 
-首先最基本的是，你要让服务端知道你的意图，你是想获取内容还是提交内容？其次你需要告诉服务端你想要哪个内容。
-
-这些信息以一种什么样的格式放到请求里去呢？这就是 HTTP 协议要解决的问题。也就是说，HTTP 协议的本质就是一种浏览器与服务器之间约定好的通信格式。那浏览器与服务器之间具体是怎么工作的呢？
+这些信息以一种什么样的格式放到请求里去呢？这就是 HTTP 协议要解决的问题。也就是说，==HTTP 协议的本质就是一种浏览器与服务器之间约定好的通信格式。==那浏览器与服务器之间具体是怎么工作的呢？
 
 **HTTP 工作原理**
 
@@ -98,15 +97,17 @@ HTTP 是通信的方式，HTML 才是通信的目的，就好比 HTTP 是信封�
 10. 浏览器拿到数据包后，以 HTTP 协议的格式解包，然后解析数据，假设这里的数据是 HTML。
 11. 浏览器将 HTML 文件展示在页面上。
 
-Tomcat 服务器接受连接、解析请求数据、处理请求和发送响应。实际情况可能会有成千上万的浏览器同时请求同一个 HTTP 服务器，为了提高服务能力和并发度，Tomcat 使用了多线程技术。（我在后面会进行专门讲解。）
+Tomcat 和 Jetty 作为一个 HTTP 服务器，在这个过程中都做了些什么事情呢？
+
+主要是接受连接、解析请求数据、处理请求和发送响应。实际情况可能会有成千上万的浏览器同时请求同一个 HTTP 服务器，为了提高服务能力和并发度，Tomcat 使用了多线程技术。（我在后面会进行专门讲解。）
 
 **HTTP 请求响应实例**
 
-那 HTTP 协议的数据包具体长什么样呢？
+那 HTTP 协议的数据包具体长什么样呢？以极客时间的登录请求为例，用户在登陆页面输入用户名和密码，点击登陆后，浏览器发出了这样的 HTTP 请求：
 
 ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091117.png)
 
-HTTP 请求数据由三部分组成，分别是**请求行、请求报头、请求正文**。
+可以看到，HTTP 请求数据由三部分组成，分别是**请求行、请求报头、请求正文**。
 
 当这个 HTTP 请求数据到达 Tomcat 后，Tomcat 会把 HTTP 请求数据字节流解析成一个 Request 对象，这个 Request 对象封装了 HTTP 所有的请求信息。接着 Tomcat 把这个 Request 对象交给 Web 应用去处理，处理完后得到一个 Response 对象，Tomcat 会把这个 Response 对象转成 HTTP 格式的响应数据并发送给浏览器。
 
@@ -118,10 +119,9 @@ HTTP 的响应也是由三部分组成，分别是**状态行、响应报头、�
 
 **Cookie 和 Session**
 
-HTTP 协议有个特点是无状态，请求与请求之间是没有关系的。那 Tomcat 是怎么鉴别多个请求是来自同一个用户的呢？
+HTTP 协议有个特点是无状态，请求与请求之间是没有关系的。那 Tomcat 是怎么鉴别多个请求是来自同一个用户的呢？于是 Cookie 技术出现了。
 
 - Cookie 技术
-
 
 Cookie 是 HTTP 报文的一个请求头，Web 应用可以将用户的标识信息或者其他一些信息（用户名等）存储在 Cookie 中。用户经过验证之后，每次 HTTP 请求报文中都包含 Cookie，这样服务器读取这个 Cookie 请求头就知道用户是谁了。
 
@@ -155,15 +155,23 @@ Tomcat 的 Session 管理器提供了多种持久化方案来存储 Session，�
 
 **Servlet 规范**
 
-面向接口编程是解决耦合问题的法宝，各种业务类都必须实现这个接口，这个接口就叫 Servlet 接口。Servlet 容器用来加载和管理业务类，当接收到一个 HTTP 请求时，Servlet 容器会将请求转发到具体的 Servlet，如果这个 Servlet 还没创建，就加载并实例化这个 Servlet，然后调用这个 Servlet 的接口方法。
+那该怎么解决这个问题呢？我们知道，面向接口编程是解决耦合问题的法宝，各种业务类都必须实现这个接口，这个接口就叫 Servlet 接口。
+
+HTTP 服务器如何知道由哪个 Servlet 来处理呢？Servlet 又是由谁来实例化呢？
+
+Servlet 容器用来加载和管理业务类，当接收到一个 HTTP 请求时，Servlet 容器会将请求转发到具体的 Servlet，如果这个 Servlet 还没创建，就加载并实例化这个 Servlet，然后调用这个 Servlet 的接口方法。
 
 下面我们通过一张图来加深理解。
 
 ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091131.jpg)
 
-Servlet 接口和 Servlet 容器这一整套规范叫作 Servlet 规范。
+图的左边表示 HTTP 服务器直接调用具体业务类，它们是紧耦合的。再看图的右边，HTTP 服务器不直接调用业务类，而是把请求交给容器来处理，容器通过 Servlet 接口调用业务类。因此 Servlet 接口和 Servlet 容器的出现，达到了 HTTP 服务器与业务类解耦的目的。
+
+==Servlet 接口和 Servlet 容器这一整套规范叫作 Servlet 规范。==
 
 Tomcat 和 Jetty 都按照 Servlet 规范的要求实现了 Servlet 容器，同时它们也具有 HTTP 服务器的功能。作为 Java 程序员，如果我们要实现新的业务功能，只需要实现一个 Servlet，并把它注册到 Tomcat（Servlet 容器）中，剩下的事情就由 Tomcat 帮我们处理了。
+
+接下来我们来看看 Servlet 接口具体是怎么定义的，以及 Servlet 规范又有哪些要重点关注的地方呢？
 
 **Servlet 接口**
 
@@ -185,25 +193,27 @@ public interface Servlet {
 
 - service()
 
-   service 方法实现具体业务处理逻辑。ServletRequest 用来封装请求信息，ServletResponse 用来封装响应信息。
 
-  HTTP 协议中的请求和响应就是对应了 HttpServletRequest 和 HttpServletResponse 这两个类。可以通过 HttpServletRequest 来获取所有请求相关的信息，包括请求路径、Cookie、HTTP 头、请求参数等，还可以通过 HttpServletRequest 来创建和获取 Session。
+其中最重要是的 service 方法，具体业务类在这个方法里实现处理逻辑。这个方法有两个参数：ServletRequest 和 ServletResponse。ServletRequest 用来封装请求信息，ServletResponse 用来封装响应信息。
 
-  HttpServletResponse 是用来封装 HTTP 响应的。
+HTTP 协议中的请求和响应就是对应了 HttpServletRequest 和 HttpServletResponse 这两个类。可以通过 HttpServletRequest 来获取所有请求相关的信息，包括请求路径、Cookie、HTTP 头、请求参数等，还可以通过 HttpServletRequest 来创建和获取 Session。HttpServletResponse 是用来封装 HTTP 响应的。
 
 - init()
 
-  Servlet 容器在加载 Servlet 类的时候会调用 init 方法。比如 Spring MVC 中的 DispatcherServlet，就是在 init 方法里创建了自己的 Spring 容器。
+
+Servlet 容器在加载 Servlet 类的时候会调用 init 方法。比如 Spring MVC 中的 DispatcherServlet，就是在 init 方法里创建了自己的 Spring 容器。
 
 - destroy()
 
-  Servlet 容器在卸载 Servlet 类的时候会调用 destroy 方法，释放一些资源。
+
+Servlet 容器在卸载 Servlet 类的时候会调用 destroy 方法，释放一些资源。
 
 - getServletConfig()
 
-  ServletConfig 的作用就是封装 Servlet 的初始化参数。你可以在 web.xml 给 Servlet 配置参数，并在程序里通过 getServletConfig 方法拿到这些参数。
 
-Servlet 规范提供了 GenericServlet 抽象类，我们可以通过扩展它来实现 Servlet。虽然 Servlet 规范并不在乎通信协议是什么，但是大多数的 Servlet 都是在 HTTP 环境中处理的，因此 Servet 规范还提供了 HttpServlet 来继承 GenericServlet，并且加入了 HTTP 特性。这样我们通过继承 HttpServlet 类来实现自己的 Servlet，只需要重写两个方法：doGet 和 doPost。
+ServletConfig 的作用就是封装 Servlet 的初始化参数。你可以在 web.xml 给 Servlet 配置参数，并在程序里通过 getServletConfig 方法拿到这些参数。
+
+我们知道，有接口一般就有抽象类，抽象类用来实现接口和封装通用的逻辑，因此 Servlet 规范提供了 GenericServlet 抽象类，我们可以通过扩展它来实现 Servlet。虽然 Servlet 规范并不在乎通信协议是什么，但是大多数的 Servlet 都是在 HTTP 环境中处理的，因此 Servet 规范还提供了 HttpServlet 来继承 GenericServlet，并且加入了 HTTP 特性。这样我们通过继承 HttpServlet 类来实现自己的 Servlet，只需要重写两个方法：doGet 和 doPost。
 
 **Servlet 容器**
 
@@ -211,39 +221,44 @@ Servlet 规范提供了 GenericServlet 抽象类，我们可以通过扩展它�
 
 - 工作流程
 
-  当客户请求某个资源时，HTTP 服务器会用一个 ServletRequest 对象把客户的请求信息封装起来，然后调用 Servlet 容器的 service 方法，Servlet 容器拿到请求后，根据请求的 URL 和 Servlet 的映射关系，找到相应的 Servlet，如果 Servlet 还没有被加载，就用反射机制创建这个 Servlet，并调用 Servlet 的 init 方法来完成初始化，接着调用 Servlet 的 service 方法来处理请求，把 ServletResponse 对象返回给 HTTP 服务器，HTTP 服务器会把响应发送给客户端。
 
-  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091138.jpg" style="zoom: 67%;" />
+当客户请求某个资源时，HTTP 服务器会用一个 ServletRequest 对象把客户的请求信息封装起来，然后调用 Servlet 容器的 service 方法，Servlet 容器拿到请求后，根据请求的 URL 和 Servlet 的映射关系，找到相应的 Servlet，如果 Servlet 还没有被加载，就用反射机制创建这个 Servlet，并调用 Servlet 的 init 方法来完成初始化，接着调用 Servlet 的 service 方法来处理请求，把 ServletResponse 对象返回给 HTTP 服务器，HTTP 服务器会把响应发送给客户端。
+
+同样我通过一张图来帮助你理解。
+
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091138.jpg" style="zoom: 67%;" />
 
 - Web应用
 
-  Servlet 容器会实例化和调用 Servlet，那 Servlet 是怎么注册到 Servlet 容器中的呢？
 
-  根据 Servlet 规范，Web 应用程序有一定的目录结构，在这个目录下分别放置了 Servlet 的类文件、配置文件以及静态资源，Servlet 容器通过读取配置文件，就能找到并加载 Servlet。
+Servlet 容器会实例化和调用 Servlet，那 Servlet 是怎么注册到 Servlet 容器中的呢？
 
-  Web 应用的目录结构大概是下面这样的：
+根据 Servlet 规范，Web 应用程序有一定的目录结构，在这个目录下分别放置了 Servlet 的类文件、配置文件以及静态资源，Servlet 容器通过读取配置文件，就能找到并加载 Servlet。
 
-  ```text
-  | -  MyWebApp
-        | -  WEB-INF/web.xml        -- 配置文件，用来配置 Servlet 等
-        | -  WEB-INF/lib/           -- 存放 Web 应用所需各种 JAR 包
-        | -  WEB-INF/classes/       -- 存放你的应用类，比如 Servlet 类
-        | -  META-INF/              -- 目录存放工程的一些信息
-  ```
+Web 应用的目录结构大概是下面这样的：
 
-  Servlet 规范里定义了 **ServletContext** 这个接口来对应一个 Web 应用。
+```text
+| -  MyWebApp
+      | -  WEB-INF/web.xml        -- 配置文件，用来配置 Servlet 等
+      | -  WEB-INF/lib/           -- 存放 Web 应用所需各种 JAR 包
+      | -  WEB-INF/classes/       -- 存放你的应用类，比如 Servlet 类
+      | -  META-INF/              -- 目录存放工程的一些信息
+```
 
-  Servlet 容器在启动时会加载 Web 应用，并为每个 Web 应用创建唯一的 ServletContext 对象。一个 Web 应用可能有多个 Servlet，这些 Servlet 可以通过全局的 ServletContext 来共享数据，这些数据包括 Web 应用的初始化参数、Web 应用目录下的文件资源等。由于 ServletContext 持有所有 Servlet 实例，你还可以通过它来实现 Servlet 请求的转发。
+Servlet 规范里定义了 **ServletContext** 这个接口来对应一个 Web 应用。
+
+Servlet 容器在启动时会加载 Web 应用，并为每个 Web 应用创建唯一的 ServletContext 对象。一个 Web 应用可能有多个 Servlet，这些 Servlet 可以通过全局的 ServletContext 来共享数据，这些数据包括 Web 应用的初始化参数、Web 应用目录下的文件资源等。由于 ServletContext 持有所有 Servlet 实例，你还可以通过它来实现 Servlet 请求的转发。
 
 - 扩展机制
 
-  引入了 Servlet 规范后，你不需要关心 Socket 网络通信、不需要关心 HTTP 协议，也不需要关心你的业务类是如何被实例化和调用的，因为这些都被 Servlet 规范标准化了，你只要关心怎么实现的你的业务逻辑。
 
-  考虑到可扩展性。Servlet 规范提供了两种扩展机制：**Filter** 和 **Listener**。
+引入了 Servlet 规范后，你不需要关心 Socket 网络通信、不需要关心 HTTP 协议，也不需要关心你的业务类是如何被实例化和调用的，因为这些都被 Servlet 规范标准化了，你只要关心怎么实现的你的业务逻辑。
 
-  **Filter**是过滤器，这个接口允许你对请求和响应做一些统一的定制化处理，比如你可以根据请求的频率来限制访问，或者根据国家地区的不同来修改响应内容。过滤器的工作原理是这样的：Web 应用部署完成后，Servlet 容器需要实例化 Filter 并把 Filter 链接成一个 FilterChain。当请求进来时，获取第一个 Filter 并调用 doFilter 方法，doFilter 方法负责调用这个 FilterChain 中的下一个 Filter。
+考虑到可扩展性。Servlet 规范提供了两种扩展机制：**Filter** 和 **Listener**。
 
-  **Listener**是监听器，这是另一种扩展机制。当 Web 应用在 Servlet 容器中运行时，Servlet 容器内部会不断的发生各种事件，如 Web 应用的启动和停止、用户请求到达等。 Servlet 容器提供了一些默认的监听器来监听这些事件，当事件发生时，Servlet 容器会负责调用监听器的方法。当然，你可以定义自己的监听器去监听你感兴趣的事件，将监听器配置在 web.xml 中。比如 Spring 就实现了自己的监听器，来监听 ServletContext 的启动事件，目的是当 Servlet 容器启动时，创建并初始化全局的 Spring 容器。
+**Filter** 是过滤器，这个接口允许你对请求和响应做一些统一的定制化处理，比如你可以根据请求的频率来限制访问，或者根据国家地区的不同来修改响应内容。过滤器的工作原理是这样的：Web 应用部署完成后，Servlet 容器需要实例化 Filter 并把 Filter 链接成一个 FilterChain。当请求进来时，获取第一个 Filter 并调用 doFilter 方法，doFilter 方法负责调用这个 FilterChain 中的下一个 Filter。
+
+**Listener** 是监听器，这是另一种扩展机制。当 Web 应用在 Servlet 容器中运行时，Servlet 容器内部会不断的发生各种事件，如 Web 应用的启动和停止、用户请求到达等。 Servlet 容器提供了一些默认的监听器来监听这些事件，当事件发生时，Servlet 容器会负责调用监听器的方法。当然，你可以定义自己的监听器去监听你感兴趣的事件，将监听器配置在 web.xml 中。比如 Spring 就实现了自己的监听器，来监听 ServletContext 的启动事件，目的是当 Servlet 容器启动时，创建并初始化全局的 Spring 容器。
 
 到这里相信你对 Servlet 容器的工作原理有了深入的了解。
 
