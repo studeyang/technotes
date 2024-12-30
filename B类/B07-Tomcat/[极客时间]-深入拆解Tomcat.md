@@ -266,13 +266,179 @@ Servlet 容器在启动时会加载 Web 应用，并为每个 Web 应用创建�
 
 Servlet 容器与 Spring 容器有什么关系？
 
-# 04 | 实战：纯手工打造Servlet和Tomcat
+# 04 | 实战：纯手工打造和运行一个Servlet
+
+> 简化版的 tomcat 可参考：https://github.com/feifa168/mytomcat
+
+作为 Java 程序员，我们可能已经习惯了使用 IDE 和 Web 框架进行开发，IDE 帮我们做了编译、打包的工作，而 Spring 框架在背后帮我们实现了 Servlet 接口，并把 Servlet 注册到了 Web 容器。
+
+今天我们就抛弃 IDE、拒绝框架，自己纯手工编写一个 Servlet，并在 Tomcat 中运行起来。
 
 **用配置文件部署 Servlet**
 
+1. 下载并安装 Tomcat
+2. 编写一个继承 HttpServlet 的 Java 类
+
+我在专栏上一期提到，javax.servlet 包提供了实现 Servlet 接口的 GenericServlet 抽象类。但是大多数的 Servlet 都在 HTTP 环境中处理请求，因此 Servet 规范还提供了 HttpServlet 来扩展 GenericServlet 并且加入了 HTTP 特性。我们通过继承 HttpServlet 类来实现自己的 Servlet 只需要重写两个方法：doGet 和 doPost。
+
+```java
+import java.io.IOException;
+import java.io.PrintWriter;
+ 
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+ 
+ 
+public class MyServlet extends HttpServlet {
+ 
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+ 
+        System.out.println("MyServlet 在处理 get（）请求...");
+        PrintWriter out = response.getWriter();
+        response.setContentType("text/html;charset=utf-8");
+        out.println("<strong>My Servlet!</strong><br>");
+    }
+ 
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+ 
+        System.out.println("MyServlet 在处理 post（）请求...");
+        PrintWriter out = response.getWriter();
+        response.setContentType("text/html;charset=utf-8");
+        out.println("<strong>My Servlet!</strong><br>");
+    }
+ 
+}
+```
+
+3. 将 Java 文件编译成 Class 文件
+
+你需要把 Tomcat lib 目录下的 servlet-api.jar 拷贝到当前目录下，这是因为 servlet-api.jar 中定义了 Servlet 接口，编译 Servlet 类需要这个 JAR 包。接着我们执行编译命令：
+
+```shell
+javac -cp ./servlet-api.jar MyServlet.java
+```
+
+4. 建立 Web 应用的目录结构
+
+我们在上一期学到，Servlet 是放到 Web 应用里部署到 Tomcat 的，而 Web 应用具有一定的目录结构，所有我们按照要求建立 Web 应用文件夹，名字叫 MyWebApp，然后在这个目录下建立子文件夹，像下面这样：
+
+```
+MyWebApp/WEB-INF/web.xml
+MyWebApp/WEB-INF/classes/MyServlet.class
+```
+
+然后在 web.xml 中配置 Servlet，内容如下：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
+  http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+  version="4.0"
+  metadata-complete="true">
+ 
+    <description> Servlet Example. </description>
+    <display-name> MyServlet Example </display-name>
+    <request-character-encoding>UTF-8</request-character-encoding>
+ 
+    <servlet>
+      <servlet-name>myServlet</servlet-name>
+      <servlet-class>MyServlet</servlet-class>
+    </servlet>
+ 
+    <servlet-mapping>
+      <servlet-name>myServlet</servlet-name>
+      <url-pattern>/myservlet</url-pattern>
+    </servlet-mapping>
+ 
+</web-app>
+```
+
+请注意，servlet 和 servlet-mapping 这两个标签里的 servlet-name 要保持一致。
+
+5. 部署 Web 应用
+
+Tomcat 应用的部署非常简单，将这个目录 MyWebApp 拷贝到 Tomcat 的安装目录下的 webapps 目录即可。
+
+6. 启动 Tomcat
+7. 浏览访问验证结果
+
+在浏览器里访问这个 URL：`http://localhost:8080/MyWebApp/myservlet`，你会看到：
+
+```
+My Servlet!
+```
+
+这里需要注意，访问 URL 路径中的 MyWebApp 是 Web 应用的名字，myservlet 是在 web.xml 里配置的 Servlet 的路径。
+
+8. 查看 Tomcat 日志
+
+打开 Tomcat 安装目录下的 logs 目录。Tomcat 的日志信息分为两类 ：一是运行日志，它主要记录运行过程中的一些信息，尤其是一些异常错误日志信息 ；二是访问日志，它记录访问的时间、IP 地址、访问的路径等相关信息。
+
+这里简要介绍各个文件的含义。
+
+- `catalina.***.log`: 主要是记录 Tomcat 启动过程的信息，在这个文件可以看到启动的 JVM 参数以及操作系统等日志信息。
+- `catalina.out`: 记录 Tomcat 的标准输出（stdout）和标准错误（stderr），这是在 Tomcat 的启动脚本里指定的。
+- `localhost.**.log`: 主要记录 Web 应用在初始化过程中遇到的未处理的异常，会被 Tomcat 捕获而输出这个日志文件。
+- `localhost_access_log.**.txt`: 存放访问 Tomcat 的请求日志，包括 IP 地址以及请求的路径、时间、请求协议以及状态码等信息。
+- `manager.***.log/host-manager.***.log`: 存放 Tomcat 自带的 manager 项目的日志信息。
+
 **用注解的方式部署 Servlet**
 
-参考：https://github.com/feifa168/mytomcat
+Servlet 3.0 规范支持用注解的方式来部署 Servlet，不需要在 web.xml 里配置。我们首先修改 Java 代码，给 Servlet 类加上 @WebServlet 注解，修改后的代码如下。
+
+```java
+import java.io.IOException;
+import java.io.PrintWriter;
+ 
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+ 
+@WebServlet("/myAnnotationServlet")
+public class AnnotationServlet extends HttpServlet {
+ 
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        System.out.println("AnnotationServlet 在处理 get（）请求...");
+        PrintWriter out = response.getWriter();
+        response.setContentType("text/html; charset=utf-8");
+        out.println("<strong>Annotation Servlet!</strong><br>");
+    }
+ 
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        System.out.println("AnnotationServlet 在处理 post（）请求...");
+        PrintWriter out = response.getWriter();
+        response.setContentType("text/html; charset=utf-8");
+        out.println("<strong>Annotation Servlet!</strong><br>");
+    }
+
+}
+```
+
+创建好 Java 类以后，同样经过编译，并放到 MyWebApp 的 class 目录下，然后重启 Tomcat。
+
+> 这里要注意的是，你需要删除原来的 web.xml，因为我们不需要 web.xml 来配置 Servlet 了。
+
+接下来我们验证一下这个新的 AnnotationServlet 有没有部署成功。在浏览器里输入：`http://localhost:8080/MyWebApp/myAnnotationServlet`，得到结果：
+
+```
+Annotation Servlet!
+```
+
+这说明我们的 AnnotationServlet 部署成功了。可以通过注解完成 web.xml 所有的配置功能，包括 Servlet 初始化参数以及配置 Filter 和 Listener 等。
 
 ------
 
