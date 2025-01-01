@@ -569,6 +569,8 @@ Processor 是一个接口，定义了请求的处理等方法。它的抽象实�
 
 # 06 | Tomcat系统架构（下）：聊聊多层容器的设计
 
+专栏上一期我们学完了连接器的设计，今天我们一起来看一下 Tomcat 的容器设计。
+
 容器，顾名思义就是用来装载东西的器具，在 Tomcat 里，容器就是用来装载 Servlet 的。那 Tomcat 的 Servlet 容器是如何设计的呢？
 
 **容器的层次结构**
@@ -579,17 +581,17 @@ Tomcat 设计了 4 种容器，分别是 Engine、Host、Context 和 Wrapper。�
 
 为什么要设计这么多层次的容器呢？
 
-Context 表示一个 Web 应用程序；Wrapper 表示一个 Servlet；Host 代表的是一个虚拟主机，或者说一个站点；Engine 表示引擎，用来管理多个虚拟站点；一个 Service 最多只能有一个 Engine。
+Tomcat 通过一种分层的架构，使得 Servlet 容器具有很好的灵活性。Context 表示一个 Web 应用程序；Wrapper 表示一个 Servlet；Host 代表的是一个虚拟主机，或者说一个站点；Engine 表示引擎，用来管理多个虚拟站点；一个 Service 最多只能有一个 Engine。
 
 你可以再通过 Tomcat 的 server.xml 配置文件来加深对 Tomcat 容器的理解。
 
 ```xml
-<server>            <!-- 顶层组件，可以包括多个service -->
-  <service>         <!-- 顶层组件，可包含一个engine，多个连接器 -->
-    <connector>     <!-- 连接器组件，代表通信接口 -->
+<server>           <!-- 顶层组件，可以包括多个service -->
+  <service>        <!-- 顶层组件，可包含一个engine，多个连接器 -->
+    <connector>    <!-- 连接器组件，代表通信接口 -->
     </connector>    
-    <engine>        <!-- 容器组件，一个Engine组件处理Service中的所有请求，包含多个Host -->
-      <host>        <!-- 容器组件，处理特定的Host下客户请求，可包含多个Context -->
+    <engine>       <!-- 容器组件，一个Engine组件处理Service中的所有请求，包含多个Host -->
+      <host>       <!-- 容器组件，处理特定的Host下客户请求，可包含多个Context -->
         <context>  <!-- 容器组件，为特定的Web应用处理所有的客户请求 -->
         </context>
       </host>
@@ -628,27 +630,33 @@ public interface Container extends Lifecycle {
 }
 ```
 
-LifeCycle 接口用来统一管理各组件的生命周期。
+正如我们期望的那样，我们在上面的接口看到了 getParent、setParent、addChild 和 removeChild 等方法。你可能还注意到 Container 接口扩展了 LifeCycle 接口，LifeCycle 接口用来统一管理各组件的生命周期，后面我也用专门的篇幅去详细介绍。
 
 **请求定位 Servlet 的过程**
 
 设计了这么多层次的容器，Tomcat 是怎么确定请求是由哪个 Wrapper 容器里的 Servlet 来处理的呢？
 
-Tomcat 是用 Mapper 组件来完成这个任务的。Mapper 组件的功能就是将用户请求的 URL 定位到一个 Servlet，它的工作原理是：Mapper 组件里保存了 Web 应用的配置信息，其实就是**容器组件与访问路径的映射关系**，比如 Host 容器里配置的域名、Context 容器里的 Web 应用路径，以及 Wrapper 容器里 Servlet 映射的路径，你可以想象这些配置信息就是一个多层次的 Map。
+答案是，Tomcat 是用 Mapper 组件来完成这个任务的。Mapper 组件的功能就是将用户请求的 URL 定位到一个 Servlet，它的工作原理是：Mapper 组件里保存了 Web 应用的配置信息，其实就是容器组件与访问路径的映射关系，比如 Host 容器里配置的域名、Context 容器里的 Web 应用路径，以及 Wrapper 容器里 Servlet 映射的路径，你可以想象这些配置信息就是一个多层次的 Map。
 
 当一个请求到来时，Mapper 组件通过解析请求 URL 里的域名和路径，再到自己保存的 Map 里去查找，就能定位到一个 Servlet。
 
+> 【旁白】请你注意，一个请求 URL 最后只会定位到一个 Wrapper 容器，也就是一个 Servlet。
+
 接下来我通过一个例子来解释这个定位的过程。
+
+> 定位的过程
 
 假如有一个网购系统，有面向网站管理人员的后台管理系统，还有面向终端客户的在线购物系统。这两个系统跑在同一个 Tomcat 上，为了隔离它们的访问域名，配置了两个虚拟域名：`manage.shopping.com`和`user.shopping.com`。网站管理人员可以管理用户和商品；终端客户可以搜索商品和下订单，搜索功能和订单管理也是两个独立的 Web 应用。如下图所示。
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091213.jpg" style="zoom: 50%;" />
 
+> 【思考】通过域名访问这块的实现原理是什么？猜测 Tomcat 会修改本地 Host 文件。
+
 假如有用户访问一个 URL，比如图中的`http://user.shopping.com:8080/order/buy`，Tomcat 如何将这个 URL 定位到一个 Servlet 呢？
 
 - 首先，根据协议和端口号选定 Service 和 Engine。
 
-  我们知道 Tomcat 的每个连接器都监听不同的端口，比如 Tomcat 默认的 HTTP 连接器监听 8080 端口、默认的 AJP 连接器监听 8009 端口。一个连接器是属于一个 Service 组件的，这样 Service 组件就确定了。我们还知道一个 Service 组件里除了有多个连接器，还有一个容器组件，具体来说就是一个 Engine 容器，因此 Service 确定了也就意味着 Engine 也确定了。
+  我们知道 Tomcat 的每个连接器都监听不同的端口，比如 Tomcat 默认的 HTTP 连接器监听 8080 端口、默认的 AJP 连接器监听 8009 端口。我们还知道一个 Service 组件里除了有多个连接器，还有一个容器组件，具体来说就是一个 Engine 容器，因此 Service 确定了也就意味着 Engine 也确定了。
 
 - 然后，根据域名选定 Host。
 
@@ -664,7 +672,7 @@ Tomcat 是用 Mapper 组件来完成这个任务的。Mapper 组件的功能就�
 
 并不是说只有 Servlet 才会去处理请求，实际上这个查找路径上的父子容器都会对请求做一些处理。我在上一期说过，连接器中的 Adapter 会调用容器的 Service 方法来执行 Servlet，最先拿到请求的是 Engine 容器，Engine 容器对请求做一些处理后，会把请求传给自己子容器 Host 继续处理，依次类推，最后这个请求会传给 Wrapper 容器，Wrapper 会调用最终的 Servlet 来处理。那么这个调用过程具体是怎么实现的呢？答案是使用 Pipeline-Valve 管道。
 
-**Pipeline-Valve 管道**
+> Pipeline-Valve 管道
 
 Pipeline-Valve 是责任链模式，责任链模式是指在一个请求处理的过程中有很多处理者依次对请求进行处理，每个处理者负责做自己相应的处理，处理完之后将再调用下一个处理者继续处理。
 
@@ -678,7 +686,7 @@ public interface Valve {
 }
 ```
 
-invoke 方法就是来处理请求的。
+Valve 是一个处理点，invoke 方法就是来处理请求的。注意到 Valve 中有 getNext 和 setNext 方法，因此我们大概可以猜到有一个链表将 Valve 链起来了。请你继续看 Pipeline 接口：
 
 ```java
 public interface Pipeline extends Contained {
@@ -689,13 +697,11 @@ public interface Pipeline extends Contained {
 }
 ```
 
-Pipeline 中维护了 Valve 链表，Valve 可以插入到 Pipeline 中，对请求做某些处理。
+Pipeline 中维护了 Valve 链表，Valve 可以插入到 Pipeline 中，对请求做某些处理。我们还发现 Pipeline 中没有 invoke 方法，因为整个调用链的触发是 Valve 来完成的，Valve 完成自己的处理后，调用 getNext.invoke() 来触发下一个 Valve 调用。
 
-每一个容器都有一个 Pipeline 对象，只要触发这个 Pipeline 的第一个 Valve，这个容器里 Pipeline 中的 Valve 就都会被调用到。
+每一个容器都有一个 Pipeline 对象，只要触发这个 Pipeline 的第一个 Valve，这个容器里 Pipeline 中的所有 Valve 就都会被调用到。但是，不同容器的 Pipeline 是怎么链式触发的呢？
 
-但是，不同容器的 Pipeline 是怎么链式触发的呢？
-
- Pipeline 中还有个 getBasic 方法。这个 BasicValve 处于 Valve 链表的末端，负责调用下层容器的 Pipeline 里的第一个 Valve。
+Pipeline 中还有个 getBasic 方法。这个 BasicValve 处于 Valve 链表的末端，负责调用下层容器的 Pipeline 里的第一个 Valve。
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091220.jpg" style="zoom:50%;" />
 
@@ -712,24 +718,25 @@ connector.getService()
 
 Wrapper 容器的最后一个 Valve 会创建一个 Filter 链，并调用 doFilter() 方法，最终会调到 Servlet 的 service 方法。
 
-**Valve 与 Filter**
+> Valve 与 Filter
+>
 
 Valve 和 Filter 有什么区别吗？
 
-- Valve 是 Tomcat 的私有机制，与 Tomcat 的基础架构 /API 是紧耦合的。Servlet API 是公有的标准，所有的 Web 容器包括 Jetty 都支持 Filter 机制。
+- Valve 是 Tomcat 的私有机制，与 Tomcat 的基础架构 / API 是紧耦合的。Filter 是公有的标准，属于 Servlet API 规范里的，所有的 Web 容器包括 Jetty 都支持 Filter 机制。
 - Valve 工作在 Web 容器级别，拦截所有应用的请求；而 Servlet Filter 工作在应用级别，只能拦截某个 Web 应用的所有请求。如果想做整个 Web 容器的拦截器，必须通过 Valve 来实现。
 
 **课后思考**
 
 Tomcat 内的 Context 组件跟 Servlet 规范中的 ServletContext 接口有什么区别？跟 Spring 中的 ApplicationContext 又有什么关系？
 
-答：1）Servlet规范中ServletContext表示web应用的上下文环境，而web应用对应tomcat的概念是Context，所以从设计上，ServletContext自然会成为tomcat的Context具体实现的一个成员变量。
+答：1）Servlet 规范中 ServletContext 表示 web 应用的上下文环境，而 web 应用对应 tomcat 的概念是 Context，所以从设计上，ServletContext 自然会成为 tomcat 的 Context 具体实现的一个成员变量。
 
-2）tomcat内部实现也是这样完成的，ServletContext对应tomcat实现是org.apache.catalina.core.ApplicationContext，Context容器对应tomcat实现是org.apache.catalina.core.StandardContext。ApplicationContext是StandardContext的一个成员变量。
+2）tomcat 内部实现也是这样完成的，ServletContext 对应 tomcat 实现是`org.apache.catalina.core.ApplicationContext`，Context 容器对应 tomcat 实现是`org.apache.catalina.core.StandardContext`。ApplicationContext 是 StandardContext 的一个成员变量。
 
-3）Spring的ApplicationContext之前已经介绍过，tomcat启动过程中ContextLoaderListener会监听到容器初始化事件，它的contextInitialized方法中，Spring会初始化全局的Spring根容器ApplicationContext，初始化完毕后，Spring将其存储到ServletContext中。
+3）Spring 的 ApplicationContext 之前已经介绍过，tomcat 启动过程中 ContextLoaderListener 会监听到容器初始化事件，它的 contextInitialized 方法中，Spring 会初始化全局的 Spring 根容器 ApplicationContext，初始化完毕后，Spring 将其存储到 ServletContext 中。
 
-总而言之，Servlet规范中ServletContext是tomcat的Context实现的一个成员变量，而Spring的ApplicationContext是Servlet规范中ServletContext的一个属性。
+总而言之，Servlet 规范中 ServletContext 是 tomcat 的 Context 实现的一个成员变量，而 Spring 的 ApplicationContext 是 Servlet 规范中 ServletContext 的一个属性。
 
 # 07 | Tomcat如何实现一键式启停？
 
