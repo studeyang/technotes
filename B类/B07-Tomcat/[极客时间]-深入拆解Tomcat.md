@@ -740,17 +740,27 @@ Tomcat 内的 Context 组件跟 Servlet 规范中的 ServletContext 接口有什
 
 # 07 | Tomcat如何实现一键式启停？
 
-我们通过一张简化的类图来回顾一下 Tomcat 的组件。
-
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091228.png)
+通过前面的学习，相信你对 Tomcat 的架构已经有所了解，知道了 Tomcat 都有哪些组件，组件之间是什么样的关系，以及 Tomcat 是怎么处理一个 HTTP 请求的。下面我们通过一张简化的类图来回顾一下 Tomcat 的组件层次关系。
 
 图中的虚线表示一个请求在 Tomcat 中流转的过程。
 
+![image-20250104212945074](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202501042129325.png)
+
+这张图描述了组件之间的静态关系，如果想让一个系统能够对外提供服务，我们需要创建、组装并启动这些组件；在服务停止的时候，我们还需要释放资源，销毁这些组件，因此这是一个动态的过程。也就是说，Tomcat 需要动态地管理这些组件的生命周期。
+
+**组件之间的关系**
+
 在我们实际的工作中，如果你需要设计一个比较大的系统或者框架时，你同样也需要考虑这几个问题：如何统一管理组件的创建、初始化、启动、停止和销毁？如何做到代码逻辑清晰？如何方便地添加或者删除组件？如何做到组件启动和停止不遗漏、不重复？
 
-先来看看组件之间的关系：组件有大有小，大组件管理小组件；组件有外有内，外层组件控制内层组件；
+今天我们就来解决上面的问题，在这之前，先来看看组件之间的关系，它们具有两层关系。
 
-因此在创建组件时应该遵循一定的顺序：先创建子组件，再创建父组件，子组件需要被“注入”到父组件中；先创建内层组件，再创建外层组件，内层组建需要被“注入”到外层组件。
+- 第一层关系是组件有大有小，大组件管理小组件，比如 Server 管理 Service，Service 又管理连接器和容器。
+- 第二层关系是组件有外有内，外层组件控制内层组件，比如连接器是外层组件，负责对外交流，外层组件调用内层组件完成业务功能。也就是说，请求的处理过程是由外层组件来驱动的。
+
+这两层关系决定了系统在创建组件时应该遵循一定的顺序。
+
+- 第一个原则是先创建子组件，再创建父组件，子组件需要被“注入”到父组件中。
+- 第二个原则是先创建内层组件，再创建外层组件，内层组建需要被“注入”到外层组件。
 
 因此，最直观的做法就是将图上所有的组件按照先小后大、先内后外的顺序创建出来，然后组装在一起。不知道你注意到没有，这个思路其实很有问题！因为这样不仅会造成代码逻辑混乱和组件遗漏，而且也不利于后期的功能扩展。
 
@@ -760,11 +770,7 @@ Tomcat 内的 Context 组件跟 Servlet 规范中的 ServletContext 接口有什
 
 设计就是要找到系统的变化点和不变点。这里的不变点就是每个组件都要经历创建、初始化、启动这几个过程，这些状态以及状态的转化是不变的。而变化点是每个具体组件的初始化方法，也就是启动方法是不一样的。
 
-因此，我们把不变点抽象出来成为一个接口，这个接口跟生命周期有关，叫作 LifeCycle。
-
-在父组件的 init() 方法里需要创建子组件并调用子组件的 init() 方法。同样，在父组件的 start() 方法里也需要调用子组件的 start() 方法，因此调用者可以无差别的调用各组件的 init() 方法和 start() 方法，这就是**组合模式**的使用，并且只要调用最顶层组件，也就是 Server 组件的 init() 和 start() 方法，整个 Tomcat 就被启动起来了。
-
-下面是 LifeCycle 接口的定义。
+因此，我们把不变点抽象出来成为一个接口，这个接口跟生命周期有关，叫作 LifeCycle。下面是 LifeCycle 接口的定义。
 
 ```java
 public interface Lifecycle {
@@ -775,9 +781,13 @@ public interface Lifecycle {
 }
 ```
 
+在父组件的 init() 方法里需要创建子组件并调用子组件的 init() 方法。同样，在父组件的 start() 方法里也需要调用子组件的 start() 方法，因此调用者可以无差别的调用各组件的 init() 方法和 start() 方法，这就是**组合模式**的使用，并且只要调用最顶层组件，也就是 Server 组件的 init() 和 start() 方法，整个 Tomcat 就被启动起来了。
+
 **可扩展性：Lifesycle 事件**
 
 我们再来考虑另一个问题，那就是系统的可扩展性。因为各个组件 init() 和 start() 方法的具体实现是复杂多变的，比如在 Host 容器的启动方法里需要扫描 webapps 目录下的 Web 应用，创建相应的 Context 容器，如果将来需要增加新的逻辑，直接修改 start() 方法？这样会违反开闭原则，那如何解决这个问题呢？
+
+> 【旁白】开闭原则说的是为了扩展系统的功能，你不能直接修改系统中已有的类，但是你可以定义新的类。
 
 我们注意到，组件的 init() 和 start() 调用是由它的父组件的状态变化触发的，上层组件的初始化会触发子组件的初始化，上层组件的启动会触发子组件的启动，因此我们把组件的生命周期定义成一个个状态，把状态的转变看作是一个事件。而事件是有监听器的，在监听器里可以实现一些逻辑，并且监听器也可以方便的添加和删除，这就是典型的**观察者模式**。
 
@@ -789,18 +799,13 @@ public interface Lifecycle {
 
 **重用性：LifecycleBase 抽象基类**
 
-有了接口，我们就要用类去实现接口。为了避免重复代码，我们用基类来实现共同的逻辑。基类中会定义一些抽象方法，留给各个子类去实现。
+有了接口，我们就要用类去实现接口。一般来说实现类不止一个，不同的类在实现接口时往往会有一些相同的逻辑，为了避免重复代码，我们用基类来实现共同的逻辑。基类中会定义一些抽象方法，留给各个子类去实现。
 
 Tomcat 定义一个基类 LifecycleBase 来实现 Lifecycle 接口，把一些公共的逻辑放到基类中去，比如生命状态的转变与维护、生命事件的触发以及监听器的添加和删除等，而子类就负责实现自己的初始化、启动和停止等方法。
 
-```java
-public abstract class LifecycleBase implements Lifecycle {
-    abstract void initInternal();
-    abstract void startInternal();
-    abstract void stopInternal();
-    abstract void destroyInternal();
-}
-```
+为了避免跟基类中的方法同名，我们把具体子类的实现方法改个名字，在后面加上 Internal，叫 initInternal()、startInternal() 等。我们再来看引入了基类 LifeCycleBase 后的类图：
+
+![image-20250104223727746](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202501042237938.png)
 
 上面就是典型的**模板设计模式**。
 
@@ -818,7 +823,7 @@ public final synchronized void init() throws LifecycleException {
         //2. 触发 INITIALIZING 事件的监听器，调用监听器的业务方法
         setStateInternal(LifecycleState.INITIALIZING, null, false);
         
-        //3. 调用具体子类的初始化方法
+        //3. 调用具体子类的抽象方法实现
         initInternal();
         
         //4. 触发 INITIALIZED 事件的监听器，调用监听器的业务方法
@@ -829,13 +834,15 @@ public final synchronized void init() throws LifecycleException {
 }
 ```
 
-LifeCycleBase 负责触发事件，并调用监听器的方法，那是什么时候、谁把监听器注册进来的呢？
+LifeCycleBase 负责触发事件，并调用监听器的方法，那么是谁、什么时候把监听器注册进来的呢？
 
-Tomcat 自定义了一些监听器，这些监听器是父组件在创建子组件的过程中注册到子组件的。比如 MemoryLeakTrackingListener 监听器，用来检测 Context 容器中的内存泄漏，这个监听器是 Host 容器在创建 Context 容器时注册到 Context 中的。
+分为两种情况。第一，Tomcat 自定义了一些监听器，这些监听器是父组件在创建子组件的过程中注册到子组件的。比如 MemoryLeakTrackingListener 监听器，用来检测 Context 容器中的内存泄漏，这个监听器是 Host 容器在创建 Context 容器时注册到 Context 中的。
 
-我们还可以在 server.xml 中定义自己的监听器，Tomcat 在启动时会解析 server.xml，创建监听器并注册到容器组件。
+第二，我们还可以在 server.xml 中定义自己的监听器，Tomcat 在启动时会解析 server.xml，创建监听器并注册到容器组件。
 
 **生命周期管理总体类图**
+
+通过上面的学习，我相信你对 Tomcat 组件的生命周期的管理有了深入的理解，我们再来看一张总体类图继续加深印象。
 
 ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091239.png)
 
@@ -847,7 +854,7 @@ StandardEngine、StandardHost、StandardContext 和 StandardWrapper 是相应容
 
 从文中最后的类图上你会看到所有的容器组件都扩展了 ContainerBase，跟 LifeCycleBase 一样，ContainerBase 也是一个骨架抽象类，请你思考一下，各容器组件有哪些“共同的逻辑”需要 ContainerBase 由来实现呢？
 
-答：ContainerBase提供了针对Container接口的通用实现，所以最重要的职责包含两个:
+答：ContainerBase 提供了针对Container 接口的通用实现，所以最重要的职责包含两个:
 1) 维护容器通用的状态数据；
 2) 提供管理状态数据的通用方法；
 
