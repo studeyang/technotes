@@ -738,7 +738,9 @@ Tomcat 内的 Context 组件跟 Servlet 规范中的 ServletContext 接口有什
 
 总而言之，Servlet 规范中 ServletContext 是 tomcat 的 Context 实现的一个成员变量，而 Spring 的 ApplicationContext 是 Servlet 规范中 ServletContext 的一个属性。
 
-# 07 | Tomcat如何实现一键式启停？
+# 07 | Tomcat组件的生命周期
+
+> 原标题：Tomcat如何实现一键式启停？
 
 通过前面的学习，相信你对 Tomcat 的架构已经有所了解，知道了 Tomcat 都有哪些组件，组件之间是什么样的关系，以及 Tomcat 是怎么处理一个 HTTP 请求的。下面我们通过一张简化的类图来回顾一下 Tomcat 的组件层次关系。
 
@@ -858,17 +860,21 @@ StandardEngine、StandardHost、StandardContext 和 StandardWrapper 是相应容
 1) 维护容器通用的状态数据；
 2) 提供管理状态数据的通用方法；
 
-# 08 | Tomcat的“高层们”都负责做什么？
+# 08 | Tomcat的启动过程
+
+> 原标题：Tomcat的“高层们”都负责做什么？
 
 我们通过 Tomcat 的 /bin 目录下的脚本 startup.sh 来启动 Tomcat，那你是否知道我们执行了这个脚本后发生了什么呢？你可以通过下面这张流程图来了解一下。
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20201120091247.png)
+![image-20250105223614640](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202501052236886.png)
 
-1. startup.sh 脚本会启动一个 JVM 来运行 Tomcat 的启动类 Bootstrap；
-2. Bootstrap 初始化 Tomcat 的类加载器，并创建 Catalina；
-3. Catalina 是一个启动类，它解析 server.xml 、创建相应的组件，并调用 Server 的 start 方法；
+1. Tomcat 本质上是一个 Java 程序，因此 startup.sh 脚本会启动一个 JVM 来运行 Tomcat 的启动类 Bootstrap；
+2. Bootstrap 初始化 Tomcat 的类加载器，并创建 Catalina；（关于 Tomcat 为什么需要自己的类加载器，我会在专栏后面详细介绍）
+3. Catalina 是一个启动类，它解析 server.xml、创建相应的组件，并调用 Server 的 start 方法；
 4. Server 组件的职责就是管理 Service 组件，它负责调用 Service 的 start 方法；
 5. Service 组件的职责就是管理连接器和顶层容器 Engine，因此它会调用连接器和 Engine 的 start 方法；
+
+这样 Tomcat 的启动就算完成了。下面我来详细介绍一下上面这个启动过程中提到的几个非常关键的启动类和组件。
 
 你可以把 Bootstrap 看作是上帝，它初始化了类加载器，也就是创造万物的工具。如果我们把 Tomcat 比作是一家公司，那么 Catalina 应该是公司创始人，因为 Catalina 负责组建团队，也就是创建 Server 以及它的子组件。Server 是公司的 CEO，负责管理多个事业群，每个事业群就是一个 Service。Service 是事业群总经理，它管理两个职能部门：一个是对外的市场部，也就是连接器组件；另一个是对内的研发部，也就是容器组件。Engine 则是研发部经理，因为 Engine 是最顶层的容器组件。
 
@@ -876,11 +882,15 @@ StandardEngine、StandardHost、StandardContext 和 StandardWrapper 是相应容
 
 今天我们就来看看这些“高层”的实现细节，目的是让我们逐步理解 Tomcat 的工作原理。
 
-**Catalina**
+**Catalina（创始人）**
+
+> 任务一：启动 Server
 
 Catalina 的主要任务就是创建 Server，它不是直接 new 一个 Server 实例就完事了，而是需要解析 server.xml，把在 server.xml 里配置的各种组件一一创建出来，接着调用 Server 组件的 init 方法和 start 方法，这样整个 Tomcat 就启动起来了。
 
-作为“管理者”，Catalina 还需要处理各种“异常”情况，比如当我们通过“Ctrl + C”关闭 Tomcat 时，Tomcat 将如何优雅的停止并且清理资源呢？因此 Catalina 在 JVM 中注册一个“关闭钩子”。
+> 任务二：关闭钩子
+
+作为“管理者”，Catalina 还需要处理各种“异常”情况，比如当我们通过“Ctrl+C”关闭 Tomcat 时，Tomcat 将如何优雅的停止并且清理资源呢？因此 Catalina 在 JVM 中注册一个“关闭钩子”。
 
 ```java
 public void start() {
@@ -914,7 +924,7 @@ public void start() {
 }
 ```
 
-JVM 在停止之前会尝试执行这个线程的 run 方法。下面我们来看看 CatalinaShutdownHook 做了些什么。
+“关闭钩子”其实就是一个线程，JVM 在停止之前会尝试执行这个线程的 run 方法。下面我们来看看 CatalinaShutdownHook 做了些什么。
 
 ```java
 protected class CatalinaShutdownHook extends Thread {
@@ -934,7 +944,9 @@ protected class CatalinaShutdownHook extends Thread {
 
 实际上就执行了 Server 的 stop 方法，Server 的 stop 方法会释放和清理所有的资源。
 
-**Server 组件**
+**Server 组件（CEO）**
+
+> 任务一：添加并启动 Service
 
 Server 组件的具体实现类是 StandardServer。Server 继承了 LifecycleBase，它的生命周期被统一管理，并且它的子组件是 Service，因此它还需要管理 Service 的生命周期，也就是说在启动时调用 Service 组件的启动方法，在停止时调用它们的停止方法。Server 在内部维护了若干 Service 组件，它是以数组来保存的，那 Server 是如何添加一个 Service 到数组中的呢？
 
@@ -969,11 +981,13 @@ public void addService(Service service) {
 }
 ```
 
+> 任务二：监听停止命令
+
 除此之外，Server 组件还有一个重要的任务是启动一个 Socket 来监听停止端口，这就是为什么你能通过 shutdown 命令来关闭 Tomcat。不知道你留意到没有，上面 Caralina 的启动方法的最后一行代码就是调用了 Server 的 await 方法。
 
 在 await 方法里会创建一个 Socket 监听 8005 端口，并在一个死循环里接收 Socket 上的连接请求，如果有新的连接到来就建立连接，然后从 Socket 中读取数据；如果读到的数据是停止命令“SHUTDOWN”，就退出循环，进入 stop 流程。
 
-**Service 组件**
+**Service 组件（事业群总经理）**
 
 Service 组件的具体实现类是 StandardService，我们先来看看它的定义以及关键的成员变量。
 
@@ -1033,13 +1047,14 @@ protected void startInternal() throws LifecycleException {
 
 从启动方法可以看到，Service 先启动了 Engine 组件，再启动 Mapper 监听器，最后才是启动连接器。这很好理解，因为内层组件启动好了才能对外提供服务，才能启动外层的连接器组件。而 Mapper 也依赖容器组件，容器组件启动好了才能监听它们的变化，因此 Mapper 和 MapperListener 在容器组件之后启动。组件停止的顺序跟启动顺序正好相反的，也是基于它们的依赖关系。
 
-**Engine 组件**
+**Engine 组件（研发部经理CTO）**
+
+> 任务一：启动 Host
 
 最后我们再来看看顶层的容器组件 Engine 具体是如何实现的。Engine 本质是一个容器，因此它继承了 ContainerBase 基类，并且实现了 Engine 接口。
 
 ```java
 public class StandardEngine extends ContainerBase implements Engine {
-    
 }
 ```
 
@@ -1059,6 +1074,8 @@ for (int i = 0; i < children.length; i++) {
 
 所以 Engine 在启动 Host 子容器时就直接重用了这个方法。
 
+> 任务二：转发请求
+
 那 Engine 自己做了什么呢？我们知道容器组件最重要的功能是处理请求，而 Engine 容器对请求的“处理”，其实就是把请求转发给某一个 Host 子容器来处理，具体是通过 Valve 来实现的。
 
 通过专栏前面的学习，我们知道每一个容器组件都有一个 Pipeline，而 Pipeline 中有一个基础阀（Basic Valve），而 Engine 容器的基础阀定义如下：
@@ -1066,18 +1083,17 @@ for (int i = 0; i < children.length; i++) {
 ```java
 final class StandardEngineValve extends ValveBase {
  
-    public final void invoke(Request request, Response response)
-      throws IOException, ServletException {
+    public final void invoke(Request request, Response response) throws IOException, ServletException {
   
-      // 拿到请求中的 Host 容器
-      Host host = request.getHost();
-      if (host == null) {
-          return;
-      }
+        // 拿到请求中的 Host 容器
+        Host host = request.getHost();
+        if (host == null) {
+            return;
+        }
   
-      // 调用 Host 容器中的 Pipeline 中的第一个 Valve
-      host.getPipeline().getFirst().invoke(request, response);
-  }
+        // 调用 Host 容器中的 Pipeline 中的第一个 Valve
+        host.getPipeline().getFirst().invoke(request, response);
+    }
   
 }
 ```
@@ -1086,13 +1102,17 @@ final class StandardEngineValve extends ValveBase {
 
 **课后思考**
 
-Server 组件的在启动连接器和容器时，都分别加了锁，这是为什么呢？
+Service 组件的在启动连接器和容器时，都分别加了锁，这是为什么呢？
 
-答：
+答：可能存在并发操作的场景：Tomcat 提供 MBean 的机制对管理的对象进行并发操作，如添加/删除某个 service。
 
-可能存在并发操作的场景：Tomcat 提供 MBean 的机制对管理的对象进行并发操作，如添加/删除某个service。
+Server 本身包含多个 Service，内部实现上用数组来存储 services，数组的并发操作(包含缩容，扩容)是不安全的。所以，在并发操作(添加/修改/删除/遍历等) services 数组时，需要进行加锁处理。
 
-Server本身包含多个Service，内部实现上用数组来存储services，数组的并发操作(包含缩容，扩容)是不安全的。所以，在并发操作(添加/修改/删除/遍历等)services数组时，需要进行加锁处理。
+# 09 | 比较：Jetty架构特点之Connector组件
+
+
+
+
 
 # 12 | 实战：优化并提高Tomcat启动速度
 
