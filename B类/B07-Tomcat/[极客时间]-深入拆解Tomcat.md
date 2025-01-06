@@ -1110,7 +1110,128 @@ Server 本身包含多个 Service，内部实现上用数组来存储 services�
 
 # 09 | 比较：Jetty架构特点之Connector组件
 
+Servlet 容器并非只有 Tomcat 一家，还有别的架构设计思路吗？今天我们就来看看 Jetty 的设计特点。我会和你重点聊聊 Jetty 在哪些地方跟 Tomcat 不同。
 
+**鸟瞰 Jetty 整体架构**
+
+简单来说，Jetty Server 就是由多个 Connector（连接器）、多个 Handler（处理器），以及一个线程池组成。整体结构请看下面这张图。
+
+![image-20250106225933828](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202501062259040.png)
+
+跟 Tomcat 一样，Jetty 也有 HTTP 服务器和 Servlet 容器的功能，因此 Jetty 中的 Connector 组件和 Handler 组件分别来实现这两个功能，而这两个组件工作时所需要的线程资源都直接从一个全局线程池 ThreadPool 中获取。
+
+Jetty Server 可以有多个 Connector 在不同的端口上监听客户请求，而对于请求处理的 Handler 组件，也可以根据具体场景使用不同的 Handler。这样的设计提高了 Jetty 的灵活性：需要支持 Servlet，则可以使用 ServletHandler；需要支持 Session，则再增加一个 SessionHandler。也就是说我们可以不使用 Servlet 或者 Session，只要不配置这个 Handler 就行了。
+
+为了启动和协调上面的核心组件工作，Jetty 提供了一个 Server 类来做这个事情，它负责创建并初始化 Connector、Handler、ThreadPool 组件，然后调用 start 方法启动它们。
+
+我们对比一下 Tomcat 的整体架构图，你会发现 Tomcat 在整体上跟 Jetty 很相似，它们的第一个区别是 Jetty 中没有 Service 的概念，Tomcat 中的 Service 包装了多个连接器和一个容器组件，一个 Tomcat 实例可以配置多个 Service，不同的 Service 通过不同的连接器监听不同的端口；而 Jetty 中 Connector 是被所有 Handler 共享的。
+
+![image-20250106230048546](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202501062300716.png)
+
+它们的第二个区别是，在 Tomcat 中每个连接器都有自己的线程池，而在 Jetty 中所有的 Connector 共享一个全局的线程池。
+
+讲完了 Jetty 的整体架构，接下来我来详细分析 Jetty 的 Connector 组件的设计，下一期我将分析 Handler 组件的设计。
+
+> Connector 组件
+
+跟 Tomcat 一样，Connector 的主要功能是对 I/O 模型和应用层协议的封装。I/O 模型方面，最新的 Jetty 9 版本只支持 NIO，因此 Jetty 的 Connector 设计有明显的 Java NIO 通信模型的痕迹。至于应用层协议方面，跟 Tomcat 的 Processor 一样，Jetty 抽象出了 Connection 组件来封装应用层协议的差异。
+
+接下来我们一起来看看 Jetty 是如何实现 NIO 模型的，以及它是怎么用 Java NIO 的。
+
+**Java NIO 回顾**
+
+> Java NIO 系列可参考：http://ifeve.com/java-nio-all/
+
+Java NIO 的核心组件是 Channel、Buffer 和 Selector。Channel 表示一个连接，可以理解为一个 Socket，通过它可以读取和写入数据，但是并不能直接操作数据，需要通过 Buffer 来中转。
+
+Selector 可以用来检测 Channel 上的 I/O 事件，比如读就绪、写就绪、连接就绪，一个 Selector 可以同时处理多个 Channel，因此单个线程可以监听多个 Channel，这样会大量减少线程上下文切换的开销。下面我们通过一个典型的服务端 NIO 程序来回顾一下如何使用这些组件。
+
+首先，创建服务端 Channel，绑定监听端口并把 Channel 设置为非阻塞方式。
+
+```java
+ServerSocketChannel server = ServerSocketChannel.open();
+server.socket().bind(new InetSocketAddress(port));
+server.configureBlocking(false);
+```
+
+然后，创建 Selector，并在 Selector 中注册 Channel 感兴趣的事件 OP_ACCEPT，告诉 Selector 如果客户端有新的连接请求到这个端口就通知我。
+
+```java
+Selector selector = Selector.open();
+server.register(selector, SelectionKey.OP_ACCEPT);
+```
+
+接下来，Selector 会在一个死循环里不断地调用 select() 去查询 I/O 状态，select() 会返回一个 SelectionKey 列表，Selector 会遍历这个列表，看看是否有“客户”感兴趣的事件，如果有，就采取相应的动作。
+
+比如下面这个例子，如果有新的连接请求，就会建立一个新的连接。连接建立后，再注册 Channel 的可读事件到 Selector 中，告诉 Selector 我对这个 Channel 上是否有新的数据到达感兴趣。
+
+```java
+while (true) {
+    selector.select();// 查询 I/O 事件
+    for (Iterator<SelectionKey> i = selector.selectedKeys().iterator(); i.hasNext();) { 
+        SelectionKey key = i.next(); 
+        i.remove(); 
+ 
+        if (key.isAcceptable()) { 
+            // 建立一个新连接 
+            SocketChannel client = server.accept(); 
+            client.configureBlocking(false); 
+                
+            // 连接建立后，告诉 Selector，我现在对 I/O 可读事件感兴趣
+            client.register(selector, SelectionKey.OP_READ);
+        } 
+    }
+} 
+```
+
+简单回顾完服务端 NIO 编程之后，你会发现服务端在 I/O 通信上主要完成了三件事情：**监听连接、I/O 事件查询以及数据读写**。因此 Jetty 设计了**Acceptor、SelectorManager 和 Connection 来分别做这三件事情**，下面我分别来说说这三个组件。
+
+**Acceptor**
+
+顾名思义，Acceptor 用于接受请求，跟 Tomcat 一样，Jetty 也有独立的 Acceptor 线程组用于处理连接请求。在 Connector 的实现类 ServerConnector 中，有一个`_acceptors`的数组，在 Connector 启动的时候, 会根据`_acceptors`数组的长度创建对应数量的 Acceptor，而 Acceptor 的个数可以配置。
+
+```java
+for (int i = 0; i < _acceptors.length; i++) {
+    Acceptor a = new Acceptor(i);
+    getExecutor().execute(a);
+}
+```
+
+Acceptor 是 ServerConnector 中的一个内部类，同时也是一个 Runnable，Acceptor 线程是通过 getExecutor() 得到的线程池来执行的，前面提到这是一个全局的线程池。
+
+Acceptor 通过阻塞的方式来接受连接，这一点跟 Tomcat 也是一样的。
+
+```java
+public void accept(int acceptorID) throws IOException {
+  ServerSocketChannel serverChannel = _acceptChannel;
+  if (serverChannel != null && serverChannel.isOpen()) {
+    // 这里是阻塞的
+    SocketChannel channel = serverChannel.accept();
+    // 执行到这里时说明有请求进来了
+    accepted(channel);
+  }
+}
+```
+
+接受连接成功后会调用 accepted() 函数，accepted() 函数中会将 SocketChannel 设置为非阻塞模式，然后交给 Selector 去处理，因此这也就到了 Selector 的地界了。
+
+```java
+private void accepted(SocketChannel channel) throws IOException {
+    channel.configureBlocking(false);
+    Socket socket = channel.socket();
+    configure(socket);
+    // _manager 是 SelectorManager 实例，里面管理了所有的 Selector 实例
+    _manager.accept(channel);
+}
+```
+
+**SelectorManager**
+
+> 越来越看不懂了。
+
+
+
+# 11 | 总结：从Tomcat和Jetty中提炼组件化设计规范
 
 
 
