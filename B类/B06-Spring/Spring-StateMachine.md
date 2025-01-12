@@ -823,19 +823,219 @@ public class Config12
 
 **选择状态**
 
+需要在状态和转换中定义选择才能正常工作。您可以使用`choice()`将特定状态标记为选择状态 方法。当转换发生时，该状态需要与源状态匹配 为此选择进行配置。
+
+您可以使用`withChoice()`配置转换，在其中定义源状态和`first/then/last`一个结构，这相当于普通的转换 `if/elseif/else` 。使用`first`和`then` ，您可以指定一个防护，就像在`if/elseif`子句中使用条件一样。
+
+转换需要能够存在，因此您必须确保使用`last` 。否则，配置格式不正确。以下示例显示如何定义选择状态：
+
+```
+@Configuration
+@EnableStateMachine
+public class Config13
+		extends EnumStateMachineConfigurerAdapter<States, Events> {
+
+	@Override
+	public void configure(StateMachineStateConfigurer<States, Events> states)
+			throws Exception {
+		states
+			.withStates()
+				.initial(States.SI)
+				.choice(States.S1)
+				.end(States.SF)
+				.states(EnumSet.allOf(States.class));
+	}
+
+	@Override
+	public void configure(StateMachineTransitionConfigurer<States, Events> transitions)
+			throws Exception {
+		transitions
+			.withChoice()
+				.source(States.S1)
+				.first(States.S2, s2Guard())
+				.then(States.S3, s3Guard())
+				.last(States.S4);
+	}
+
+	@Bean
+	public Guard<States, Events> s2Guard() {
+		return new Guard<States, Events>() {
+
+			@Override
+			public boolean evaluate(StateContext<States, Events> context) {
+				return false;
+			}
+		};
+	}
+
+	@Bean
+	public Guard<States, Events> s3Guard() {
+		return new Guard<States, Events>() {
+
+			@Override
+			public boolean evaluate(StateContext<States, Events> context) {
+				return true;
+			}
+		};
+	}
+
+}
+```
+
+### 配置通用设置
+
+您可以使用以下命令设置部分公共状态机配置 `ConfigurationConfigurer` 。使用它，您可以设置`BeanFactory`和状态机的自动启动标志。它还允许您注册`StateMachineListener`实例、配置转换冲突策略和区域执行策略。以下示例展示了如何使用`ConfigurationConfigurer` ：
+
+```
+@Configuration
+@EnableStateMachine
+public class Config17
+		extends EnumStateMachineConfigurerAdapter<States, Events> {
+
+	@Override
+	public void configure(StateMachineConfigurationConfigurer<States, Events> config)
+			throws Exception {
+		config
+			.withConfiguration()
+				.autoStartup(true)
+				.machineId("myMachineId")
+				.beanFactory(new StaticListableBeanFactory())
+				.listener(new StateMachineListenerAdapter<States, Events>())
+				.transitionConflictPolicy(TransitionConflictPolicy.CHILD)
+				.regionExecutionPolicy(RegionExecutionPolicy.PARALLEL);
+	}
+}
+```
+
+## 5.2 State Machine ID 状态机ID
+
+各种类和接口使用`machineId`作为变量或作为 方法中的参数。本节将详细介绍如何 `machineId`与正常机器操作和实例化相关。
+
+### 使用`@EnableStateMachine`
+
+在 Java 配置中将`machineId`设置为`mymachine`然后公开该值以用于日志。也可以从以下位置获得相同的`machineId` `StateMachine.getId()`方法。以下示例使用`machineId`方法：
+
+```
+@Override
+public void configure(StateMachineConfigurationConfigurer<String, String> config)
+		throws Exception {
+	config
+		.withConfiguration()
+			.machineId("mymachine");
+}
+```
+
+以下日志输出示例显示了`mymachine` ID：
+
+```
+11:23:54,509  INFO main support.LifecycleObjectSupport [main] -
+started S2 S1  / S1 / uuid=8fe53d34-8c85-49fd-a6ba-773da15fcaf1 / id=mymachine
+```
+
+### 使用`@EnableStateMachineFactory`
+
+如果`machineId`使用 `StateMachineFactory`并使用该 ID 请求新机器，如以下示例所示：
+
+```
+StateMachineFactory<String, String> factory = context.getBean(StateMachineFactory.class);
+StateMachine<String, String> machine = factory.getStateMachine("mymachine");
+```
+
+### 使用`StateMachineModelFactory`
 
 
 
+## 5.3 状态机工厂
 
+### 通过适配器工厂
 
+实际上使用`@EnableStateMachine`创建状态机 通过工厂工作，因此`@EnableStateMachineFactory`只是公开 该工厂通过其接口。下面的例子使用 `@EnableStateMachineFactory` ：
 
+```
+@Configuration
+@EnableStateMachineFactory
+public class Config6
+		extends EnumStateMachineConfigurerAdapter<States, Events> {
 
+	@Override
+	public void configure(StateMachineStateConfigurer<States, Events> states)
+			throws Exception {
+		states
+			.withStates()
+				.initial(States.S1)
+				.end(States.SF)
+				.states(EnumSet.allOf(States.class));
+	}
 
+}
+```
 
+现在您已经使用`@EnableStateMachineFactory`创建了一个工厂而不是状态机 bean，您可以注入它并使用它（按原样）来请求新的状态机。以下示例展示了如何执行此操作：
 
+```
+public class Bean3 {
 
+	@Autowired
+	StateMachineFactory<States, Events> factory;
 
+	void method() {
+		StateMachine<States,Events> stateMachine = factory.getStateMachine();
+		stateMachine.startReactively().subscribe();
+	}
+}
+```
 
+### 通过构建器的状态机
 
+```
+StateMachine<String, String> buildMachine1() throws Exception {
+	Builder<String, String> builder = StateMachineBuilder.builder();
+	builder.configureStates()
+		.withStates()
+			.initial("S1")
+			.end("SF")
+			.states(new HashSet<String>(Arrays.asList("S1","S2","S3","S4")));
+	return builder.build();
+}
+```
 
+## 5.4 使用延迟事件
+
+## 5.5 使用范围
+
+## 5.6 使用动作
+
+## 5.7 使用守卫
+
+## 5.8 使用扩展状态
+
+## 5.9 触发转换
+
+## 5.10 监听状态机事件
+
+## 5.11 Context Integration
+
+## 5.12 使用`StateMachineAccessor`
+
+## 5.13 使用`StateMachineInterceptor`
+
+## 5.14 状态机安全
+
+## 5.15 状态机错误处理
+
+## 5.16 状态机服务
+
+## 5.17 持久化状态机
+
+## 5.18 Spring Boot Support 
+
+## 5.19 监控状态机
+
+## 5.20 使用分布式状态
+
+## 5.21 测试支持
+
+## 5.22 Eclipse 建模支持
+
+## 5.23 存储库支持
 
