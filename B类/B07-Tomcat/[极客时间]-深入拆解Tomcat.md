@@ -1451,8 +1451,8 @@ Tomcat 的 NioEndPoint 组件实现了 I/O 多路复用模型，接下来我会�
 
 我们知道，对于 Java 的多路复用器的使用，无非是两步：
 
-1. 创建一个 Seletor，在它身上注册各种感兴趣的事件，然后调用 select 方法，等待感兴趣的事情发生。
-2. 感兴趣的事情发生了，比如可以读了，这时便创建一个新的线程从 Channel 中读数据。
+1. 注册事件。创建一个 Seletor，在它身上注册各种感兴趣的事件，然后调用 select 方法，等待感兴趣的事情发生。
+2. 读取数据。感兴趣的事情发生了，比如可以读了，这时便创建一个新的线程从 Channel 中读数据。
 
 Tomcat 的 NioEndpoint 组件虽然实现比较复杂，但基本原理就是上面两步。我们先来看看它有哪些组件，它一共包含 LimitLatch、Acceptor、Poller、SocketProcessor 和 Executor 共 5 个组件，它们的工作过程如下图所示。
 
@@ -1469,6 +1469,8 @@ Executor 就是线程池，负责运行 SocketProcessor 任务类，SocketProces
 接下来我详细介绍一下各组件的设计特点。
 
 - LimitLatch
+
+![image-20250109225121187](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202501092251413.png)
 
 LimitLatch 用来控制连接个数，当连接数到达最大时阻塞线程，直到后续组件处理完一个连接后将连接数减 1。请你注意到达最大连接数后操作系统底层还是会接收客户端连接，但用户层已经不再接收。LimitLatch 的核心代码如下：
 
@@ -1529,7 +1531,7 @@ Acceptor 实现了 Runnable 接口，因此可以跑在单独线程里。一个�
 
 ```java
 serverSock = ServerSocketChannel.open();
-serverSock.socket().bind(addr,getAcceptCount());
+serverSock.socket().bind(addr, getAcceptCount());
 serverSock.configureBlocking(true);
 ```
 
@@ -1576,7 +1578,7 @@ Executor 是 Tomcat 定制版的线程池，它负责创建真正干活的工作
 
 另外就是有多少任务，就用相应规模的线程数去处理。我们注意到 NioEndpoint 要完成三件事情：接收连接、检测 I/O 事件以及处理请求，那么最核心的就是把这三件事情分开，用不同规模的线程去处理，比如用专门的线程组去跑 Acceptor，并且 Acceptor 的个数可以配置；用专门的线程组去跑 Poller，Poller 的个数也可以配置；最后具体任务的执行也由专门的线程池来处理，也可以配置线程池的大小。
 
-
+# 15 | Nio2Endpoint组件：Tomcat如何实现异步I/O？
 
 
 
