@@ -116,8 +116,7 @@ ldapRealm.contextFactory.authenticationMechanism = DIGEST-MD5
 
 ```java
 //1. Acquire submitted principals and credentials:
-AuthenticationToken token =
-new UsernamePasswordToken(username, password);
+AuthenticationToken token = new UsernamePasswordToken(username, password);
 //2. Get the current Subject:
 Subject currentUser = SecurityUtils.getSubject();
 //3. Login

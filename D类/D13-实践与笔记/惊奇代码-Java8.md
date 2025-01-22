@@ -134,5 +134,29 @@ public class HandleAfterRepayProcessor {
 }
 ```
 
+## 三、Java 8 Map 的优雅写法
 
+```java
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class MapListExample {
+    public static void main(String[] args) {
+        // 创建一个Map<String, List<String>>
+        Map<String, List<String>> map = new HashMap<>();
+
+        // 添加元素的示例
+        map.computeIfAbsent("fruits", k -> new ArrayList<>()).add("Apple");
+        map.computeIfAbsent("fruits", k -> new ArrayList<>()).add("Banana");
+        map.computeIfAbsent("vegetables", k -> new ArrayList<>()).add("Carrot");
+
+        // 打印Map内容
+        System.out.println("Map内容: " + map);
+    }
+}
+
+// Map内容: {fruits=[Apple, Banana], vegetables=[Carrot]}
+```
 
