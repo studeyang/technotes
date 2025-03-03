@@ -339,9 +339,182 @@ ZooKeeper 会将目录节点变更的事件通知给到消费方，然后消费�
 
 消费方服务可以将服务的调用成功数、失败数、服务调用的耗时时间上送给监控中心，也就是第 ⑧⑨ 步。这样一来，我们通过在监控中心设置不同的告警策略，就能在第一时间感知到一些异常问题的存在，争取在用户上报问题之前尽可能最快解决异常现象。
 
-
-
 # ==特色篇==
+
+# 02｜异步化实践：莫名其妙出现线程池耗尽怎么办？
+
+相信你肯定写过这样的代码：
+
+```java
+@DubboService
+@Component
+public class AsyncOrderFacadeImpl implements AsyncOrderFacade {
+    @Override
+    public OrderInfo queryOrderById(String id) {
+        // 这里模拟执行一段耗时的业务逻辑
+        sleepInner(5000);
+        OrderInfo resultInfo = new OrderInfo(
+                "GeekDubbo",
+                "服务方异步方式之RpcContext.startAsync#" + id,
+                new BigDecimal(129));
+        return resultInfo;
+    }
+}
+```
+
+这就是 Dubbo 服务提供方的一个普通的耗时功能服务，在 queryOrderById 中执行一段耗时的业务逻辑后，拿到 resultInfo 结果并返回。
+
+但如果 queryOrderById 这个方法的调用量上来了，很容易导致 Dubbo 线程池耗尽。因为 Dubbo 线程池总数默认是固定的，200 个，假设系统在单位时间内可以处理 500 个请求，一旦 queryOrderById 的请求流量上来了，极端情况下，可能会出现 200 个线程都在处理这个耗时的任务，那么剩下的 300 个请求，即使是不耗时的功能，也很难有机会拿到线程资源。所以，紧接着就导致 Dubbo 线程池耗尽了。
+
+为了让这种耗时的请求尽量不占用公共的线程池资源，我们就要开始琢磨异步了。
+
+**如何异步处理服务**
+
+我们再来尝试一下改用线程池的实现逻辑方式：
+
+```java
+@DubboService
+@Component
+public class AsyncOrderFacadeImpl implements AsyncOrderFacade {
+    @Override
+    public OrderInfo queryOrderById(String id) {
+        // 创建线程池对象
+        ExecutorService cachedThreadPool = Executors.newCachedThreadPool();
+        cachedThreadPool.execute(new Runnable() {
+            @Override
+            public void run() {
+                // 这里模拟执行一段耗时的业务逻辑
+                sleepInner(5000);
+                OrderInfo resultInfo = new OrderInfo(
+                        "GeekDubbo",
+                        "服务方异步方式之RpcContext.startAsync#" + id,
+                        new BigDecimal(129));
+                System.out.println(resultInfo);
+            }
+        });
+        return ???;
+    }
+}
+```
+
+这段代码在 queryOrderById 中创建了一个线程池，然后将 Runnable 内部类放到线程池中去执行。但这么修改后，你发现会有2个问题：
+
+- 问题 1：虽然放到了 cachedThreadPool 线程池中去执行了，但是这个 resultInfo 结果还是没有办法返回。
+- 问题 2：cachedThreadPool.execute 方法一旦执行就好比开启了异步分支逻辑，那么最终的 “return ???” 这个地方该返回什么呢？
+
+**如何实现拦截并返回结果**
+
+首先拦截识别异步，当拦截处发现有异步化模式的变量，从上下文对象中取出异步化结果并返回。
+
+![image-20250303225030458](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503032250568.png)
+
+这里要注意一点，凡是异步问题，都需要考虑当前线程如何获取其他线程内数据，所以这里我们要思考：如果异步化处理有点耗时，拦截处从异步化结果中取不到结果该怎么办呢？不停轮询等待吗？还是要作何处理呢？
+
+相信熟悉 JDK 的你已经想到了，非 java.util.concurrent.Future 莫属，这是 Java 1.5 引入的用于异步结果的获取，当异步执行结束之后，结果将会保存在 Future 当中。接下来就一起来看看该如何改造 queryOrderById 这个方法：
+
+```java
+@DubboService
+@Component
+public class AsyncOrderFacadeImpl implements AsyncOrderFacade {
+    @Override
+    public OrderInfo queryOrderById(String id) {
+        // 创建线程池对象
+        ExecutorService cachedThreadPool = Executors.newCachedThreadPool();
+        
+        // 开启异步化操作模式，标识异步化模式开始
+        AsyncContext asyncContext = RpcContext.startAsync();
+        
+        // 利用线程池来处理 queryOrderById 的核心业务逻辑
+        cachedThreadPool.execute(new Runnable() {
+            @Override
+            public void run() {
+                // 将 queryOrderById 所在线程的上下文信息同步到该子线程中
+                asyncContext.signalContextSwitch();
+                
+                // 这里模拟执行一段耗时的业务逻辑
+                sleepInner(5000);
+                OrderInfo resultInfo = new OrderInfo(
+                        "GeekDubbo",
+                        "服务方异步方式之RpcContext.startAsync#" + id,
+                        new BigDecimal(129));
+                System.out.println(resultInfo);
+                
+                // 利用 asyncContext 将 resultInfo 返回回去
+                asyncContext.write(resultInfo);
+            }
+        });
+        return null;
+    }
+}
+```
+
+核心实现就 3 点：
+
+1. 定义线程池对象，通过 RpcContext.startAsync 方法开启异步模式；
+2. 在异步线程中通过 asyncContext.signalContextSwitch 同步父线程的上下文信息；
+3. 在异步线程中将异步结果通过 asyncContext.write 写入到异步线程的上下文信息中。
+
+接下来就让我们来看看，Dubbo 这个优秀框架，在源码层面是怎么实现异步的，和我们的思路异同点在哪里。
+
+**Dubbo 异步实现原理**
+
+首先，还是定义线程池对象，在 Dubbo 中 RpcContext.startAsync 方法意味着异步模式的开启：
+
+![image-20250303223619489](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503032236640.png)
+
+们追踪源码的调用流程，可以发现最终是通过 CAS 原子性的方式创建了一个 java.util.concurrent.CompletableFuture 对象，这个对象就存储在当前的上下文 org.apache.dubbo.rpc.RpcContextAttachment 对象中。
+
+然后，需要在异步线程中同步父线程的上下文信息：
+
+![image-20250303223702215](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503032237302.png)
+
+可以看到，Dubbo 框架，也是用的 asyncContext 同步不同线程间的信息，也就是信息的拷贝，只不过这个拷贝需要利用到异步模式开启之后的返回对象 asyncContext。
+
+因为 asyncContext 富含上下文信息，只需要把这个所谓的 asyncContext 对象传入到子线程中，然后将 asyncContext 中的上下文信息充分拷贝到子线程中，这样，子线程处理所需要的任何信息就不会因为开启了异步化处理而缺失。
+
+最后的第三步就是在异步线程中，将异步结果写入到异步线程的上下文信息中：
+
+```java
+// org.apache.dubbo.rpc.AsyncContextImpl#write
+public void write(Object value) {
+    if (isAsyncStarted() && stop()) {
+        if (value instanceof Throwable) {
+            Throwable bizExe = (Throwable) value;
+            future.completeExceptionally(bizExe);
+        } else {
+            future.complete(value);
+        }
+    } else {
+        throw new IllegalStateException("The async response has probably been wrote back by another thread, or the asyncContext has been closed.");
+    }
+}
+```
+
+Dubbo 用 asyncContext.write 写入异步结果，这样拦截处只需要调用 java.util.concurrent.CompletableFuture#get(long timeout, TimeUnit unit) 方法就可以很轻松地拿到异步化结果了。
+
+**异步应用场景**
+
+Dubbo 的异步实现原理，相信你已经非常清楚了，那哪些应用场景可以考虑异步呢？
+
+- 第一，我们定义了线程池，你可能会认为定义线程池的目的就是为了异步化操作，其实不是，因为异步化的操作会使 queryOrderById 方法立马返回，也就是说，异步化耗时的操作并没有在 queryOrderById 方法所在线程中继续占用资源，而是在新开辟的线程池中占用资源。
+
+  所以对于一些 IO 耗时的操作，比较影响客户体验和使用性能的一些地方，我们是可以采用异步处理的。
+
+- 其次，因为 queryOrderById 开启异步操作后就立马返回了，queryOrderById 所在的线程和异步线程没有太多瓜葛，异步线程的完成与否，不太影响 queryOrderById 的返回操作。
+
+  所以，若某段业务逻辑开启异步执行后不太影响主线程的原有业务逻辑，也是可以考虑采取异步处理的。
+
+- 最后，在 queryOrderById 这段简单的逻辑中，只开启了一个异步化的操作，站在时序的角度上看，queryOrderById 方法返回了，但是异步化的逻辑还在慢慢执行着，完全对时序的先后顺序没有严格要求。所以，时序上没有严格要求的业务逻辑，也是可以采用异步处理的。
+
+**思考**
+
+问：asyncContext.write(resultInfo); 这里将resultInfo 写入 Future 之后，Dubbo框架什么时候调用Future.get 获取计算结果？
+
+答：asyncContext.write(resultInfo); 执行之后是将结果写入到了 Future 当中，但是还有另外一个底层在调用这个 Future#get 的结果，这个调用的地方就是在【org.apache.dubbo.remoting.exchange.support.header.HeaderExchangeHandler#handleRequest】方法中的【handler.reply(channel, msg);】代码处。
+
+【handler.reply(channel, msg);】返回的对象就是 Future 对象，然后调用 Future 对象的 whenComplete 方法，调用完后若没有结果就会等待，有结果的话就会立马进入 whenComplete 方法的回调逻辑中。
+
+
 
 
 
