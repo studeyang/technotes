@@ -514,9 +514,132 @@ Dubbo 的异步实现原理，相信你已经非常清楚了，那哪些应用�
 
 【handler.reply(channel, msg);】返回的对象就是 Future 对象，然后调用 Future 对象的 whenComplete 方法，调用完后若没有结果就会等待，有结果的话就会立马进入 whenComplete 方法的回调逻辑中。
 
+# 03｜隐式传递：如何精准找出一次请求的全部日志？
 
+今天我们继续探索 Dubbo 框架的第二道特色风味，隐式传递。
 
+在我们日常开发工作中，查日志是很常见一环了。实际开发会涉及很多系统，如果出问题的功能调用流程非常复杂，你可能都不确定找到的日志是不是出问题时的日志，也可能只是找到了出问题时日志体系中的小部分，还可能找到一堆与问题毫无关系的日志。比如下面这个复杂调用关系：
 
+![image-20250305220918569](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503052209682.png)
+
+通过请求中的关键字，我们在 A、B、C、D 系统中找到了相关日志：
+
+```
+2022-10-28 23:29:01.302 [系统A,DubboServerHandler-1095] INFO com.XxxJob - [JOB] calling start [emp_airOrderNoticeJob] 
+2022-10-28 23:29:02.523 [系统B,DubboServerHandler-1093] INFO WARN XxxImpl - queryUser 入参参数为: xxxx 
+2022-10-28 23:30:23.257 [系统C,DubboServerHandler-1096] INFO ABCImpl - recv Request... 
+2022-10-28 23:30:25.679 [系统D,DubboServerHandler-1094] INFO XyzImpl - doQuery Start... 
+2022-10-28 23:31:18.310 [系统B,DubboServerHandler-1093] INFO WARN XxxImpl - queryUser 入参参数不正确
+```
+
+看系统 B 的 DubboServerHandler-1093 线程打印的两行日志，第一眼从打印内容的上下文关系上看，我们会误认为这就是要找的错误信息。
+
+但实际开发中一定要考虑不同请求、不同线程这两个因素，你能确定这两行日志一定是同一次请求、同一个线程打印出来的么？
+
+**隐式传递**
+
+我们回忆平时编写代码进行 Dubbo 远程调用时的流程链路：
+
+![image-20250305220144970](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503052201143.png)
+
+这是一个比较简单的消费者调用提供者的链路图，在消费者调用的过程中，一些附加的信息可以设置到 RpcContext 上下文中去，然后 RpcContext 中的信息就会随着远程调用去往提供者那边。
+
+那如何把参数设置到 RpcContext 中呢？
+
+我们需要有一个集中的环节可以进行操作，那么这个集中环节在哪里呢？再来看调用链路图：
+
+![image-20250305220240439](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503052202574.png)
+
+为了尽可能降低侵入性，我们最好能在系统的入口和出口，把接收数据的操作以及发送数据的操作进行完美衔接。这就意味着需要在接收请求的内部、发送请求的内部做好数据的交换。
+
+来看代码实现：
+
+```java
+@Activate(group = PROVIDER, order = -9000)
+public class ReqNoProviderFilter implements Filter {
+    public static final String TRACE_ID = "TRACE-ID";
+    @Override
+    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 获取入参的跟踪序列号值
+        Map<String, Object> attachments = invocation.getObjectAttachments();
+        String reqTraceId = attachments != null ? (String) attachments.get(TRACE_ID) : null;
+        
+        // 若 reqTraceId 为空则重新生成一个序列号值，序列号在一段相对长的时间内唯一足够了
+        reqTraceId = reqTraceId == null ? generateTraceId() : reqTraceId;
+        
+        // 将序列号值设置到上下文对象中
+        RpcContext.getServerAttachment().setObjectAttachment(TRACE_ID, reqTraceId);
+        
+        // 并且将序列号设置到日志打印器中，方便在日志中体现出来
+        MDC.put(TRACE_ID, reqTraceId);
+        
+        // 继续后面过滤器的调用
+        return invoker.invoke(invocation);
+    }
+}
+```
+
+```java
+
+@Activate(group = CONSUMER, order = Integer.MIN_VALUE + 1000)
+public class ReqNoConsumerFilter implements Filter, Filter.Listener {
+    public static final String TRACE_ID = "TRACE-ID";
+    @Override
+    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 从上下文对象中取出跟踪序列号值
+        String existsTraceId = RpcContext.getServerAttachment().getAttachment(TRACE_ID);
+        
+        // 然后将序列号值设置到请求对象中
+        invocation.getObjectAttachments().put(TRACE_ID, existsTraceId);
+        RpcContext.getClientAttachment().setObjectAttachment(TRACE_ID, existsTraceId);
+        
+        // 继续后面过滤器的调用
+        return invoker.invoke(invocation);
+    }
+}
+```
+
+思路也很清晰，主要新增了两个过滤器：
+
+- ReqNoProviderFilter 为提供者维度的过滤器，主要接收请求参数中的 traceId，并将 traceId 的值放置到 RpcContext 上下文对象中。
+- ReqNoConsumerFilter 为消费者维度的过滤器，主要从 RpcContext 上下文对象中取出 traceId 的值，并放置到 invocation 请求对象中。
+
+然后遵循 Dubbo 的 SPI 特性将两个过滤器添加到 META-INF/dubbo/org.apache.dubbo.rpc.Filter 配置文件中：
+
+```properties
+reqNoConsumerFilter=com.hmilyylimh.cloud.ReqNoConsumerFilter
+reqNoProviderFilter=com.hmilyylimh.cloud.ReqNoProviderFilter
+```
+
+最后修改一下日志器的打印日志模式：
+
+```
+%d{yyyy-MM-dd HH:mm:ss.SSS} [${APP_NAME}, %thread, %X{X-TraceId}] %-5level %c{1} -%msg%n
+```
+
+经过改造后，我们看到的日志就会是这样的：
+
+```
+2022-10-29 14:29:01.302 [系统A,DubboServerHandler-1095,5a2e67913efee084] INFO com.XxxJob - [JOB] calling start [emp_airOrderNoticeJob] 
+2022-10-29 14:29:02.523 [系统B,DubboServerHandler-1093,9b42e2bf4bc2808e] INFO WARN XxxImpl - queryUser 入参参数为: xxxx 
+2022-10-29 14:30:23.257 [系统C,DubboServerHandler-1096,6j40e2mn4bc4508e] INFO ABCImpl - recv Request... 
+2022-10-29 14:30:25.679 [系统D,DubboServerHandler-1094,wx92bn9f4bc2m8z4] INFO XyzImpl - doQuery Start... 
+2022-10-29 14:31:18.310 [系统B,DubboServerHandler-1093,9b42e2bf4bc2808e] INFO WARN XxxImpl - queryUser 入参参数不正确
+```
+
+看系统 B 的 DubboServerHandler-1093 线程打印的两行日志，1093 后面都是 9b42e2bf4bc2808e 这个序列号值，说明这一定是同一次请求、同一个线程打印出来的日志。
+
+**隐式传递的应用**
+
+今天学习的隐式传递，在我们的日常开发中，又有哪些应用场景呢？
+
+第一，传递请求流水号，分布式应用中通过链路追踪号来全局检索日志。
+
+第二，传递用户信息，以便不同系统在处理业务逻辑时可以获取用户层面的一些信息。
+
+第三，传递凭证信息，以便不同系统可以有选择性地取出一些数据做业务逻辑，比如 Cookie、Token 等。
+
+总体来说传递的都是一些技术属性数据，和业务属性没有太大关联，为了方便开发人员更为灵活地扩展系统能力，来更好地支撑业务的发展。
 
 # ==源码篇==
 
