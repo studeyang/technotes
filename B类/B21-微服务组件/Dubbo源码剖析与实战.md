@@ -641,6 +641,207 @@ reqNoProviderFilter=com.hmilyylimh.cloud.ReqNoProviderFilter
 
 总体来说传递的都是一些技术属性数据，和业务属性没有太大关联，为了方便开发人员更为灵活地扩展系统能力，来更好地支撑业务的发展。
 
+# 04｜泛化调用：三步教你搭建通用的泛化调用框架
+
+我们继续探索 Dubbo 框架的第三道特色风味，泛化调用。
+
+我们都知道，页面与后台的交互调用流程一般是，页面发起 HTTP 请求，首先到达 Web 服务器，然后由 Web 服务器向后端各系统发起调用：
+
+![image-20250310232324578](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503102323759.png)
+
+上述实现代码如下：
+
+```java
+@RestController
+public class UserController {
+    // 响应码为成功时的值
+    public static final String SUCC = "000000";
+    
+    // 定义访问下游查询用户服务的字段
+    @DubboReference
+    private UserQueryFacade userQueryFacade;
+    
+    // 定义URL地址
+    @PostMapping("/queryUserInfo")
+    public String queryUserInfo(@RequestBody QueryUserInfoReq req){
+        // 将入参的req转为下游方法的入参对象，并发起远程调用
+        QueryUserInfoResp resp = 
+                userQueryFacade.queryUserInfo(convertReq(req));
+        
+        // 判断响应对象的响应码，不是成功的话，则组装失败响应
+        if(!SUCC.equals(resp.getRespCode())){
+            return RespUtils.fail(resp);
+        }
+        
+        // 如果响应码为成功的话，则组装成功响应
+        return RespUtils.ok(resp);
+    }
+}
+```
+
+如果现在有十几个的运营页面，大约五十个请求接口，每个请求的核心逻辑都在后端系统，你预估一下，在 Web 服务器中写 Java 代码大概要写多久？
+
+**泛化调用**
+
+我们可以使用类似这种 /projects/{project}/versions 占位符形式的 URL，利用 RequestMappingHandlerMapping 中的 URL 注册器去匹配。如果可以把一些变化的因子放到 URL 占位符中，精简 URL 的概率就非常大了。
+
+我们先尝试修改一下：
+
+```java
+@RestController
+public class CommonController {
+    // 响应码为成功时的值
+    public static final String SUCC = "000000";
+    
+    // 定义URL地址
+    @PostMapping("/gateway/{className}/{mtdName}/request")
+    public String commonRequest(@PathVariable String className,
+                                @PathVariable String mtdName,
+                                @RequestBody String reqBody){
+        // 将入参的req转为下游方法的入参对象，并发起远程调用
+        return commonInvoke(className, mtdName, reqBody);
+    }
+
+    /**
+     * <h2>模拟公共的远程调用方法.</h2>
+     *
+     * @param className：下游的接口归属方法的全类名。
+     * @param mtdName：下游接口的方法名。
+     * @param reqParamsStr：需要请求到下游的数据。
+     * @return 直接返回下游的整个对象。
+     * @throws InvocationTargetException
+     * @throws IllegalAccessException
+     */
+    public static String commonInvoke(String className, 
+                                      String mtdName, 
+                                      String reqParamsStr) throws InvocationTargetException, IllegalAccessException, ClassNotFoundException {
+        // 试图从类加载器中通过类名获取类信息对象
+        Class<?> clz = CommonController.class.getClassLoader().loadClass(className);
+        // 然后试图通过类信息对象想办法获取到该类对应的实例对象
+        Object reqObj = tryFindBean(clz.getClass());
+        
+        // 通过反射找到 reqObj(例：userQueryFacade) 中的 mtdName(例：queryUserInfo) 方法
+        Method reqMethod = ReflectionUtils.findMethod(clz, mtdName);
+        // 并设置查找出来的方法可被访问
+        ReflectionUtils.makeAccessible(reqMethod);
+        
+        // 将 reqParamsStr 反序列化为下游对象格式，并反射调用 invoke 方法
+        Object resp =  reqMethod.invoke(reqObj, JSON.parseObject(reqParamsStr, reqMethod.getParameterTypes()[0]));
+        
+        // 判断响应对象的响应码，不是成功的话，则组装失败响应
+        if(!SUCC.equals(OgnlUtils.getValue(resp, "respCode"))){
+            return RespUtils.fail(resp);
+        }
+        // 如果响应码为成功的话，则组装成功响应
+        return RespUtils.ok(resp);
+    }
+}
+```
+
+这段代码有一个重要的核心逻辑还没解决，tryFindBean，我们该通过什么样的办法拿到下游接口的实例对象呢？或者说，该怎么仿照 @DubboReference 注解，拿到下游接口的实例对象呢？
+
+虽然不知道 @DubboReference 注解是怎么做到的，但是我们起码能明白一点，只要通过 @DubboReference 修饰的字段就能拿到实例对象，那接下来就是需要一点耐心的环节了，顺着 @DubboReference 注解的核心实现逻辑探索一下源码：
+
+![image-20250310230950063](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503102309227.png)
+
+最终，我们会发现是通过 ReferenceConfig#get 方法创建了代理对象。
+
+**编码实现**
+
+经过一番源码探索后，最难解决的 tryFindBean 逻辑也有了头绪。我们找到了 ReferenceConfig 这个核心类，接下来要做的就是拿到 referenceConfig#get 返回的泛化对象 GenericService，然后调用 GenericService#$invoke 方法进行远程调用。
+
+按思路来调整代码：
+
+```java
+@RestController
+public class CommonController {
+    // 响应码为成功时的值
+    public static final String SUCC = "000000";
+    
+    // 定义URL地址
+    @PostMapping("/gateway/{className}/{mtdName}/{parameterTypeName}/request")
+    public String commonRequest(@PathVariable String className,
+                                @PathVariable String mtdName,
+                                @PathVariable String parameterTypeName,
+                                @RequestBody String reqBody){
+        // 将入参的req转为下游方法的入参对象，并发起远程调用
+        return commonInvoke(className, parameterTypeName, mtdName, reqBody);
+    }
+    
+    /**
+     * <h2>模拟公共的远程调用方法.</h2>
+     *
+     * @param className：下游的接口归属方法的全类名。
+     * @param mtdName：下游接口的方法名。
+     * @param parameterTypeName：下游接口的方法入参的全类名。
+     * @param reqParamsStr：需要请求到下游的数据。
+     * @return 直接返回下游的整个对象。
+     * @throws InvocationTargetException
+     * @throws IllegalAccessException
+     */
+    public static String commonInvoke(String className,
+                                      String mtdName,
+                                      String parameterTypeName,
+                                      String reqParamsStr) {
+        // 然后试图通过类信息对象想办法获取到该类对应的实例对象
+        ReferenceConfig<GenericService> referenceConfig = createReferenceConfig(className);
+        
+        // 远程调用
+        GenericService genericService = referenceConfig.get();
+        Object resp = genericService.$invoke(
+                mtdName,
+                new String[]{parameterTypeName},
+                new Object[]{JSON.parseObject(reqParamsStr, Map.class)});
+        
+        // 判断响应对象的响应码，不是成功的话，则组装失败响应
+        if(!SUCC.equals(OgnlUtils.getValue(resp, "respCode"))){
+            return RespUtils.fail(resp);
+        }
+        
+        // 如果响应码为成功的话，则组装成功响应
+        return RespUtils.ok(resp);
+    }
+    
+    private static ReferenceConfig<GenericService> createReferenceConfig(String className) {
+        DubboBootstrap dubboBootstrap = DubboBootstrap.getInstance();
+        
+        // 设置应用服务名称
+        ApplicationConfig applicationConfig = new ApplicationConfig();
+        applicationConfig.setName(dubboBootstrap.getApplicationModel().getApplicationName());
+        
+        // 设置注册中心的地址
+        String address = dubboBootstrap.getConfigManager().getRegistries().iterator().next().getAddress();
+        RegistryConfig registryConfig = new RegistryConfig(address);
+        ReferenceConfig<GenericService> referenceConfig = new ReferenceConfig<>();
+        referenceConfig.setApplication(applicationConfig);
+        referenceConfig.setRegistry(registryConfig);
+        referenceConfig.setInterface(className);
+        
+        // 设置泛化调用形式
+        referenceConfig.setGeneric("true");
+        // 设置默认超时时间5秒
+        referenceConfig.setTimeout(5 * 1000);
+        return referenceConfig;
+    }
+}
+```
+
+到这里我们今天的学习任务就大功告成了，把枯燥无味的代码用泛化调用形式改善了一番，发起的请求，先经过“泛化调用”，然后调往各个提供方系统，这样发起的请求根本不需要感知提供方的存在，只需要按照既定的“泛化调用”形式发起调用就可以了。
+
+![image-20250310232216887](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503102322101.png)
+
+**泛化调用的应用**
+
+学习了泛化调用，想必你已经可以很娴熟地封装自己的通用网关了，在我们日常开发中，哪些应用场景可以考虑泛化调用呢？
+
+第一，透传式调用，发起方只是想调用提供者拿到结果，没有过多的业务逻辑诉求，即使有，也是拿到结果后再继续做分发处理。
+
+第二，代理服务，所有的请求都会经过代理服务器，而代理服务器不会感知任何业务逻辑，只是一个通道，接收数据 -> 发起调用 -> 返回结果，调用流程非常简单纯粹。
+
+第三，前端网关，有些内网环境的运营页面，对 URL 的格式没有那么严格的讲究，页面的功能都是和后端服务一对一的操作，非常简单直接。
+
+
+
 # ==源码篇==
 
 
