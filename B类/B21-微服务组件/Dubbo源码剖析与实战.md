@@ -840,6 +840,181 @@ public class CommonController {
 
 第三，前端网关，有些内网环境的运营页面，对 URL 的格式没有那么严格的讲究，页面的功能都是和后端服务一对一的操作，非常简单直接。
 
+# 05｜点点直连：点对点搭建产线“后⻔”的万能管控
+
+我们继续探索 Dubbo 框架的第四道特⾊⻛味，点点直连。
+
+今天我们来聊一聊产线问题如何快速修复的话题。情况是这样的，一天，运行良好的订单推送系统突然发生了一点异常情况，经过排查后，你发现有一条记录的状态不对，导致订单迟迟不能推送给外部供应商。
+
+为了争取在最短时间内恢复这笔订单的功能运转，我们需要尽快修改这条推送记录在数据库的状态，修复产线数据。对于这样的紧急情况，你会怎么做？
+
+![image-20250311225044426](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503112250636.png)
+
+**1、正规流程**
+
+参考公司平时遇到需要修复数据的情景，找到那行记录，编写一个 Update 语句，然后提交一个数据订正的流程。
+
+**2、粗暴流程**
+
+我们看流程图，从前端切入，重点标出了Web服务器的TOKEN概念：
+
+![image-20250311225250346](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503112252504.png)
+
+可以从Web服务器的后台日志中，弄出用户的TOKEN，然后找到可以更新这条推送记录的URL地址，最后模拟用户的请求，把这条推送记录更新掉就行了。
+
+但如果后台没有暴露更新记录的URL地址呢？
+
+**3、万能管控**
+
+既然提前写好的代码能被调用，是不是可以考虑动态调用代码呢？那如何动态编译呢？我们回忆Java代码从编译到执行的流程：
+
+![image-20250311231935911](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503112319088.png)
+
+在这样的开发过程中，动态编译一般有两种方式：
+
+- 自主编码实现，比如通过Runtime调用javac，或者通过JavaCompile调用run。
+- 调用插件实现，比如使用市面上常用的groovy-all.jar插件。
+
+那接下来该如何发起调用呢？我们整理思绪，设计了一下改造的大致思路：
+
+![image-20250311230153722](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503112301867.png)
+
+首先需要准备一个页面，填入5个字段信息，接口类名、接口方法名、接口方法参数类名、指定的URL节点、修复问题的Java代码，然后将这5个字段通过HTTP请求发往Web服务器，Web服务器接收到请求后组装泛化所需对象，最后通过泛化调用的形式完成功能修复。
+
+最终Web服务器代码如下：
+
+```java
+@RestController
+public class MonsterController {
+    // 响应码为成功时的值
+    public static final String SUCC = "000000";
+
+    // 定义URL地址
+    @PostMapping("/gateway/repair/request")
+    public String repairRequest(@RequestBody RepairRequest repairRequest){
+        // 将入参的req转为下游方法的入参对象，并发起远程调用
+        return commonInvoke(repairRequest);
+    }
+
+    private String commonInvoke(RepairRequest repairRequest) {
+        // 然后试图通过类信息对象想办法获取到该类对应的实例对象
+        ReferenceConfig<GenericService> referenceConfig =
+                createReferenceConfig(repairRequest.getClassName(), repairRequest.getUrl());
+
+        // 远程调用
+        GenericService genericService = referenceConfig.get();
+        Object resp = genericService.$invoke(
+                repairRequest.getMtdName(),
+                new String[]{repairRequest.getParameterTypeName()},
+                new Object[]{JSON.parseObject(repairRequest.getParamsMap(), Map.class)});
+
+        // 判断响应对象的响应码，不是成功的话，则组装失败响应
+        if(!SUCC.equals(OgnlUtils.getValue(resp, "respCode"))){
+            return RespUtils.fail(resp);
+        }
+
+        // 如果响应码为成功的话，则组装成功响应
+        return RespUtils.ok(resp);
+    }
+
+    private static ReferenceConfig<GenericService> createReferenceConfig(String className, String url) {
+        DubboBootstrap dubboBootstrap = DubboBootstrap.getInstance();
+        // 设置应用服务名称
+        ApplicationConfig applicationConfig = new ApplicationConfig();
+        applicationConfig.setName(dubboBootstrap.getApplicationModel().getApplicationName());
+        // 设置注册中心的地址
+        String address = dubboBootstrap.getConfigManager().getRegistries().iterator().next().getAddress();
+        RegistryConfig registryConfig = new RegistryConfig(address);
+        ReferenceConfig<GenericService> referenceConfig = new ReferenceConfig<>();
+        referenceConfig.setApplication(applicationConfig);
+        referenceConfig.setRegistry(registryConfig);
+        referenceConfig.setInterface(className);
+        // 设置泛化调用形式
+        referenceConfig.setGeneric("true");
+        // 设置默认超时时间5秒
+        referenceConfig.setTimeout(5 * 1000);
+        // 设置点对点连接的地址
+        referenceConfig.setUrl(url);
+        return referenceConfig;
+    }
+}
+
+@Setter
+@Getter
+public class RepairRequest {
+    /** <h2>接口类名，例：com.xyz.MonsterFacade</h2> **/
+    private String className;
+    /** <h2>接口方法名，例：heretical</h2> **/
+    private String mtdName;
+    /** <h2>接口方法参数类名，例：com.xyz.bean.HereticalReq</h2> **/
+    private String parameterTypeName;
+    /** <h2>指定的URL节点，例：dubbo://ip:port</h2> **/
+    private String url;
+    /** <h2>可以是调用具体接口的请求参数，也可以是修复问题的Java代码</h2> **/
+    private String paramsMap;
+}
+```
+
+MonsterFacade代码如下：
+
+```java
+public interface MonsterFacade {
+    // 定义了一个专门处理万能修复逻辑的Dubbo接口
+    AbstractResponse heretical(HereticalReq req);
+}
+
+public class MonsterFacadeImpl implements MonsterFacade {
+    @Override
+    AbstractResponse heretical(HereticalReq req){
+        // 编译 Java 代码，然后变成 JVM 可识别的 Class 对象信息
+        Class<?> javaClass = compile(req.getJavaCode());
+
+        // 为 Class 对象信息，自定义一个名称，将来创建 Spring 单例对象要用到
+        String beanName = "Custom" + javaClass.getSimpleName();
+
+        // 通过 Spring 来创建单例对象
+        generateSpringBean(beanName, javaClass);
+
+        // 获取 beanName 对应的单例对象
+        MonsterInvokeRunnable runnable = (MonsterAction)SpringContextUtils.getBean(beanName);
+
+        // 执行单例对象的方法即可
+        Object resp = runnable.run(req.getReqParamsMap());
+
+        // 返回结果
+        return new AbstractResponse(resp);
+    }
+
+    // 利用 groovy-all.jar 中的 groovyClassLoader 来编译 Java 代码
+    private Class<?> compile(String javaCode){
+        return groovyClassLoader.parseClass(javaCode);
+    }
+
+    // 生成Spring容器Bean对象
+    private void generateSpringBean(String beanName, Class<?> javaClass){
+        // 构建 Bean 定义对象
+        BeanDefinitionBuilder beanDefinitionBuilder =
+                BeanDefinitionBuilder.genericBeanDefinition(javaClass);
+        AbstractBeanDefinition rawBeanDefinition = beanDefinitionBuilder.getRawBeanDefinition();
+
+        // 将 bean 移交给 Spring 去管理
+        ConfigurableApplicationContext appCtx =
+                (ConfigurableApplicationContext)SpringContextUtils.getContext();
+        appCtx.getAutowireCapableBeanFactory()
+                .applyBeanPostProcessorsAfterInitialization(rawBeanDefinition, beanName);
+        ((BeanDefinitionRegistry)appCtx.getBeanFactory()).registerBeanDefinition(beanName, rawBeanDefinition);
+    }
+}
+```
+
+**点点直连的应用**
+
+好，点点直连的代码逻辑我们就掌握了，之后如果能应用到自己的项目中，相信你再也不用担心紧急的数据订正事件了。在日常开发中，哪些应用场景可以考虑点点直连呢？
+
+第一，修复产线事件，通过直连+泛化+动态代码编译执行，可以轻松临时解决产线棘手的问题。
+
+第二，绕过注册中心直接联调测试，有些公司由于测试环境的复杂性，有时候不得不采用简单的直连方式，来快速联调测试验证功能。
+
 
 
 # ==源码篇==
