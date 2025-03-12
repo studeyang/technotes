@@ -107,6 +107,7 @@ public class SimpleRedisServiceUpdateCallback implements IDisconfUpdate {
     @Autowired
     private SimpleRedisService simpleRedisService;
 
+    @Override
     public void reload() throws Exception {
         simpleRedisService.changeJedis();
     }
@@ -224,7 +225,7 @@ disconf.enable_local_download_dir_in_class_path=
 
 disconf服务集群模式：
 
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406122321715.jpeg)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503121548914.png" alt="image-20250312152150755" style="zoom: 67%;" />
 
 disconf的模块架构图：
 
@@ -234,20 +235,20 @@ disconf的模块架构图：
 
 ### 4.2.1 运行流程详细介绍
 
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406132317699.jpeg)
+![image-20250312162130194](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503121621367.png)
 
 启动事件A：以下按顺序发生。
 
 （第一次扫描，静态扫描 for annotation config）
 
 - A3：扫描静态注解类数据，并注入到配置仓库里。==（第一次扫描）==
-- A4+A2：根据仓库里的配置文件、配置项，到 disconf-web 平台里下载配置数据。==（获取数据）==
+- A4：根据仓库里的配置文件、配置项，到 disconf-web 平台里下载配置数据。==（获取数据）==
 - A5：将下载得到的配置数据值注入到仓库里。==（注入）==
-- A6：根据仓库里的配置文件、配置项，去ZK上监控节点。==（Watch）==
+- A4+A6：根据仓库里的配置文件、配置项，去ZK上监控节点。==（Watch）==
 
 （第二次扫描，动态扫描 for annotation config）
 
-- A7+A2：根据XML配置定义，到 disconf-web 平台里下载配置文件，放在仓库里，并监控ZK结点。
+- A7+A4+A6：根据XML配置定义，到 disconf-web 平台里下载配置文件，放在仓库里，并监控ZK结点。
 - A8：A1-A6均是处理静态类数据。A7是处理动态类数据，包括：实例化配置的回调函数类；将配置的值注入到配置实体里。
 
 > 配置仓库指的是什么？
@@ -258,8 +259,8 @@ disconf的模块架构图：
 
 - B1：管理员在 Disconf-web 平台上更新配置。
 - B2：Disconf-web 平台发送配置更新消息给ZK指定的结点。
-- B3：ZK通知 Disconf-cient 模块。
-- B4：Disconf-cient 根据仓库里的配置文件、配置项，到 disconf-web 平台里下载配置数据。（与A4一样）
+- B3：ZK 通知 Disconf-Client 模块。
+- B4：Disconf-Client 根据仓库里的配置文件、配置项，到 disconf-web 平台里下载配置数据。（与A4一样）
 - B5：将下载得到的配置数据值注入到仓库里。（与A5一样）
 - B6：根据仓库里的配置文件、配置项，去ZK上监控节点。（基本与A6一样，唯一的区别是，这里还会将配置的新值注入到配置实体里）
 
@@ -328,6 +329,34 @@ DisconfMgrBean的扫描主要是静态数据的初始化，并未涉及到动态
 2. 为配置实例注入值。
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202406132344828.jpeg)
+
+### 启动补充
+
+**disconf-client**
+
+```
+下载地址：
+GET http://disconf-sit6.xxx.com/api/config/file?version=1_0_0_0&app=es-sendbox-core&env=qa6&key=sysConfig.properties&type=0
+
+Watch:
+/disconf/es-sendbox-core_1_0_0_0_qa6/file/sysConfig.properties
+```
+
+**Get ZK host**
+
+```
+>> com.baidu.disconf.client.watch.WatchFactory#getWatchMgr
+/api/zoo/hosts
+SIT6: 10.204.209.134:2181,10.204.209.144:2181,10.204.209.154:2181
+```
+
+**Read ZK Data**
+
+```
+>> com.baidu.disconf.core.common.zookeeper.inner.ResilientActiveKeyValueStore#read
+```
+
+
 
 ### 4.2.3 动态修改配置的原理
 
@@ -445,7 +474,84 @@ Nginx(处理静态请求) + Tomcat(处理动态请求）
 - JSON
 - RestFul API
 
+### 4.3.1 修改配置
 
+```
+PUT http://disconf-sit6.xxx.com/api/web/config/filetext/117568
+
+Request Header
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+
+Request Body
+fileContent=%23%E4%B8%B0%
+
+Response
+{
+    "message": {},
+    "sessionId": "4fc08ec8-93a6-41e7-a735-ce5a3fb4d68c",
+    "success": "true",
+    "result": "修改成功，邮件发送失败，请检查邮箱配置"
+}
+```
+
+```
+Write ZK
+>> com.baidu.disconf.core.common.zookeeper.inner.ResilientActiveKeyValueStore#write
+```
+
+### 4.3.2 获取配置
+
+```
+GET http://disconf-sit6.xxx.com/api/web/config/117562
+
+Request Body
+{
+    "message": {},
+    "sessionId": "41690d6c-8dc0-48ff-ae51-7573bab5b0f4",
+    "success": "true",
+    "result": {
+        "configId": 117562,
+        "appName": "es-sendbox-core",
+        "appId": 288,
+        "version": "1_0_0_0",
+        "envId": 11,
+        "envName": "qa6",
+        "type": "配置文件",
+        "typeId": 0,
+        "key": "dubbo.properties",
+        "value": "\n\nservice.version=1.0.0\n#dubbo服务名称\ndubbo.application.name=es-sendbox-core\ndubbo.application.id=es-sendbox-core\n\n#注册中心地址\ndubbo.registry.protocol=zookeeper\ndubbo.registry.address=10.204.209.163:2181,10.204.209.164:2181,10.204.209.165:2181 \n\ndubbo.server=true\n#扫描的包\ndubbo.scan=com.xxx.send.sendbox\n\n# Dubbo Protocol\ndubbo.protocol.name=dubbo\ndubbo.protocol.port=20880\ndubbo.protocol.payload=25165824\n\ndubbo.consumer.check=false\n\ndubbo.protocol.threads=1000",
+        "createTime": "20210831161145",
+        "modifyTime": "202205161600",
+        "machineSize": 0,
+        "machineList": null,
+        "errorNum": 0
+    }
+}
+
+Response
+{
+    "message": {},
+    "sessionId": "41690d6c-8dc0-48ff-ae51-7573bab5b0f4",
+    "success": "true",
+    "result": {
+        "configId": 117562,
+        "appName": "es-sendbox-core",
+        "appId": 288,
+        "version": "1_0_0_0",
+        "envId": 11,
+        "envName": "qa6",
+        "type": "配置文件",
+        "typeId": 0,
+        "key": "dubbo.properties",
+        "value": "#dubbo服务名称\ndubbo.application.name=es-sendbox-core\n",
+        "createTime": "20210831161145",
+        "modifyTime": "202205161600",
+        "machineSize": 0,
+        "machineList": null,
+        "errorNum": 0
+    }
+}
+```
 
 
 
