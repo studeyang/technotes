@@ -1015,11 +1015,214 @@ public class MonsterFacadeImpl implements MonsterFacade {
 
 第二，绕过注册中心直接联调测试，有些公司由于测试环境的复杂性，有时候不得不采用简单的直连方式，来快速联调测试验证功能。
 
+# 06｜事件通知：⼀招打败各种神乎其神的回调事件
+
+今天我们探索 Dubbo 框架的第五道特⾊⻛味，事件通知。
+
+我们看个项目例子，比如有个支付系统提供了一个商品支付功能：
+
+![image-20250312224547937](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503122245150.png)
+
+图中的支付系统暴露了一个支付请求的Dubbo接口，支付核心业务逻辑是调用核心支付系统完成，当支付状态翻转为支付成功后，还需要额外做些事情，比如埋点商品信息、短信告知用户和通知物流派件。
+
+面对这样一个完成核心功能后还需要额外处理多个事件的需求，你会怎么优雅地快速处理呢？
+
+**面向过程编程**
+
+用面向对象编程的思路，把一些小功能用小方法封装一下，让那一大坨代码整体看起来整洁点。
+
+![image-20250312224901516](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503122249693.png)
+
+```java
+@DubboService
+@Component
+public class PayFacadeImpl implements PayFacade {
+    // 商品支付功能：一个大方法
+    @Override
+    public PayResp recvPay(PayReq req){
+        // 支付核心业务逻辑处理
+        method1();
+
+        // 埋点已支付的商品信息
+        method2();
+
+        // 发送支付成功短信给用户
+        method3();
+
+        // 通知物流派件
+        method4();
+
+        // 返回支付结果
+        return buildSuccResp();
+    }
+}
+```
+
+上述代码实现方式可能会为我们之后的繁重工作量埋下种子，⽐如⼀周后需求⼜来了，要发送邮件、通知结算，怎么办呢？是不是还得继续添加⼩⽅法 5 和⼩⽅法 6？
+
+为了提升代码水平，我们继续思考商品支付的功能设计。
+
+**如何解耦**
+
+“分开”其实就是要做解耦，这里我教你一个解耦小技巧，从3方面分析：
+
+1. **功能相关性**。将一些功能非常相近的汇聚成一块，既是对资源的聚焦整合，也降低了他人的学习成本，尊重了人类物以类聚的认知习惯。
+2. **密切相关性**。按照与主流程的密切相关性，将一个个小功能分为密切与非密切。
+3. **状态变更性**。按照是否有明显业务状态的先后变更，将一个个小功能再归类。
+
+按照小技巧我们再梳理一下这4个功能：
+
+![image-20250312225103943](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503122251128.png)
+
+先看功能相关性，四个小功能的拆分没问题；再看密切相关性，支付核心业务逻辑是最重要的，其他三个事件的重要程度和迫切性并不高；最后看状态变更性，核心业务逻辑有了明显的状态变更后，在支付成功的关键节点后，驱动着继续做另外三件事。
+
+解耦完成，如何形成主次分明的结构呢？
+
+考虑到商品支付这个功能也只是Dubbo众多接口中的一个，我们不妨升维思考，站在Dubbo接口的框架调用流程中，看看是否可以在商品支付功能method1远程调用的前后做点事情来提供事件通知的入口。回忆Dubbo调用远程的整个流程：
+
+![image-20250312225246277](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503122252449.png)
+
+把AOP的思想充分应用到拦截模块中，在执行下一步调用之前、之后、异常时包裹了一层。
+
+![image-20250312225551353](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503122255541.png)
+
+那过滤器的代码该怎么写呢？其实Dubbo底层的源码已经按照我们的预想实现了一番：
+
+```java
+@Activate(group = CommonConstants.CONSUMER)
+public class FutureFilter implements ClusterFilter, ClusterFilter.Listener {
+    protected static final Logger logger = LoggerFactory.getLogger(FutureFilter.class);
+    @Override
+    public Result invoke(final Invoker<?> invoker, final Invocation invocation) throws RpcException {
+        // 调用服务之前：执行Dubbo接口配置中指定服务中的onInvoke方法
+        fireInvokeCallback(invoker, invocation);
+        // need to configure if there's return value before the invocation in order to help invoker to judge if it's
+        // necessary to return future.
+        // 调用服务并返回调用结果
+        return invoker.invoke(invocation);
+    }
+
+    // 调用服务之后：
+    // 正常返回执行Dubbo接口配置中指定服务中的onReturn方法
+    // 异常返回执行Dubbo接口配置中指定服务中的onThrow方法
+    @Override
+    public void onResponse(Result result, Invoker<?> invoker, Invocation invocation) {
+        if (result.hasException()) {
+            // 调用出现了异常之后的应对处理
+            fireThrowCallback(invoker, invocation, result.getException());
+        } else {
+            // 正常调用返回结果的应对处理
+            fireReturnCallback(invoker, invocation, result.getValue());
+        }
+    }
+
+    // 调用框架异常后：
+    // 异常返回执行Dubbo接口配置中指定服务中的onThrow方法
+    @Override
+    public void onError(Throwable t, Invoker<?> invoker, Invocation invocation) {
+        fireThrowCallback(invoker, invocation, t);
+    }
+}
+```
+
+**如何改造**
+
+接下来就是轻松环节了，核心逻辑和三个事件逻辑该怎么写呢？我们可以直接根据源码所提供的支撑能力，重新修改 recvPay 方法：
+
+```java
+@DubboService
+@Component
+public class PayFacadeImpl implements PayFacade {
+    @Autowired
+    @DubboReference(
+            /** 为 DemoRemoteFacade 的 sayHello 方法设置事件通知机制 **/
+            methods = {@Method(
+                    name = "sayHello",
+                    oninvoke = "eventNotifyService.onInvoke",
+                    onreturn = "eventNotifyService.onReturn",
+                    onthrow = "eventNotifyService.onThrow")}
+    )
+    private DemoRemoteFacade demoRemoteFacade;
+
+    // 商品支付功能：一个大方法
+    @Override
+    public PayResp recvPay(PayReq req){
+        // 支付核心业务逻辑处理
+        method1();
+        // 返回支付结果
+        return buildSuccResp();
+    }
+    private void method1() {
+        // 省略其他一些支付核心业务逻辑处理代码
+        demoRemoteFacade.sayHello(buildSayHelloReq());
+    }
+}
+```
+
+```java
+// 专门为 demoRemoteFacade.sayHello 该Dubbo接口准备的事件通知处理类
+@Component("eventNotifyService")
+public class EventNotifyServiceImpl implements EventNotifyService {
+    // 调用之前
+    @Override
+    public void onInvoke(String name) {
+        System.out.println("[事件通知][调用之前] onInvoke 执行.");
+    }
+    // 调用之后
+    @Override
+    public void onReturn(String result, String name) {
+        System.out.println("[事件通知][调用之后] onReturn 执行.");
+        // 埋点已支付的商品信息
+        method2();
+        // 发送支付成功短信给用户
+        method3();
+        // 通知物流派件
+        method4();
+    }
+    // 调用异常
+    @Override
+    public void onThrow(Throwable ex, String name) {
+        System.out.println("[事件通知][调用异常] onThrow 执行.");
+    }
+}
+```
+
+通过这样的整理，我们彻底在 recvPay 方法中凸显了支付核心业务逻辑的重要性，剥离解耦了其他三件事与主体核心逻辑的边界。
+
+**事件通知的应用**
+
+事件通知的应用我们已经掌握了，不过，事件通知也只是一种机制流程，那在我们日常开发中，哪些应用场景可以考虑事件通知呢？
+
+第一，职责分离，可以按照功能相关性剥离开，让各自的逻辑是内聚的、职责分明的。
+
+第二，解耦，把复杂的面向过程风格的一坨代码分离，可以按照功能是技术属性还是业务属性剥离。
+
+第三，事件溯源，针对一些事件的实现逻辑，如果遇到未知异常后还想再继续尝试重新执行的话，可以考虑事件持久化并支持在一定时间内重新回放执行。
+
+> 这个技巧有点华而不实的味道，想要解耦的话，可以把后面3个方法放到其他业务 Bean 里处理就行了。
+
+# 07｜参数验证：写个参数校验居然也会被训？
+
+# 08｜缓存操作：如何为接口优雅地提供缓存功能？
+
+# 09｜流量控制：控制接口调用请求流量的三个秘诀
+
+# 10｜服务认证：被异构系统侵入调用了，怎么办？
+
+# 11｜配置加载顺序：为什么你设置的超时时间不生效？
+
+
+
 
 
 # ==源码篇==
 
 
 
+# 22｜协议编解码：接口调用的数据是如何发到网络中的？
+
 # ==拓展篇==
 
+
+
+# 27｜协议扩展：如何快速控制应用的上下线？
