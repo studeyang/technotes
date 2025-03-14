@@ -1203,6 +1203,282 @@ public class EventNotifyServiceImpl implements EventNotifyService {
 
 # 07｜参数验证：写个参数校验居然也会被训？
 
+今天我们探索 Dubbo 框架的第六道特⾊⻛味，参数验证。
+
+现在你的同事小马就因为漏写了参数校验被老大训话了，来看他写的一段消费方调用提供方的代码：
+
+```java
+///////////////////////////////////////////////////
+// 消费方的一段调用下游 validateUser 的代码
+///////////////////////////////////////////////////
+@Component
+public class InvokeDemoFacade {
+    @DubboReference
+    private ValidationFacade validationFacade;
+
+    // 一个简单的触发调用下游 ValidationFacade.validateUser 的方法
+    public String invokeValidate(String id, String name, String
+        // 调用下游接口
+        return validationFacade.validateUser(new ValidateUserInfo(id, name, sex));
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方的一段接收 validateUser 请求的代码
+///////////////////////////////////////////////////
+@DubboService
+@Component
+public class ValidationFacadeImpl implements ValidationFacade {
+    @Override
+    public String validateUser(ValidateUserInfo userInfo) {
+        // 这里就象征性地模拟一下业务逻辑
+        String retMsg = "Ret: "
+                + userInfo.getId()
+                + "," + userInfo.getName()
+                + "," + userInfo.getSex();
+        System.out.println(retMsg);
+        return retMsg;
+    }
+}
+```
+
+老大指出的几个问题：
+
+- 问题1：消费方代码，在调用下游的 validateUser 方法时，没有预先做一些参数的合法性校验。
+- 问题2：提供方代码，服务方代码在接收请求的时候，没有对一些必要的字段进行合法性校验。
+
+**统⼀验证**
+
+像过滤器这种具有拦截所有请求机制功能的类，一定要先看看你所在系统的相关底层能力支撑，说不定类似的功能已经存在，我们就能物尽其用了。具体步骤就是：
+
+- 首先找到具有拦截机制的类，这里就是 org.apache.dubbo.rpc.Filter 过滤器。
+- 其次找到该 org.apache.dubbo.rpc.Filter 过滤器的所有实现类。
+- 最后认真阅读每个过滤器的类名，翻阅一下每个过滤器的类注释，看看有什么用。
+
+我们按照小技巧操作一下，org.apache.dubbo.rpc.Filter接口下有好多个实现类：
+
+```
+Filter (org.apache.dubbo.rpc)
+- TokenFilter (org.apache.dubbo.rpc.filter)
+- MetricsFilter (org.apache.dubbo.monitor.dubbo)
+- DeprecatedFilter (org.apache.dubbo.rpc.filter)
+- ClassLoaderCallbackFilter (org.apache.dubbo.rpc.filter)
+- CacheFilter (org.apache.dubbo.cache.filter)
+- ActiveLimitFilter (org.apache.dubbo.rpc.filter)
+- ConsumerContextFilter (org.apache.dubbo.rpc.filter)
+- ValidationFilter (org.apache.dubbo.validation.filter)
+- GenericImplFilter (org.apache.dubbo.rpc.filter)
+- MetricsFilter (org.apache.dubbo.monitor.support)
+- CompatibleFilter (org.apache.dubbo.rpc.filter)
+- ProfilerServerFilter (org.apache.dubbo.rpc.filter)
+- ClassLoaderFilter (org.apache.dubbo.rpc.filter)
+- ExceptionFilter (org.apache.dubbo.rpc.filter)
+- ProviderAuthFilter (org.apache.dubbo.auth.filter)
+- ListenableFilter (org.apache.dubbo.rpc)
+- FutureFilter (org.apache.dubbo.rpc.protocol.dubbo.filter)
+- AccessLogFilter (org.apache.dubbo.rpc.filter)
+- TimeoutFilter (org.apache.dubbo.rpc.filter)
+- TraceFilter (org.apache.dubbo.rpc.protocol.dubbo.filter)
+- ConsumerSignFilter (org.apache.dubbo.auth.filter)
+- TpsLimitFilter (org.apache.dubbo.rpc.filter)
+- GenericFilter (org.apache.dubbo.rpc.filter)
+- MonitorFilter (org.apache.dubbo.monitor.support)
+- ExecuteLimitFilter (org.apache.dubbo.rpc.filter)
+- ContextFilter (org.apache.dubbo.rpc.filter)
+- Filter (com.alibaba.dubbo.rpc)
+- EchoFilter (org.apache.dubbo.rpc.filter)
+```
+
+耐心些一路看下去，在第9行，你会发现一个 ValidationFilter 类，通过类名的英文单词能大致看出是一个验证的过滤器。是不是底层框架已经做了我们想做的事情了呢？我们进入源码一探究竟。
+
+ValidationFilter 的类注释信息：简单理解就是，ValidationFilter 会根据 url 配置的 validation 属性值找到正确的校验器，在方法真正执行之前触发调用校验器执行参数验证逻辑。
+
+类注释里还举了个例子：
+
+```
+e.g. <dubbo:method name="save" validation="jvalidation" />
+```
+
+可以在方法层面添加 validation 属性，并设置属性值为 jvalidation，这样就可以正常使用底层提供的参数校验机制了。
+
+还提到特殊设置方式：
+
+```
+e.g. <dubbo:method name="save" validation="special" />
+where "special" is representing a validator for special character.
+special=xxx.yyy.zzz.SpecialValidation under META-INF folders org.apache.dubbo.validation.Validation file.
+```
+
+可以在 validation 属性的值上，填充一个自定义的校验类名，并且嘱咐我们记得将自定义的校验类名添加到 META-INF 文件夹下的 org.apache.dubbo.validation.Validation 文件中。
+
+**代码改造**
+
+我们进入 ValidationFilter 源码类看看，找到 invoke 方法，顺着逻辑逐行点进每个方法：
+
+```java
+// org.apache.dubbo.validation.filter.ValidationFilter.invoke
+public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+    // Validation 接口的代理类被注入成功，且该调用的方法有 validation 属性
+    if (validation != null && !invocation.getMethodName().startsWith("$")
+            && ConfigUtils.isNotEmpty(invoker.getUrl().getMethodParameter(invocation.getMethodName(), "validation"))) {
+        try {
+            // 接着通过 url 中 validation 属性值，并且为该方法创建对应的校验实现类
+            Validator validator = validation.getValidator(invoker.getUrl());
+            if (validator != null) {
+                // 若找到校验实现类的话，则真正开启对方法的参数进行校验
+                validator.validate(invocation.getMethodName(), invocation.getParameterTypes(), invocation.getArguments());
+            }
+        } catch (RpcException e) {
+            // RpcException 异常直接抛出去
+            throw e;
+        } catch (Throwable t) {
+            // 非 RpcException 异常的话，则直接封装结果返回
+            return AsyncRpcResult.newDefaultAsyncResult(t, invocation);
+        }
+    }
+    // 能来到这里，说明要么没有配置校验过滤器，要么就是校验了但参数都合法
+    // 既然没有抛异常的话，那么就直接调用下一个过滤器的逻辑
+    return invoker.invoke(invocation);
+}
+
+// org.apache.dubbo.validation.support.AbstractValidation.getValidator
+public Validator getValidator(URL url) {
+    // 将 url 转成字符串形式
+    String key = url.toFullString();
+    // validators 是一个 Map 结构，即底层可以说明每个方法都可以有不同的校验器
+    Validator validator = validators.get(key);
+    if (validator == null) {
+        // 若通过 url 从 Map 结构中找不到 value 的话，则直接根据 url 创建一个校验器实现类
+        // 而且 createValidator 是一个 protected abstract 修饰的
+        // 说明是一种模板方式，创建校验器实现类，是可被重写重新创建自定义的校验器
+        validators.put(key, createValidator(url));
+        validator = validators.get(key);
+    }
+    return validator;
+}
+
+// org.apache.dubbo.validation.support.jvalidation.JValidation
+public class JValidation extends AbstractValidation {
+    @Override
+    protected Validator createValidator(URL url) {
+        // 创建一个 Dubbo 框架默认的校验器
+        return new JValidator(url);
+    }
+}
+
+// org.apache.dubbo.validation.support.jvalidation.JValidator
+public class JValidator implements Validator {
+    // 省略其他部分代码
+    // 进入到 Dubbo 框架默认的校验器中，发现真实采用的是 javax 第三方的 validation 插件
+    // 由此，我们应该找到了标准产物的关键突破口了
+    private final javax.validation.Validator validator;
+}
+```
+
+跟踪源码的过程：
+
+- 先找到 ValidationFilter 过滤器的 invoke 入口。
+- 紧接着找到根据 validation 属性值创建校验器的 createValidator 方法。
+- 然后发现创建了一个 JValidator 对象。
+- 在该对象中发现了关于 javax 包名的第三方 validation 插件。
+
+最终我们确实发现了一个第三方 validation 插件，顺藤摸瓜你可以找到对应的 maven 坐标：
+
+```xml
+<dependency>
+    <groupId>org.hibernate</groupId>
+    <artifactId>hibernate-validator</artifactId>
+</dependency>
+```
+
+我们进入 hibernate-validator 插件的 pom 中，能看到里面引用了一个 validation-api 插件坐标：
+
+```xml
+<dependency>
+    <groupId>javax.validation</groupId>
+    <artifactId>validation-api</artifactId>
+</dependency>
+```
+
+万事俱备，只欠代码，改造如下：
+
+```java
+///////////////////////////////////////////////////
+// 统一验证：下游 validateUser 的方法入参对象
+///////////////////////////////////////////////////
+@Setter
+@Getter
+public class ValidateUserInfo implements Serializable {
+    private static final long serialVersionUID = 1558193327511325424L;
+    // 添加了 @NotBlank 注解
+    @NotBlank(message = "id 不能为空")
+    private String id;
+    // 添加了 @Length 注解
+    @Length(min = 5, max = 10, message = "name 必须在 5~10 个长度之间")
+    private String name;
+    // 无注解修饰
+    private String sex;
+}
+
+///////////////////////////////////////////////////
+// 统一验证：消费方的一段调用下游 validateUser 的代码
+///////////////////////////////////////////////////
+@Component
+public class InvokeDemoFacade {
+
+    // 注意，@DubboReference 这里添加了 validation 属性
+    @DubboReference(validation ＝ "jvalidation")
+    private ValidationFacade validationFacade;
+
+    // 一个简单的触发调用下游 ValidationFacade.validateUser 的方法
+    public String invokeValidate(String id, String name, String sex) {
+        return validationFacade.validateUser(new ValidateUserInfo(id, name, sex));
+    }
+}
+
+///////////////////////////////////////////////////
+// 统一验证：提供方的一段接收 validateUser 请求的代码
+///////////////////////////////////////////////////
+// 注意，@DubboService 这里添加了 validation 属性
+@DubboService(validation ＝ "jvalidation")
+@Component
+public class ValidationFacadeImpl implements ValidationFacade {
+    @Override
+    public String validateUser(ValidateUserInfo userInfo) {
+        // 这里就象征性的模拟下业务逻辑
+        String retMsg = "Ret: "
+                + userInfo.getId()
+                + "," + userInfo.getName()
+                + "," + userInfo.getSex();
+        System.out.println(retMsg);
+        return retMsg;
+    }
+}
+```
+
+其他代码没有多大变化，主要改动是3点，也就是我们前面梳理的需要改造的3点：
+
+1. 提供方将方法入参的 id、name 字段添加了注解。
+2. 提供方在 ValidationFacadeImpl 类的 @DubboService 注解中添加了 validation 属性，属性对应的值为 jvalidation。
+3. 消费方在调用提供方时，在 InvokeDemoFacade 中给 validationFacade 字段的 @DubboReference 注解中也添加了一个 validation 属性，属性对应的值也为 jvalidation。
+
+代码写完，再回过头来看看老大训斥的2个问题有没有解决：
+
+- 问题1：消费方代码，在调用下游的 validateUser 方法时，没有预先做一些参数的合法性校验。
+- 问题2：提供方代码，服务方代码在接收请求的时候，没有对一些必要的字段进行合法性校验。
+
+问题1我们可以通过在 @DubboReference 注解中添加 validation 属性解决，问题2我们可以在 @DubboService 注解中添加 validation 属性解决。
+
+这样，我们轻松做到了既能在消费方提前预判参数的合法性，也能在提供方进行参数的兜底校验，还能让代码更加精简提升编码效率，减少大量枯燥无味的雷同代码。
+
+**参数验证的应⽤**
+
+但是这种简单的参数校验也不是万能的，在我们实际应用开发过程中，哪些应用场景可以考虑这种参数校验呢？
+
+- 第一，单值简单规则判断，各个字段的校验逻辑毫无关联、相互独立。
+- 第二，提前拦截掉脏请求，尽可能把一些参数值不合法的情况提前过滤掉，对于消费方来说尽量把高质量的请求发往提供方，对于提供方来说，尽量把非法的字段值提前拦截，以此保证核心逻辑不被脏请求污染。
+- 第三，通用网关校验领域，在网关领域部分很少有业务逻辑，但又得承接请求，对于不合法的参数请求就需要尽量拦截掉，避免不必要的请求打到下游系统，造成资源浪费。
+
 # 08｜缓存操作：如何为接口优雅地提供缓存功能？
 
 # 09｜流量控制：控制接口调用请求流量的三个秘诀
