@@ -1481,9 +1481,237 @@ public class ValidationFacadeImpl implements ValidationFacade {
 
 # 08｜缓存操作：如何为接口优雅地提供缓存功能？
 
+今天我们探索 Dubbo 框架的第七道特⾊⻛味，缓存操作。
+
+移动端App你应该不陌生了，不过最近有个项目引发了用户吐槽：
+
+![image-20250317225403361](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503172254647.png)
+
+图中的App，在首页进行页面渲染加载时会向网关发起请求，网关会从权限系统拿到角色信息列表和菜单信息列表，从用户系统拿到当前登录用户的简单信息，然后把三块信息一并返回给到App。
+
+然而，就是这样一个看似简单的功能，每当上下班的时候因为App被打开的频率非常高，首页加载的请求流量在短时间内居高不下，打开很卡顿，渲染很慢。
+
+经过排查后，发现该App只有数十万用户，但意外的是在访问高峰期，权限系统的响应时间比以往增长了近10倍，权限系统集群中单机查询数据库的QPS高达500多，导致数据库的查询压力特别大，从而导致查询请求响应特别慢。
+
+由于目前用户体量尚且不大，架构团队商讨后，为了稳住用户体验，最快的办法就是在网关增加缓存功能，把首页加载请求的结果缓存起来，以提升首页快速渲染页面的时效。
+
+对于这个加缓存的需求，你会如何优雅地处理呢？
+
+**套用源码**
+
+来看 org.apache.dubbo.rpc.Filter 接口的实现类，寻找有没有缓存英文单词的类名，你会发现还真有一个叫 CacheFilter 名字的类，看起来像是缓存过滤器。
+
+我们看注释，还有一部分注释是教我们如何使用缓存的：
+
+```xml
+e.g. 1)<dubbo:service cache="lru" />
+     2)<dubbo:service /> <dubbo:method name="method2" cache="threadlocal" /> <dubbo:service/>
+     3)<dubbo:provider cache="expiring" />
+     4)<dubbo:consumer cache="jcache" />
+```
+
+接下来我们可以根据源码提示的解决方案去改造代码了。改造如下：
+
+```java
+@Component
+public class InvokeCacheFacade {
+    // 引用下游查询角色信息列表的接口，添加 cache = lru 属性
+    @DubboReference(cache = "lru")
+    private RoleQueryFacade roleQueryFacade;
+    // 引用下游查询菜单信息列表的接口，添加 cache = lru 属性
+    @DubboReference(cache = "lru")
+    private MenuQueryFacade menuQueryFacade;
+    // 引用下游查询菜单信息列表的接口，没有添加缓存属性
+    @DubboReference
+    private UserQueryFacade userQueryFacade;
+
+    public void invokeCache(){
+        // 循环 3 次，模拟网关被 App 请求调用了 3 次
+        for (int i = 1; i <= 3; i++) {
+            // 查询角色信息列表
+            String roleRespMsg = roleQueryFacade.queryRoleList("Geek");
+            // 查询菜单信息列表
+            String menuRespMsg = menuQueryFacade.queryAuthorizedMenuList("Geek");
+            // 查询登录用户简情
+            String userRespMsg = userQueryFacade.queryUser("Geek");
+
+            // 打印远程调用的结果，看看是走缓存还是走远程
+            String idx = new DecimalFormat("00").format(i);
+            System.out.println("第 "+ idx + " 次调用【角色信息列表】结果为: " + roleRespMsg);
+            System.out.println("第 "+ idx + " 次调用【菜单信息列表】结果为: " + menuRespMsg);
+            System.out.println("第 "+ idx + " 次调用【登录用户简情】结果为: " + userRespMsg);
+            System.out.println();
+        }
+    }
+}
+```
+
+运行 invokeCache 方法，打印如下：
+
+```
+第 01 次调用【角色信息列表】结果为: 2022-11-18_22:52:00.402: Hello Geek, 已查询该用户【角色列表信息】
+第 01 次调用【菜单信息列表】结果为: 2022-11-18_22:52:00.407: Hello Geek, 已查询该用户已授权的【菜单列表信息】
+第 01 次调用【登录用户简情】结果为: 2022-11-18_22:52:00.411: Hello Geek, 已查询【用户简单信息】
+
+第 02 次调用【角色信息列表】结果为: 2022-11-18_22:52:00.415: Hello Geek, 已查询该用户【角色列表信息】
+第 02 次调用【菜单信息列表】结果为: 2022-11-18_22:52:00.419: Hello Geek, 已查询该用户已授权的【菜单列表信息】
+第 02 次调用【登录用户简情】结果为: 2022-11-18_22:52:00.422: Hello Geek, 已查询【用户简单信息】
+
+第 03 次调用【角色信息列表】结果为: 2022-11-18_22:52:00.415: Hello Geek, 已查询该用户【角色列表信息】
+第 03 次调用【菜单信息列表】结果为: 2022-11-18_22:52:00.419: Hello Geek, 已查询该用户已授权的【菜单列表信息】
+第 03 次调用【登录用户简情】结果为: 2022-11-18_22:52:00.426: Hello Geek, 已查询【用户简单信息】
+```
+
+“角色信息列表”在第2次和第3次的时间戳信息是一样的 415 结尾，“菜单信息列表”在第2次和第3次的时间戳信息也是一样的，而“登录用户简情”的时间戳每次都是不一样。
+
+日志信息很有力地说明缓存功能生效了。
+
+**改造思考**
+
+1. 改造方案的数据是存储在 JVM 内存中，那会不会撑爆内存呢？
+
+我们盘算一下，假设角色信息列表和菜单信息列表占用内存总和约为 1024 字节，预估有 50 万用户体量，那么最终总共占用 50W \* 1024字节 ≈ 488.28 兆，目前网关的老年代大小约为 1200 兆，是不会撑爆内存的。这个问题解决。
+
+2. 如果某些用户的权限发生了变更，从变更完成到能使用最新数据的容忍时间间隔是多少，如何完成内存数据的刷新操作呢？
+
+目前改造方案使用的是 `cache = "lru"` 缓存策略，虽然我们对底层的实现细节一概不知，但也没有什么好胆怯的，开启 debug 模式去 CacheFilter 中调试一番：
+
+```java
+// 过滤器被触发调用的入口
+org.apache.dubbo.cache.filter.CacheFilter#invoke
+                  ↓
+// 根据 invoker.getUrl() 获取缓存容器
+org.apache.dubbo.cache.support.AbstractCacheFactory#getCache
+                  ↓
+// 若缓存容器没有的话，则会自动创建一个缓存容器
+org.apache.dubbo.cache.support.lru.LruCacheFactory#createCache
+                  ↓
+// 最终创建的是一个 LruCache 对象，该对象的内部使用的 LRU2Cache 存储数据
+org.apache.dubbo.cache.support.lru.LruCache#LruCache
+// 存储调用结果的对象
+private final Map<Object, Object> store;
+public LruCache(URL url) {
+    final int max = url.getParameter("cache.size", 1000);
+    this.store = new LRU2Cache<>(max);
+}
+                  ↓
+// LRU2Cache 的带参构造方法，在 LruCache 构造方法中，默认传入的大小是 1000
+org.apache.dubbo.common.utils.LRU2Cache#LRU2Cache(int)
+public LRU2Cache(int maxCapacity) {
+    super(16, DEFAULT_LOAD_FACTOR, true);
+    this.maxCapacity = maxCapacity;
+    this.preCache = new PreCache<>(maxCapacity);
+}
+// 若继续放数据时，若发现现有数据个数大于 maxCapacity 最大容量的话
+// 则会考虑抛弃掉最古老的一个，也就是会抛弃最早进入缓存的那个对象
+@Override
+protected boolean removeEldestEntry(java.util.Map.Entry<K, V> eldest) {
+    return size() > maxCapacity;
+}
+                  ↓
+// JDK 中的 LinkedHashMap 源码在发生节点插入后
+// 给了子类一个扩展删除最旧数据的机制
+java.util.LinkedHashMap#afterNodeInsertion
+void afterNodeInsertion(boolean evict) { // possibly remove eldest
+    LinkedHashMap.Entry<K,V> first;
+    if (evict && (first = head) != null && removeEldestEntry(first)) {
+        K key = first.key;
+        removeNode(hash(key), key, null, false, true);
+    }
+}
+```
+
+一路跟踪源码，最终发现了底层存储数据的是一个继承了 LinkedHashMap 的类，即 LRU2Cache，它重写了父类 LinkedHashMap 中的 removeEldestEntry 方法，当 LRU2Cache 存储的数据个数大于设置的容量后，会删除最先存储的数据，让最新的数据能够保存进来。
+
+所以容忍的时间间隔其实是不确定的，因为请求流量的不确定性，LRU2Cache 的容量不知道多久才能打满，而刷新操作也是依赖于容量被打满后剔除最旧数据的机制，所以容忍的时间间隔和刷新的时效都存在不确定性。
+
+3. 每秒的请求流量峰值是多少呢，会引发缓存雪崩、穿透、击穿三大效应么？
+
+从权限系统的单机查询数据库高达500多的QPS可以大概得知，目前网关接收首页加载的请求在500多QPS左右。
+
+如果用户都在早上的上班时刻打开App，因为每个用户第一次请求在网关是没有缓存数据的，第二次发起的请求就可以使用上缓存数据了，也就是说，只要撑过第一次请求，后面的第二次乃至第N次请求就会改善很多。可以反推出，LruCache 的构造方法中cache.size 参数设置至关重要。
+
+当然问题还有很多，比如网关系统只有这个首页加载的请求需要缓存么，是否还有其他的功能也用了缓存占用了 JVM 内存？
+
+这么问下去，我们简单地用个 lru 策略已经招架不住了，该继续想其他法子了。
+
+**深挖源码**
+
+刚刚只是用了 lru 策略，我们还有另外 threadlocal、jcache、expiring 三个策略可以替换，先到这三个策略对应的缓存工厂类中去看看类注释信息：
+
+- threadlocal，使用的是 ThreadLocalCacheFactory 工厂类，类名中 ThreadLocal 是本地线程的意思，而 ThreadLocal 最终还是使用的是 JVM 内存。
+- jcache，使用的是 JCacheFactory 工厂类，是提供 javax-spi 缓存实例的工厂类，既然是一种 spi 机制，可以接入很多自制的开源框架。
+- expiring，使用的是 ExpiringCacheFactory 工厂类，内部的 ExpiringCache 中还是使用的 Map 数据结构来存储数据，仍然使用的是 JVM 内存。
+
+由于 JVM 内存的有限性，无法支撑更多的接口具有缓存特性，如果稍不留神，很可能导致网关内存溢出或权限系统的数据库被打爆。那把 `cache = "lru"` 换成 `cache = "jcache"` 试试。
+
+需要引入依赖：
+
+```xml
+<dependency>
+  <groupId>javax.cache</groupId>
+  <artifactId>cache-api</artifactId>
+</dependency>
+```
+
+Redisson 框架中实现了 CachingProvider 接口的类， 这就是我们要找的 Redis 缓存框架了，引入依赖：
+
+```xml
+<dependency>
+    <groupId>org.redisson</groupId>
+    <artifactId>redisson</artifactId>
+    <version>3.18.0</version>
+</dependency>
+```
+
+接下来，我们编写配置文件。拿创建 redisson-jcache.json 文件举例，方便演示我们就先配置一个单机 redis 服务节点，如果要上到生产，记得采用 clusterServersConfig 集群服务配置：
+
+```json
+{
+  "singleServerConfig": {
+    "address": "redis://127.0.0.1:6379"
+  }
+}
+```
+
+.json配置文件中，我们只是配置了单机Redis服务的节点。现在启动Redis服务，再去触发调用一下运行 invokeCache 方法看看效果。
+
+终于成功了，打印信息如下：
+
+```
+第 01 次调用【角色信息列表】结果为: 2022-11-19_01:44:43.482: Hello Geek, 已查询该用户【角色列表信息】
+第 01 次调用【菜单信息列表】结果为: 2022-11-19_01:44:43.504: Hello Geek, 已查询该用户已授权的【菜单列表信息】
+第 01 次调用【登录用户简情】结果为: 2022-11-19_01:44:43.512: Hello Geek, 已查询【用户简单信息】
+
+第 02 次调用【角色信息列表】结果为: 2022-11-19_01:44:43.482: Hello Geek, 已查询该用户【角色列表信息】
+第 02 次调用【菜单信息列表】结果为: 2022-11-19_01:44:43.504: Hello Geek, 已查询该用户已授权的【菜单列表信息】
+第 02 次调用【登录用户简情】结果为: 2022-11-19_01:44:43.959: Hello Geek, 已查询【用户简单信息】
+
+第 03 次调用【角色信息列表】结果为: 2022-11-19_01:44:43.482: Hello Geek, 已查询该用户【角色列表信息】
+第 03 次调用【菜单信息列表】结果为: 2022-11-19_01:44:43.504: Hello Geek, 已查询该用户已授权的【菜单列表信息】
+第 03 次调用【登录用户简情】结果为: 2022-11-19_01:44:43.975: Hello Geek, 已查询【用户简单信息】
+```
+
+“角色信息列表”3次调用的时间戳信息完全是一样的，“菜单信息列表”3次调用的时间戳信息也是一样的，我们接入 Redis 缓存框架生效了！
+
+**缓存操作的应用**
+
+在经过一番改造后，采用Redis分布式缓存的确可以缓解短时间内首页加载的压力。
+
+但是也不是任何情况遇到问题了就用缓存处理，缓存也是有一些缺点的，比如大对象与用户进行笛卡尔积的容量很容易撑爆内存，服务器掉电或宕机容易丢失数据，在分布式环境中缓存的一致性问题不但增加了系统的实现复杂度，而且还容易引发各种数据不一致的业务问题。
+
+那哪些日常开发的应用场景可以考虑呢？
+
+- 第一，数据库缓存，对于从数据库查询出来的数据，如果多次查询变化差异较小的话，可以按照一定的维度缓存起来，减少访问数据库的次数，为数据库减压。
+- 第二，业务层缓存，对于一些聚合的业务逻辑，执行时间过长或调用次数太多，而又可以容忍一段时间内数据的差异性，也可以考虑采取一定的维度缓存起来。
+
 # 09｜流量控制：控制接口调用请求流量的三个秘诀
 
+
+
 # 10｜服务认证：被异构系统侵入调用了，怎么办？
+
+
 
 # 11｜配置加载顺序：为什么你设置的超时时间不生效？
 
