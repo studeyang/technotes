@@ -1707,7 +1707,395 @@ Redisson 框架中实现了 CachingProvider 接口的类， 这就是我们要�
 
 # 09｜流量控制：控制接口调用请求流量的三个秘诀
 
+今天我们探索 Dubbo 框架的第⼋道特⾊⻛味，流量控制。
 
+**单机限流**
+
+我们先从最简单的单机开始。把 Dubbo 服务中的方法作为最细粒度，对每个方法设计出一个 **标准容量参数**，然后在方法开始执行业务逻辑时进行计数加1，最后在方法结束执行业务时进行计数减1，而这个计数加1、计数减1就是我们需要的 **实时容量参数**。
+
+于是权限系统的流程图变成这样：
+
+![image-20250318222421968](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503182224354.png)
+
+我们可以考虑采用 ConcurrentMap + AtomicInteger 来进行加减操作，ConcurrentMap 中的 key 存储的是服务名加方法名，value 是目前已使用次数，ConcurrentMap 保证同一个 key 在并发时计数不相互覆盖，AtomicInteger 保证原子性的加减计数。
+
+```java
+///////////////////////////////////////////////////
+// 提供方：自定义限流过滤器
+///////////////////////////////////////////////////
+@Activate(group = PROVIDER)
+public class CustomLimitFilter implements Filter {
+    /** <h2>存储计数资源的Map数据结构，预分配容量64，避免无畏的扩容消耗</h2> **/
+    private static final ConcurrentMap<String, AtomicInteger> COUNT_MAP = new ConcurrentHashMap<>(64);
+    /** <h2>标识启动QPS限流检测，{@code true}：标识开启限流检测，{@code false 或 null}：标识不开启限流检测</h2> **/
+    public static final String KEY_QPS_ENABLE = "qps.enable";
+    /** <h2>每个方法开启的限流检测值</h2> **/
+    public static final String KEY_QPS_VALUE = "qps.value";
+    /** <h2>默认的限流检测值，默认为 30</h2> **/
+    public static final long DEFAULT_QPS_VALUE = 30;
+
+    @Override
+    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 获取限流资源的结果，acquired 有三种值：
+        // true：获取到计数资源；false：计数已满，无法再获取计数资源；null：不需要限流
+        Boolean acquired = null;
+        try {
+            // 尝试是否能获取到限流计数资源
+            acquired = tryAcquire(invoker.getUrl(), invocation);
+            // 若获取不到计数资源的话，则直接抛出异常即可，告知调用方限流了
+            if (acquired != null && !acquired) {
+                throw new RuntimeException(
+                    "Failed to acquire service " +
+                     String.join(".", invoker.getInterface().getName(), invocation.getMethodName()) +
+                     " because of overload.");
+            }
+
+            // 能来到这里，要么是不需要限流，要么就是获取到了计数资源，那就直接继续下一步调用即可
+            return invoker.invoke(invocation);
+        } finally {
+            // 调用不管是成功还是失败，都是需要进行计数资源释放的
+            release(acquired, invoker.getUrl(), invocation);
+        }
+    }
+
+    private Boolean tryAcquire(URL url, Invocation invocation) {
+        // 从方法层面获取 qps.enable 参数值，如果为 true 则表示开启限流控制，否则不需要限流
+        String qpsEnableFlag = url.getMethodParameter(invocation.getMethodName(), KEY_QPS_ENABLE);
+        if (!Boolean.TRUE.toString().equals(qpsEnableFlag)) {
+            return null;
+        }
+
+        // 从方法层面获取 qps.value 限流的标准容量，如果没配置则默认为 30
+        long qpsValue = url.getMethodParameter(invocation.getMethodName(), KEY_QPS_VALUE, DEFAULT_QPS_VALUE);
+        // 服务名加方法名构建Map的Key
+        String serviceKey = String.join("_", url.getServiceKey(), invocation.getMethodName());
+        // 尝试看看该服务是否有对应的计数对象
+        AtomicInteger currentCount = COUNT_MAP.get(serviceKey);
+        if (currentCount == null) {
+            // 若没有对应的计数对象的话，则 putIfAbsent 会进行加锁控制，内部有并发锁控制
+            COUNT_MAP.putIfAbsent(serviceKey, new AtomicInteger());
+            currentCount = COUNT_MAP.get(serviceKey);
+        }
+
+        // 若当前的计数值大于或等于已配置的限流值的话，那么返回 false 表示无法获取计数资源
+        if (currentCount.get() >= qpsValue) {
+            return false;
+        }
+
+        // 能来到这里说明是可以获取锁资源的，那么就正常的加锁即可
+        currentCount.incrementAndGet();
+        return true;
+    }
+
+    private void release(Boolean acquired, URL url, Invocation invocation) {
+        // 若不需要限流，或者没有获取到计数资源，都不需要进行计数资源释放
+        if(acquired == null || !acquired){
+            return;
+        }
+        // 释放计数资源
+        String serviceKey = String.join("_", url.getServiceKey(), invocation.getMethodName());
+        AtomicInteger currentCount = COUNT_MAP.get(serviceKey);
+        currentCount.decrementAndGet();
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方：查询角色信息列表方法
+// 配合限流过滤器而添加的限流参数 qps.enable、qps.value
+///////////////////////////////////////////////////
+@DubboService(methods = {@Method(
+        name = "queryRoleList",
+        parameters = {"qps.enable", "true", "qps.value", "3"})}
+)
+@Component
+public class RoleQueryFacadeImpl implements RoleQueryFacade {
+    @Override
+    public String queryRoleList(String userId) {
+        // 睡眠 1 秒，模拟一下查询数据库需要耗费时间
+        TimeUtils.sleep(1000);
+        String result = String.format(TimeUtils.now() + ": Hello %s, 已查询该用户【角色列表信息】", userId);
+        System.out.println(result);
+        return result;
+    }
+}
+```
+
+我们顺着代码依次看下在提供方的改造要点：
+
+1. 定义了一个自定义限流过滤器，并设置为主要在提供方生效。
+2. 定义了 qps.enable、qps.value 两个方法级别的参数，qps.enable 参数主要表示是否开启流量控制，qps.value 参数主要表示流量的标准容量上限值，这里设置了标准容量的上限值为 3。
+3. 在 invoke 方法中先尝试能否获取计数资源，如果不需要限流或已获取限流计数资源，则拦截放行继续向后调用，否则会抛出无法获取计数资源的运行时异常。
+4. 在 invoke 的 finally 代码块中处理释放计数资源的逻辑。
+5. 在提供方的 @DubboService 注解中，为方法增加了 qps.enable=true、qps.value=3 两个配置，来应用我们刚刚写的限流过滤器。
+
+提供方的代码写的差不多了，马上编写消费方的代码来启动验证看看情况：
+
+```java
+@Component
+public class InvokeLimitFacade {
+    // 引用下游查询角色信息列表的接口
+    @DubboReference(timeout = 10000)
+    private RoleQueryFacade roleQueryFacade;
+    // 引用下游查询菜单信息列表的接口
+    @DubboReference(timeout = 10000)
+    private MenuQueryFacade menuQueryFacade;
+    // 引用下游查询菜单信息列表的接口
+    @DubboReference
+    private UserQueryFacade userQueryFacade;
+    // 定义的一个线程池，来模拟网关接收了很多请求
+    ExecutorService executorService = Executors.newCachedThreadPool();
+
+    public void invokeFilter(){
+        // 循环 5 次，模拟网关被 App 请求调用了 5 次
+        for (int i = 1; i <= 5; i++) {
+            int idx = i;
+            executorService.execute(() -> invokeCacheInner(idx));
+        }
+    }
+
+    private void invokeCacheInner(int i){
+        // 查询角色信息列表
+        String roleRespMsg = roleQueryFacade.queryRoleList("Geek");
+        // 查询菜单信息列表
+        String menuRespMsg = menuQueryFacade.queryAuthorizedMenuList("Geek");
+        // 查询登录用户简情
+        String userRespMsg = userQueryFacade.queryUser("Geek");
+
+        // 打印远程调用的结果，看看是走缓存还是走远程
+        String idx = new DecimalFormat("00").format(i);
+        System.out.println("第 "+ idx + " 次调用【角色信息列表】结果为: " + roleRespMsg);
+        System.out.println("第 "+ idx + " 次调用【菜单信息列表】结果为: " + menuRespMsg);
+        System.out.println("第 "+ idx + " 次调用【登录用户简情】结果为: " + userRespMsg);
+        System.out.println();
+    }
+}
+```
+
+运行 invokeFilter 方法后，网关发起的 5 次请求，3 次是成功的，另外 2 次被拒绝了并且打印了拒绝异常信息如下：
+
+```
+Caused by: org.apache.dubbo.remoting.RemotingException: java.lang.RuntimeException: Failed to acquire service com.hmilyylimh.cloud.facade.role.RoleQueryFacade.queryRoleList because of overload.
+java.lang.RuntimeException: Failed to acquire service com.hmilyylimh.cloud.facade.role.RoleQueryFacade.queryRoleList because of overload.
+	at com.hmilyylimh.cloud.limit.config.CustomLimitFilter.invoke(CustomLimitFilter.java:38)
+	at org.apache.dubbo.rpc.cluster.filter.FilterChainBuilder$CopyOfFilterChainNode.invoke(FilterChainBuilder.java:321)
+```
+
+**分布式限流**
+
+如果要控制某个接口在所有集群中的流量次数，单机还能做到么？
+
+很多人直觉这还不简单，如果某个方法需要按照 qps = 100 进行限流，集群中有 4 台机器，那么只要设置 qps.value = 100/4 = 25 不就可以了么，轻松搞定。这，也不是不可以，只是前提得保证所有机器都正常运转。如果现在有 1 台机器宕机了，那一段时间内，我们岂不是只能提供 qps.size = 25\*3 = 75 的能力了，不满足添加或减少机器方法总 QPS 不变的诉求。
+
+那我们将提供方的代码稍微改造为用 Redis 来计数处理，代码如下：
+
+```java
+///////////////////////////////////////////////////
+// 提供方：自定义限流过滤器， jvm + redis 的支持
+///////////////////////////////////////////////////
+@Activate(group = PROVIDER)
+public class CustomLimitFilter implements Filter {
+    /** <h2>存储计数资源的Map数据结构，预分配容量64，避免无畏的扩容消耗</h2> **/
+    private static final ConcurrentMap<String, AtomicInteger> COUNT_MAP = new ConcurrentHashMap<>(64);
+    /** <h2>标识启动QPS限流检测，{@code true}：标识开启限流检测，{@code false 或 null}：标识不开启限流检测</h2> **/
+    public static final String KEY_QPS_ENABLE = "qps.enable";
+    /** <h2>处理限流的工具，枚举值有：jlimit-JVM限流；rlimit-Redis限流。</h2> **/
+    public static final String KEY_QPS_TYPE = "qps.type";
+    /** <h2>处理限流的工具，jlimit-JVM限流</h2> **/
+    public static final String VALUE_QPS_TYPE_OF_JLIMIT = "jlimit";
+    /** <h2>处理限流的工具，rlimit-Redis限流。</h2> **/
+    public static final String VALUE_QPS_TYPE_OF_RLIMIT = "rlimit";
+    /** <h2>每个方法开启的限流检测值</h2> **/
+    public static final String KEY_QPS_VALUE = "qps.value";
+    /** <h2>默认的限流检测值</h2> **/
+    public static final long DEFAULT_QPS_VALUE = 30;
+    /** <h2>策略分发，通过不同的 qps.type 值来选择不同的限流工具进行获取计数资源处理</h2> **/
+    private static final Map<String, BiFunction<URL, Invocation, Boolean>> QPS_TYPE_ACQUIRE_MAP = new HashMap<>(4);
+    /** <h2>策略分发，通过不同的 qps.type 值来选择不同的限流工具进行释放计数资源处理</h2> **/
+    private static final Map<String, BiConsumer<URL, Invocation>> QPS_TYPE_RELEASE_MAP = new HashMap<>(4);
+    /** <h2>这里得想办法采取扫描机制简单支持 @Autowired、@Resource 两个注解即可</h2> **/
+    @Autowired
+    private RedisTemplate redisTemplate;
+
+    /** <h2>利用默认的构造方法在创建的时候，顺便把两个策略Map初始化一下</h2> **/
+    public CustomLimitFilter() {
+        init();
+    }
+
+    private void init() {
+        QPS_TYPE_ACQUIRE_MAP.put(VALUE_QPS_TYPE_OF_JLIMIT, (url, invocation) -> tryAcquireOfJvmLimit(url, invocation));
+        QPS_TYPE_ACQUIRE_MAP.put(VALUE_QPS_TYPE_OF_RLIMIT, (url, invocation) -> tryAcquireOfRedisLimit(url, invocation));
+        QPS_TYPE_RELEASE_MAP.put(VALUE_QPS_TYPE_OF_JLIMIT, (url, invocation) -> releaseOfJvmLimit(url, invocation));
+        QPS_TYPE_RELEASE_MAP.put(VALUE_QPS_TYPE_OF_RLIMIT, (url, invocation) -> releaseOfRedisLimit(url, invocation));
+    }
+
+    @Override
+    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 获取限流资源的结果，acquired 有三种值：
+        // true：获取到计数资源；false：计数已满，无法再获取计数资源；null：不需要限流
+        Boolean acquired = null;
+        try {
+            // 尝试是否能获取到限流计数资源
+            acquired = tryAcquire(invoker.getUrl(), invocation);
+            // 若获取不到计数资源的话，则直接抛出异常即可，告知调用方限流了
+            if (acquired != null && !acquired) {
+                throw new RuntimeException(
+                    "Failed to acquire service " +
+                     String.join(".", invoker.getInterface().getName(), invocation.getMethodName()) +
+                     " because of overload.");
+            }
+            // 能来到这里，要么是不需要限流，要么就是获取到了计数资源，那就直接继续下一步调用即可
+            return invoker.invoke(invocation);
+        } finally {
+            // 调用不管是成功还是失败，都是需要进行计数资源释放的
+            release(acquired, invoker.getUrl(), invocation);
+        }
+    }
+
+    // 尝试是否能获取到限流计数资源
+    private Boolean tryAcquire(URL url, Invocation invocation) {
+        // 从方法层面获取 qps.enable 参数值，如果为 true 则表示开启限流控制，否则不需要限流
+        String qpsEnableFlag = url.getMethodParameter(invocation.getMethodName(), KEY_QPS_ENABLE);
+        if (!Boolean.TRUE.toString().equals(qpsEnableFlag)) {
+            return null;
+        }
+
+        // 从方法层面获取 qps.type 参数值，默认采用 JVM 内存来处理限流，若设置的类型从 Map 中找不到则当作不需要限流处理
+        String qpsTypeVal = url.getMethodParameter
+                (invocation.getMethodName(), KEY_QPS_TYPE, VALUE_QPS_TYPE_OF_JLIMIT);
+        BiFunction<URL, Invocation, Boolean> func = QPS_TYPE_ACQUIRE_MAP.get(qpsTypeVal);
+        if (func == null) {
+            return null;
+        }
+
+        // 根据 qps.type 找到对应的工具进行策略分发按照不同的工具进行限流处理
+        return func.apply(url, invocation);
+    }
+
+    // 进行计数资源释放
+    private void release(Boolean acquired, URL url, Invocation invocation) {
+        // 若不需要限流，或者没有获取到计数资源，都不需要进行计数资源释放
+        if(acquired == null || !acquired){
+            return;
+        }
+
+        // 从方法层面获取 qps.type 参数值，默认采用 JVM 内存来处理限流，若设置的类型从 Map 中找不到则当作不需要限流处理
+        String qpsTypeVal = url.getMethodParameter
+                (invocation.getMethodName(), KEY_QPS_TYPE, VALUE_QPS_TYPE_OF_JLIMIT);
+        BiConsumer<URL, Invocation> func = QPS_TYPE_RELEASE_MAP.get(qpsTypeVal);
+        if (func == null) {
+            return;
+        }
+
+        // 根据 qps.type 找到对应的工具进行策略分发按照不同的工具进行释放计数资源处理
+        func.accept(url, invocation);
+    }
+
+    // 通过JVM内存的处理方式，来尝试是否能获取到限流计数资源
+    private Boolean tryAcquireOfJvmLimit(URL url, Invocation invocation) {
+        // 从方法层面获取 qps.value 限流的标准容量，如果没配置则默认为 30
+        long qpsValue = url.getMethodParameter
+                (invocation.getMethodName(), KEY_QPS_VALUE, DEFAULT_QPS_VALUE);
+        // 服务名加方法名构建Map的Key
+        String serviceKey = String.join("_", url.getServiceKey(), invocation.getMethodName());
+
+        // 尝试看看该服务是否有对应的计数对象
+        AtomicInteger currentCount = COUNT_MAP.get(serviceKey);
+        if (currentCount == null) {
+            // 若没有对应的计数对象的话，则 putIfAbsent 会进行加锁控制，内部有并发锁控制
+            COUNT_MAP.putIfAbsent(serviceKey, new AtomicInteger());
+            currentCount = COUNT_MAP.get(serviceKey);
+        }
+
+        // 若当前的计数值大于或等于已配置的限流值的话，那么返回 false 表示无法获取计数资源
+        if (currentCount.get() >= qpsValue) {
+            return false;
+        }
+        // 能来到这里说明是可以获取锁资源的，那么就正常的加锁即可
+        currentCount.incrementAndGet();
+        return true;
+    }
+
+    // 通过JVM内存的处理方式，来进行计数资源释放
+    private void releaseOfJvmLimit(URL url, Invocation invocation) {
+        // 释放计数资源
+        String serviceKey = String.join("_", url.getServiceKey(), invocation.getMethodName());
+        AtomicInteger currentCount = COUNT_MAP.get(serviceKey);
+        currentCount.decrementAndGet();
+    }
+
+    // 通过Redis的处理方式，来尝试是否能获取到限流计数资源
+    private Boolean tryAcquireOfRedisLimit(URL url, Invocation invocation) {
+        // 从方法层面获取 qps.value 限流的标准容量，如果没配置则默认为 30
+        long qpsValue = url.getMethodParameter
+                (invocation.getMethodName(), KEY_QPS_VALUE, DEFAULT_QPS_VALUE);
+        // 服务名加方法名构建Map的Key
+        String serviceKey = String.join("_", url.getServiceKey(), invocation.getMethodName());
+
+        // 尝试看看该服务在 redis 中当前计数值是多少
+        int currentCount = NumberUtils.toInt(redisTemplate.opsForValue().get(serviceKey));
+        // 若当前的计数值大于或等于已配置的限流值的话，那么返回 false 表示无法获取计数资源
+        if (currentCount.get() >= qpsValue) {
+            return false;
+        }
+
+        // 能来到这里说明是可以获取锁资源的，那么就正常的加锁即可
+        redisTemplate.opsForValue().increment(serviceKey, 1);
+        return true;
+    }
+
+    // 通过Redis的处理方式，来进行计数资源释放
+    private void releaseOfRedisLimit(URL url, Invocation invocation) {
+        // 释放计数资源
+        String serviceKey = String.join("_", url.getServiceKey(), invocation.getMethodName());
+        redisTemplate.opsForValue().increment(serviceKey, -1);
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方：查询角色信息列表方法
+// 配合限流过滤器而添加的限流参数 qps.enable、qps.value
+///////////////////////////////////////////////////
+@DubboService(methods = {@Method(
+        name = "queryRoleList",
+        parameters = {
+                "qps.enable", "true",
+                "qps.value", "3",
+                "qps.type", "redis"
+        })}
+)
+@Component
+public class RoleQueryFacadeImpl implements RoleQueryFacade {
+    @Override
+    public String queryRoleList(String userId) {
+        // 睡眠 1 秒，模拟一下查询数据库需要耗费时间
+        TimeUtils.sleep(1000);
+        String result = String.format(TimeUtils.now() + ": Hello %s, 已查询该用户【角色列表信息】", userId);
+        System.out.println(result);
+        return result;
+    }
+}
+```
+
+> Redis 的 Key 最好加个过期时间吧。
+
+引入了Redis来处理分布式限流，主要 4 个改造点：
+
+1. 新增了 qps.type 方法级别的参数，主要表示处理限流的工具，有 jlimit、rlimit 两种，jlimit 表示采用JVM限流，rlimit 表示采用Redis限流，qps.type 不配置的情况下默认为JVM限流。
+2. 根据 qps.type 不同的值需要用不同的工具进行限流处理，这里采用了 Map 结构引入了策略模式来做分发，并把策略模式应用到 invoke 方法的主体逻辑中。
+3. 新增了一套关于 Redis 的计数累加、计数核减的逻辑实现。
+4. 在提供方的 @DubboService 注解中，继续为方法增加了 qps.type=redis 的配置，表示需要使用分布式限流。
+
+**流量控制的应用**
+
+通过一番改造后，我们知道了可以采用JVM或Redis来进行限流，防止哪天首页加载流量过高引发雪崩效应。在实际应用开发过程中，还有许多的应用场景也在使用限流。
+
+第一，合法性限流，比如验证码攻击、恶意IP爬虫、恶意请求参数，利用限流可以有效拦截这些恶意请求，保证正常业务的运转。
+
+第二，业务限流，比如App案例中的权限系统，参考接口的业务调用频率，我们要合理地评估功能的并发支撑能力。
+
+第三，网关限流，比如App案例中的网关，当首页加载流量异常爆炸时，也可以进行有效的限流控制。
+
+第四，连接数限流，比如利用线程池的数量来控制流量。
 
 # 10｜服务认证：被异构系统侵入调用了，怎么办？
 
