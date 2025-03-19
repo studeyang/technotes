@@ -404,13 +404,23 @@ public class AsyncOrderFacadeImpl implements AsyncOrderFacade {
 
 **如何实现拦截并返回结果**
 
+因为这个变量和当前处理业务的线程息息相关，我们要么借助本地线程 ThreadLocal 来存储，要么借助处理业务的上下文对象来存储。
+
+如果借助本地线程 ThreadLocal 来存储，又会遇到 queryOrderById 所在的线程与 cachedThreadPool 中的线程相互通信的问题。因为 ThreadLocal 存储的内容位于线程私有区域，从代码层面则体现在 java.lang.Thread#threadLocals 这个私有变量上，这也决定了，不同的线程，私有区域是无法相互访问的。
+
+所以这里 **采用上下文对象来存储，那异步化的结果也就毋庸置疑存储在上下文对象中**。
+
 首先拦截识别异步，当拦截处发现有异步化模式的变量，从上下文对象中取出异步化结果并返回。
 
 ![image-20250303225030458](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503032250568.png)
 
 这里要注意一点，凡是异步问题，都需要考虑当前线程如何获取其他线程内数据，所以这里我们要思考：如果异步化处理有点耗时，拦截处从异步化结果中取不到结果该怎么办呢？不停轮询等待吗？还是要作何处理呢？
 
-相信熟悉 JDK 的你已经想到了，非 java.util.concurrent.Future 莫属，这是 Java 1.5 引入的用于异步结果的获取，当异步执行结束之后，结果将会保存在 Future 当中。接下来就一起来看看该如何改造 queryOrderById 这个方法：
+这个问题抽象一下其实就是：A线程执行到某个环节，需要B线程的执行结果，但是B线程还未执行完，A线程是如何应对的？所以，本质回归到了多线程通信上。
+
+相信熟悉 JDK 的你已经想到了，非 java.util.concurrent.Future 莫属，这是 Java 1.5 引入的用于异步结果的获取，当异步执行结束之后，结果将会保存在 Future 当中。但 java.util.concurrent.Future 是一个接口，我们得找一个它的实现类来用，也就是 java.util.concurrent.CompletableFuture，而且它的 java.util.concurrent.CompletableFuture#get(long timeout, TimeUnit unit) 方法支持传入超时时间，也正好适合我们的场景。
+
+接下来就一起来看看该如何改造 queryOrderById 这个方法：
 
 ```java
 @DubboService
@@ -491,6 +501,8 @@ public void write(Object value) {
 ```
 
 Dubbo 用 asyncContext.write 写入异步结果，这样拦截处只需要调用 java.util.concurrent.CompletableFuture#get(long timeout, TimeUnit unit) 方法就可以很轻松地拿到异步化结果了。
+
+> 异步转同步，提升了 Dubbo 线程的利用率。
 
 **异步应用场景**
 
@@ -2099,9 +2111,315 @@ public class RoleQueryFacadeImpl implements RoleQueryFacade {
 
 # 10｜服务认证：被异构系统侵入调用了，怎么办？
 
+今天我们探索Dubbo框架的第九道特色风味，服务认证。
 
+公司最近要做一个关于提升效能的一体化网站，我们的后端服务全是 Dubbo 提供者，但是负责效能开发的同事只会使用 Go 或 Python 来编写代码，于是经过再三考虑，效能同事最后使用 dubbo-go 来过渡对接后端的 Dubbo 服务。就像这样：
+
+![image-20250319225735090](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503192257344.png)
+
+然而，dubbo-go 服务上线后不久，某个时刻，支付系统的银行账号查询接口的QPS异常突增，引起了相关领导的关注。
+
+目前暴露了一个比较严重的问题，被异构系统访问的接口缺乏一种认证机制，尤其是安全性比较敏感的业务接口，随随便便就被异构系统通过非正常途径调通了，有不少安全隐患。因此很有必要添加一种服务与服务之间的认证机制。
+
+**鉴定真假**
+
+**在客户端发送数据的时候我们添加一个 TOKEN 字段**，然后，服务端收到数据先验证 TOKEN 字段值是否存在，若存在则认为是合法可信任的请求，否则就可以抛出异常中断请求了。
+
+这个 TOKEN 在服务端怎么验证是否存在呢？一般两种处理方式，要么服务端内部就有这个 TOKEN 直接验证，要么服务端去第三方媒介间接验证，总之处理请求的是服务端，至于服务端是内部验证还是依赖第三方媒介验证，那都是服务端的事情。顺着思路画出了这样的调用链路图：
+
+![image-20250319225930103](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503192259296.png)
+
+不过，我们要面临分支选择了，该使用哪种方式呢？
+
+- 方式一无需调用远程，虽然节省了远程调用的开销，加快了处理验证的时效，但是这个 TOKEN 是位于服务端内部的，那就意味着 TOKEN 和服务端的方法有着一定的强绑定关系，不够灵活。
+- 方式二远程调用，第三方认证中心可以根据不同的客户端分配不同的 TOKEN 值，并为 TOKEN 设置过期时间，灵活性和可控性变强了，但同时也牺牲了一定的远程调用时间开销。
+
+这里为了方便演示，我们就把方式一落实到代码。
+
+```java
+///////////////////////////////////////////////////
+// 提供方：自定义TOKEN校验过滤器，主要对 TOKEN 进行验证比对
+///////////////////////////////////////////////////
+@Activate(group = PROVIDER)
+public class ProviderTokenFilter implements Filter {
+    /** <h2>TOKEN 字段名</h2> **/
+    public static final String TOKEN = "TOKEN";
+    /** <h2>方法级别层面获取配置的 auth.enable 参数名</h2> **/
+    public static final String KEY_AUTH_ENABLE = "auth.enable";
+    /** <h2>方法级别层面获取配置的 auth.token 参数名</h2> **/
+    public static final String KEY_AUTH_TOKEN = "auth.token";
+    @Override
+    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 从方法层面获取 auth.enable 参数值
+        String authEnable = invoker.getUrl().getMethodParameter
+                (invocation.getMethodName(), KEY_AUTH_ENABLE);
+        // 如果不需要开启 TOKEN 认证的话，则继续后面过滤器的调用
+        if (!Boolean.TRUE.toString().equals(authEnable)) {
+            return invoker.invoke(invocation);
+        }
+        // 能来到这里，说明需要进行 TOKEN 认证
+        Map<String, Object> attachments = invocation.getObjectAttachments();
+        String recvToken = attachments != null ? (String) attachments.get(TOKEN) : null;
+        // 既然需要认证，如果收到的 TOKEN 为空，则直接抛异常
+        if (StringUtils.isBlank(recvToken)) {
+            throw new RuntimeException(
+                    "Recv token is null or empty, path: " +
+                     String.join(".", invoker.getInterface().getName(), invocation.getMethodName()));
+        }
+        // 从方法层面获取 auth.token 参数值
+        String authToken = invoker.getUrl().getMethodParameter
+                (invocation.getMethodName(), KEY_AUTH_TOKEN);
+        // 既然需要认证，如果收到的 TOKEN 值和提供方配置的 TOKEN 值不一致的话，也直接抛异常
+        if(!recvToken.equals(authToken)){
+            throw new RuntimeException(
+                    "Recv token is invalid, path: " +
+                     String.join(".", invoker.getInterface().getName(), invocation.getMethodName()));
+        }
+        // 还能来到这，说明认证通过，继续后面过滤器的调用
+        return invoker.invoke(invocation);
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方：支付账号查询方法的实现逻辑
+// 关注 auth.token、auth.enable 两个新增的参数
+///////////////////////////////////////////////////
+@DubboService(methods = {@Method(
+        name = "queryPayAccount",
+        parameters = {
+                "auth.token", "123456789",
+                "auth.enable", "true"
+        })}
+)
+@Component
+public class PayAccountFacadeImpl implements PayAccountFacade {
+    @Override
+    public String queryPayAccount(String userId) {
+        String result = String.format(now() + ": Hello %s, 已查询该用户的【银行账号信息】", userId);
+        System.out.println(result);
+        return result;
+    }
+    private static String now() {
+        return new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss.SSS").format(new Date());
+    }
+}
+
+///////////////////////////////////////////////////
+// 消费方：自定义TOKEN校验过滤器，主要将 TOKEN 传给提供方
+///////////////////////////////////////////////////
+@Activate(group = CONSUMER)
+public class ConsumerTokenFilter implements Filter {
+    /** <h2>方法级别层面获取配置的 auth.token 参数名</h2> **/
+    public static final String KEY_AUTH_TOKEN = "auth.token";
+    /** <h2>TOKEN 字段名</h2> **/
+    public static final String TOKEN = "TOKEN";
+    @Override
+    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 从方法层面获取 auth.token 参数值
+        String authToken = invoker.getUrl().getMethodParameter
+                    (invocation.getMethodName(), KEY_AUTH_TOKEN);
+        // authToken 不为空的话则设置到请求对象中
+        if (StringUtils.isNotBlank(authToken)) {
+            invocation.getObjectAttachments().put(TOKEN, authToken);
+        }
+        // 继续后面过滤器的调用
+        return invoker.invoke(invocation);
+    }
+}
+
+///////////////////////////////////////////////////
+// 消费方：触发调用支付账号查询接口的类
+// 关注 auth.token 这个新增的参数
+///////////////////////////////////////////////////
+@Component
+public class InvokeAuthFacade {
+    // 引用下游支付账号查询的接口
+    @DubboReference(timeout = 10000, methods = {@Method(
+            name = "queryPayAccount",
+            parameters = {
+                    "auth.token", "123456789"
+            })})
+    private PayAccountFacade payAccountFacade;
+
+    // 该方法主要用来触发调用下游支付账号查询方法
+    public void invokeAuth(){
+        String respMsg = payAccountFacade.queryPayAccount("Geek");
+        System.out.println(respMsg);
+    }
+}
+```
+
+代码写后，我们验证一下，想办法触发调用消费方的 invokeAuth 方法，打印结果长这样：
+
+```
+2022-11-22_23:51:07.899: Hello Geek, 已查询该用户的【银行账号信息】
+```
+
+认证不通过日志打印如下：
+
+```
+Caused by: org.apache.dubbo.remoting.RemotingException: java.lang.RuntimeException: Recv token is invalid, path: com.hmilyylimh.cloud.facade.pay.PayAccountFacade.queryPayAccount
+java.lang.RuntimeException: Recv token is invalid, path: com.hmilyylimh.cloud.facade.pay.PayAccountFacade.queryPayAccount
+	at com.hmilyylimh.cloud.auth.config.ProviderTokenFilter.invoke(ProviderTokenFilter.java:60)
+	at org.apache.dubbo.rpc.cluster.filter.FilterChainBuilder$CopyOfFilterChainNode.invoke(FilterChainBuilder.java:321)
+	at org.apache.dubbo.monitor.support.MonitorFilter.invoke(MonitorFilter.java:99)
+```
+
+**鉴定篡改**
+
+我们接着看第二个认证工作，鉴定篡改，这个比较好理解，就是证明别人发送过来的内容没有在传输过程中被偷偷改动。
+
+这里我们就以一套常用的 RSA 加签方式进行演示。第一步当然还是梳理代码修改思路：
+
+1. 客户端新增一个 ConsumerAddSignFilter 加签过滤器，同样服务端也得增加一个 ProviderVerifySignFilter 验签过滤器。
+2. 客户端将加签的结果放在 Invocation 的 attachments 里面。
+3. 服务端获取加签数据时，进行验签处理，若验签通过则放行，否则直接抛出异常。
+
+```java
+///////////////////////////////////////////////////
+// 提供方：自定义验签过滤器，主要对 SIGN 进行验签
+///////////////////////////////////////////////////
+@Activate(group = PROVIDER)
+public class ProviderVerifySignFilter implements Filter {
+    /** <h2>SING 字段名</h2> **/
+    public static final String SING = "SING";
+    /** <h2>方法级别层面获取配置的 auth.ras.enable 参数名</h2> **/
+    public static final String KEY_AUTH_RSA_ENABLE = "auth.rsa.enable";
+    /** <h2>方法级别层面获取配置的 auth.rsa.public.secret 参数名</h2> **/
+    public static final String KEY_AUTH_RSA_PUBLIC_SECRET = "auth.rsa.public.secret";
+    @Override
+    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 从方法层面获取 auth.ras.enable 参数值
+        String authRsaEnable = invoker.getUrl().getMethodParameter
+                (invocation.getMethodName(), KEY_AUTH_RSA_ENABLE);
+        // 如果不需要验签的话，则继续后面过滤器的调用
+        if (!Boolean.TRUE.toString().equals(authRsaEnable)) {
+            return invoker.invoke(invocation);
+        }
+
+        // 能来到这里，说明需要进行验签
+        Map<String, Object> attachments = invocation.getObjectAttachments();
+        String recvSign = attachments != null ? (String) attachments.get(SING) : null;
+        // 既然需要认证，如果收到的加签值为空的话，则直接抛异常
+        if (StringUtils.isBlank(recvSign)) {
+            throw new RuntimeException(
+                    "Recv sign is null or empty, path: " +
+                     String.join(".", invoker.getInterface().getName(), invocation.getMethodName()));
+        }
+
+        // 从方法层面获取 auth.rsa.public.secret 参数值
+        String rsaPublicSecretOpsKey = invoker.getUrl().getMethodParameter
+                (invocation.getMethodName(), KEY_AUTH_RSA_PUBLIC_SECRET);
+        // 从 OPS 配置中心里面获取到 rsaPublicSecretOpsKey 对应的密钥值
+        String publicKey = OpsUtils.get(rsaPublicSecretOpsKey);
+        // 加签处理
+        boolean passed = SignUtils.verifySign(invocation.getArguments(), publicKey, recvSign);
+        // sign 不为空的话则设置到请求对象中
+        if (!passed) {
+            throw new RuntimeException(
+                    "Recv sign is invalid, path: " +
+                     String.join(".", invoker.getInterface().getName(), invocation.getMethodName()));
+        }
+
+        // 继续后面过滤器的调用
+        return invoker.invoke(invocation);
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方：支付账号查询方法的实现逻辑
+// 关注 auth.rsa.public.secret、auth.rsa.enable 两个新增的参数
+///////////////////////////////////////////////////
+@DubboService(methods = {@Method(
+        name = "queryPayAccount",
+        parameters = {
+                "auth.rsa.public.secret", "queryPayAccoun_publicSecret",
+                "auth.rsa.enable", "true"
+        })}
+)
+@Component
+public class PayAccountFacadeImpl implements PayAccountFacade {
+    @Override
+    public String queryPayAccount(String userId) {
+        String result = String.format(now() + ": Hello %s, 已查询该用户的【银行账号信息】", userId);
+        System.out.println(result);
+        return result;
+    }
+    private static String now() {
+        return new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss.SSS").format(new Date());
+    }
+}
+
+///////////////////////////////////////////////////
+// 消费方：自定义加签过滤器，主要将 SIGN 传给提供方
+///////////////////////////////////////////////////
+@Activate(group = CONSUMER)
+public class ConsumerAddSignFilter implements Filter {
+    /** <h2>SING 字段名</h2> **/
+    public static final String SING = "SING";
+    /** <h2>方法级别层面获取配置的 auth.rsa.private.secret 参数名</h2> **/
+    public static final String KEY_AUTH_RSA_PRIVATE_SECRET = "auth.rsa.private.secret";
+    @Override
+    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 从方法层面获取 auth.token 参数值
+        String aesSecretOpsKey = invoker.getUrl().getMethodParameter
+                (invocation.getMethodName(), KEY_AUTH_RSA_PRIVATE_SECRET);
+        // 从 OPS 配置中心里面获取到 aesSecretOpsKey 对应的密钥值
+        String privateKey = OpsUtils.get(aesSecretOpsKey);
+        // 加签处理
+        String sign = SignUtils.addSign(invocation.getArguments(), privateKey);
+        // sign 不为空的话则设置到请求对象中
+        if (StringUtils.isNotBlank(sign)) {
+            invocation.getObjectAttachments().put(SING, sign);
+        }
+        // 继续后面过滤器的调用
+        return invoker.invoke(invocation);
+    }
+}
+
+///////////////////////////////////////////////////
+// 消费方：触发调用支付账号查询接口的类
+// 关注 auth.rsa.private.secret 这个新增的参数
+///////////////////////////////////////////////////
+@Component
+public class InvokeAuthFacade {
+    // 引用下游支付账号查询的接口
+    @DubboReference(timeout = 10000, methods = {@Method(
+            name = "queryPayAccount",
+            parameters = {
+                    "auth.rsa.private.secret", "queryPayAccoun_privateSecret"
+            })})
+    private PayAccountFacade payAccountFacade;
+
+    // 该方法主要用来触发调用下游支付账号查询方法
+    public void invokeAuth(){
+        String respMsg = payAccountFacade.queryPayAccount("Geek");
+        System.out.println(respMsg);
+    }
+}
+```
 
 # 11｜配置加载顺序：为什么你设置的超时时间不生效？
+
+今天我们探索Dubbo框架的第十道特色风味，配置加载顺序。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
