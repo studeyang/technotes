@@ -2520,23 +2520,269 @@ Dubbo 将这种封装多个提供者并承担路由过滤和负载均衡的层�
 
 # 13｜集成框架：框架如何与Spring有机结合？
 
+今天我们来学习框架的集成。
 
+**现状 integration 层代码编写形式**
 
-14｜SPI机制：Dubbo的SPI比JDK的SPI好在哪里？
+假设我们正在开发一个已经集成了 Dubbo 框架的消费方系统，你需要编写代码远程调用下游提供方系统，获取业务数据。这是很常见的需求了。
 
-15｜Wrapper机制：Wrapper是怎么降低调用开销的？
+当系统设计的层次比较鲜明，我们一般会把调用下游提供方系统的功能都放在 integration 层，也就意味着当前系统调用下游提供方系统的引用关系都封装在 integration 层。那你的代码可能会这么写：
 
-16｜Compiler编译：神乎其神的编译你是否有过胆怯？
+```java
+// 下游系统定义的一个接口
+public interface SamplesFacade {
+    QueryOrderRes queryOrder(QueryOrderReq req);
+}
+```
 
-17｜Adaptive适配：Dubbo的Adaptive特殊在哪里？
+```java
+// 当前服务 integration 层定义的一个接口
+public interface SamplesFacadeClient {
+    QueryOrderResponse queryRemoteOrder(QueryOrderRequest req);
+}
 
-18｜实例注入：实例注入机制居然可以如此简单？
+// 当前服务 integration 层中调用下游系统实现
+public class SamplesFacadeClientImpl implements SamplesFacadeClient {
+    @DubboReference
+    private SamplesFacade samplesFacade;
+    @Override
+    public QueryOrderResponse queryRemoteOrder(QueryOrderRequest req){
+        // 构建下游系统需要的请求入参对象
+        QueryOrderReq integrationReq = buildIntegrationReq(req);
 
-19｜发布流程：带你一窥服务发布的三个重要环节
+        // 调用 Dubbo 接口访问下游提供方系统
+        QueryOrderRes resp = samplesFacade.queryOrder(integrationReq);
 
-20｜订阅流程：消费方是怎么知道提供方地址信息的？
+        // 判断返回的错误码是否成功
+        if(!"000000".equals(resp.getRespCode())){
+            throw new RuntimeException("下游系统 XXX 错误信息");
+        }
 
-21｜调用流程：消费方的调用流程体系，你知道多少？
+        // 将下游的对象转换为当前系统的对象
+        return convert2Response(resp);
+    }
+}
+```
+
+抽象，是把相似流程的骨架抽象出来，可是到底该怎么抽象呢？
+
+我们针对 SamplesFacadeClient 定义了两个注解，@DubboFeignClient 是类注解，@DubboMethod 是方法注解。
+
+```java
+@DubboFeignClient(
+        remoteClass = SamplesFacade.class,
+        needResultJudge = true,
+        resultJudge = (remoteCodeNode = "respCode", remoteCodeSuccValueList = "000000", remoteMsgNode = "respMsg")
+)
+// 当前服务定义的接口
+public interface SamplesFacadeClient {
+    @DubboMethod(
+            timeout = "5000",
+            retries = "3",
+            loadbalance = "random",
+            remoteMethodName = "queryRemoteOrder",
+            remoteMethodParamsTypeName = {"com.hmily.QueryOrderReq"}
+     )
+    QueryOrderResponse queryRemoteOrderInfo(QueryOrderRequest req);
+}
+```
+
+把 SamplesFacadeClient 设计好后，开发者用起来也特别舒服，之前调用下游提供方接口时要写的一堆代码，现在只需要自己定义一个接口并添加两种注解就完事了。
+
+可是要想在代码中使用这个接口，该怎么实现呢？我们还得继续想办法。
+
+**仿照 Spring 类扫描**
+
+在使用接口时可能会这么写：
+
+```java
+@Autowired
+private SamplesFacadeClient samplesClient;
+```
+
+那么第一个问题来了，samplesClient 要想在运行时调用方法，首先 samplesClient 必须得是一个实例化的对象。 
+
+还有一个问题值得思考：Spring 框架是怎么知道 @Component、@Configuration 等注解的存在呢，关键是这些注解遍布在工程代码的各个角落，Spring 又是怎么找到的呢？
+
+这就需要你了解 Spring 源码里的一个类 org.springframework.context.annotation.ClassPathBeanDefinitionScanner，它是 Spring 为了扫描一堆的 BeanDefinition 而设计，目的就是要 **从 @SpringBootApplication 注解中设置过的包路径及其子包路径中的所有类文件中，扫描出含有 @Component、@Configuration 等注解的类，并构建 BeanDefinition 对象**。
+
+借鉴了源码思想，我们写下了这样的代码：
+
+```java
+public class DubboFeignScanner extends ClassPathBeanDefinitionScanner {
+    // 定义一个 FactoryBean 类型的对象，方便将来实例化接口使用
+    private DubboClientFactoryBean<?> factoryBean = new DubboClientFactoryBean<>();
+    // 重写父类 ClassPathBeanDefinitionScanner 的构造方法
+    public DubboFeignScanner(BeanDefinitionRegistry registry) {
+        super(registry);
+    }
+    // 扫描各个接口时可以做一些拦截处理
+    // 但是这里不需要做任何扫描拦截，因此内置消化掉返回true不需要拦截
+    public void registerFilters() {
+        addIncludeFilter((metadataReader, metadataReaderFactory) -> true);
+    }
+    // 重写父类的 doScan 方法，并将 protected 修饰范围放大为 public 属性修饰
+    @Override
+    public Set<BeanDefinitionHolder> doScan(String... basePackages) {
+        // 利用父类的doScan方法扫描指定的包路径
+        // 在此，DubboFeignScanner自定义扫描器就是利用Spring自身的扫描特性，
+        // 来达到扫描指定包下的所有类文件，省去了自己写代码去扫描这个庞大的体力活了
+        Set<BeanDefinitionHolder> beanDefinitions = super.doScan(basePackages);
+        if(beanDefinitions == null || beanDefinitions.isEmpty()){
+            return beanDefinitions;
+        }
+        processBeanDefinitions(beanDefinitions);
+        return beanDefinitions;
+    }
+    // 自己手动构建 BeanDefinition 对象
+    private void processBeanDefinitions(Set<BeanDefinitionHolder> beanDefinitions) {
+        GenericBeanDefinition definition = null;
+        for (BeanDefinitionHolder holder : beanDefinitions) {
+            definition = (GenericBeanDefinition)holder.getBeanDefinition();
+            definition.getConstructorArgumentValues().addGenericArgumentValue(definition.getBeanClassName());
+            // 特意针对 BeanDefinition 设置 DubboClientFactoryBean.class
+            // 目的就是在实例化时能够在 DubboClientFactoryBean 中创建代理对象
+            definition.setBeanClass(factoryBean.getClass());
+            definition.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE);
+        }
+    }
+}
+```
+
+我们就可以重写 doScan 方法接收一个包路径（SamplesFacadeClient 接口所在的包路径），然后利用 super.doScan 让 Spring 帮我们去扫描指定包路径下的所有类文件。
+
+我们如何保障精准扫描出指定注解的类呢？
+
+你会发现 Spring 源码在添加 BeanDefinition 时，需要借助一个 org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider#isCandidateComponent 方法，来判断是不是候选组件，也就是，是不是需要拾取指定注解。
+
+```java
+public class DubboFeignScanner extends ClassPathBeanDefinitionScanner {
+    // ...省略部分同上代码
+    
+// 重写父类中“是否是候选组件”的方法，即我们认为哪些扫描到的类可以是候选类
+    @Override
+    protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
+        AnnotationMetadata metadata = beanDefinition.getMetadata();
+        if (!(metadata.isInterface() && metadata.isIndependent())) {
+            return false;
+        }
+        // 针对扫描到的类，然后看看扫描到的类中是否有 DubboFeignClient 注解信息
+        Map<String, Object> attributes = metadata
+        .getAnnotationAttributes(DubboFeignClient.class.getName());
+        // 若扫描到的类上没有 DubboFeignClient 注解信息则认为不是认可的类
+        if (attributes == null) {
+            return false;
+        }
+        // 若扫描到的类上有 DubboFeignClient 注解信息则起码是认可的类
+        AnnotationAttributes annoAttrs = AnnotationAttributes.fromMap(attributes);
+        if (annoAttrs == null) {
+            return false;
+        }
+        // 既然是认可的类，那再看看类注解中是否有 remoteClass 字段信息
+        // 若 remoteClass 字段信息有值的话，则认为是我们最终认定合法的候选类
+        Object remoteClass = annoAttrs.get("remoteClass");
+        if (remoteClass == null) {
+            return false;
+        }
+        return true;
+    }
+}
+```
+
+代码中在 isCandidateComponent 方法中进行了识别 DubboFeignClient 类注解的业务逻辑处理，如果有类注解且有 remoteClass 属性的话，就认为是我们寻找的类。
+
+这样，所有含有 @DubboFeignClient 注解的类的 BeanDefinition 对象都被扫描收集起来了，接下来就交给 Spring 本身 refresh 方法中的 org.springframework.beans.factory.support.DefaultListableBeanFactory#preInstantiateSingletons 方法进行实例化了，而实例化的时候，如果发现 BeanDefinition 对象是 org.springframework.beans.factory.FactoryBean 类型，会调用 FactoryBean 的 getObject 方法创建代理对象。
+
+同理我们写出：
+
+```java
+public class DubboClientFactoryBean<T> implements FactoryBean<T>, ApplicationContextAware {
+    private Class<T> dubboClientInterface;
+    private ApplicationContext appCtx;
+    public DubboClientFactoryBean() {
+    }
+    // 该方法是在 DubboFeignScanner 自定义扫描器的 processBeanDefinitions 方法中，
+    // 通过 definition.getConstructorArgumentValues().addGenericArgumentValue(definition.getBeanClassName()) 代码设置进来的
+    // 这里的 dubboClientInterface 就等价于 SamplesFacadeClient 接口
+    public DubboClientFactoryBean(Class<T> dubboClientInterface) {
+        this.dubboClientInterface = dubboClientInterface;
+    }
+
+    // Spring框架实例化FactoryBean类型的对象时的必经之路
+    @Override
+    public T getObject() throws Exception {
+        // 为 dubboClientInterface 创建一个 JDK 代理对象
+        // 同时代理对象中的所有业务逻辑交给了 DubboClientProxy 核心代理类处理
+        return (T) Proxy.newProxyInstance(dubboClientInterface.getClassLoader(),
+                new Class[]{dubboClientInterface}, new DubboClientProxy<>(appCtx));
+    }
+    // 标识该实例化对象的接口类型
+    @Override
+    public Class<?> getObjectType() {
+        return dubboClientInterface;
+    }
+    // 标识 SamplesFacadeClient 最后创建出来的代理对象是单例对象
+    @Override
+    public boolean isSingleton() {
+        return true;
+    }
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.appCtx = applicationContext;
+    }
+}
+```
+
+代码中 getObject 是我们创建代理对象的核心过程，细心的你可能会发现我们还创建了一个 DubboClientProxy 对象，这个对象放在 `java.lang.reflect.Proxy#newProxyInstance(java.lang.ClassLoader, java.lang.Class<?>[], **java.lang.reflect.InvocationHandler**)` 方法中的第三个参数。
+
+这意味着，将来含有 @DubboFeignClient 注解的类的方法被调用时，一定会触发调用 DubboClientProxy 类，也就说我们可以在 DubboClientProxy 类拦截方法，这正是我们梦寐以求的核心拦截方法的地方。
+
+来看DubboClientProxy 的实现：
+
+```java
+public class DubboClientProxy<T> implements InvocationHandler, Serializable {
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        // 省略前面的一些代码
+
+        // 读取接口（例：SamplesFacadeClient）上对应的注解信息
+        DubboFeignClient dubboClientAnno = declaringClass.getAnnotation(DubboFeignClient.class);
+        // 读取方法（例：queryRemoteOrderInfo）上对应的注解信息
+        DubboMethod methodAnno = method.getDeclaredAnnotation(DubboMethod.class);
+        // 获取需要调用下游系统的类、方法、方法参数类型
+        Class<?> remoteClass = dubboClientAnno.remoteClass();
+        String mtdName = getMethodName(method.getName(), methodAnno);
+        Method remoteMethod = MethodCache.cachedMethod(remoteClass, mtdName, methodAnno);
+        Class<?> returnType = method.getReturnType();
+
+        // 发起真正远程调用
+        Object resultObject = doInvoke(remoteClass, remoteMethod, args, methodAnno);
+
+        // 判断返回码，并解析返回结果
+        return doParse(dubboClientAnno, returnType, resultObject);
+    }
+}
+```
+
+这下是真正做到了用一套代码解决了所有 integration 层接口的远程调用，简化了重复代码开发的劳动力成本，而且也使代码的编写更加简洁美观。
+
+> 这样一看，多写一些下游转发代码其实也没什么
+
+# 14｜SPI机制：Dubbo的SPI比JDK的SPI好在哪里？
+
+# 15｜Wrapper机制：Wrapper是怎么降低调用开销的？
+
+# 16｜Compiler编译：神乎其神的编译你是否有过胆怯？
+
+# 17｜Adaptive适配：Dubbo的Adaptive特殊在哪里？
+
+# 18｜实例注入：实例注入机制居然可以如此简单？
+
+# 19｜发布流程：带你一窥服务发布的三个重要环节
+
+# 20｜订阅流程：消费方是怎么知道提供方地址信息的？
+
+# 21｜调用流程：消费方的调用流程体系，你知道多少？
 
 # 22｜协议编解码：接口调用的数据是如何发到网络中的？
 
