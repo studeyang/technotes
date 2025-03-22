@@ -2770,21 +2770,158 @@ public class DubboClientProxy<T> implements InvocationHandler, Serializable {
 
 # 14｜SPI机制：Dubbo的SPI比JDK的SPI好在哪里？
 
+今天我们来深入研究Dubbo源码的第三篇，SPI 机制。
+
+SPI，英文全称是Service Provider Interface，按每个单词翻译就是：服务提供接口。
+
+**SPI是怎么来的**
+
+我们结合具体的应用场景来思考：
+
+![image-20250322223808782](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503222238882.png)
+
+app-web 后台应用引用了一款开源的 web-fw.jar 插件，这个插件的作用就是辅助后台应用的启动，并且控制 Web 应用的核心启动流程，也就是说这个插件控制着 Web 应用启动的整个生命周期。
+
+现在，有这样一个需求， **在 Web 应用成功启动的时刻，我们需要预加载 Dubbo 框架的一些资源，你会怎么做呢？**
+
+**JDK SPI**
+
+JDK SPI 底层实现源码流程主要有三块。
+
+- 第一块，将接口传入到 ServiceLoader.load 方法后，得到了一个内部类的迭代器。
+- 第二块，通过调用迭代器的 hasNext 方法，去读取“/META-INF/services/接口类路径”这个资源文件内容，并逐行解析出所有实现类的类路径。
+- 第三块，将所有实现类的类路径通过“Class.forName”反射方式进行实例化对象。
+
+在跟踪源码的过程中，我还发现了一个问题， **当我们使用 ServiceLoader 的 load 方法执行多次时，会不断创建新的实例对象**。你可以这样编写代码验证：
+
+```java
+public static void main(String[] args) {
+    // 模拟进行 3 次调用 load 方法并传入同一个接口
+    for (int i = 0; i < 3; i++) {
+        // 加载 ApplicationStartedListener 接口的所有实现类
+        ServiceLoader<ApplicationStartedListener> loader
+               = ServiceLoader.load(ApplicationStartedListener.class);
+        // 遍历 ApplicationStartedListener 接口的所有实现类，并调用里面的 onCompleted 方法
+        Iterator<ApplicationStartedListener> it = loader.iterator();
+        while (it.hasNext()){
+            // 获取其中的一个实例，并调用 onCompleted 方法
+            ApplicationStartedListener instance = it.next();
+            instance.onCompleted();
+        }
+    }
+}
+```
+
+代码中，尝试调用 3 次 ServiceLoader 的 load 方法，并且每一次传入的都是同一个接口，运行编写好的代码，打印出如下信息：
+
+```
+预加载 Dubbo 框架的一些资源, com.hmilyylimh.cloud.jdk.spi.PreloadDubboResourcesListener@300ffa5d
+预加载 Dubbo 框架的一些资源, com.hmilyylimh.cloud.jdk.spi.PreloadDubboResourcesListener@1f17ae12
+预加载 Dubbo 框架的一些资源, com.hmilyylimh.cloud.jdk.spi.PreloadDubboResourcesListener@4d405ef7
+```
+
+创建出多个实例对象，有什么问题呢？
+
+问题一，使用 load 方法频率高，容易影响 IO 吞吐和内存消耗。如果调用 load 方法的频率比较高，那每调用一次其实就在做读取文件->解析文件->反射实例化这几步，不但会影响磁盘IO读取的效率，还会明显增加内存开销，我们并不想看到。
+
+问题二，使用 load 方法想要获取指定实现类，需要自己进行遍历并编写各种比较代码。每次在调用时想拿到其中一个实现类，使用起来也非常不舒服，因为我们不知道想要的实现类，在迭代器的哪个位置，只有遍历完所有的实现类，才能找到想要的那个。假如项目中，有很多业务逻辑都需要获取指定的实现类，那将会充斥着各色各样针对 load 进行遍历的代码并比较，无形中，我们又悄悄产生了很多雷同代码。
+
+**Dubbo SPI**
+
+为了弥补我们分析的 JDK SPI 的不足，Dubbo 也定义出了自己的一套 SPI 机制逻辑，既要通过 O(1) 的时间复杂度来获取指定的实例对象，还要控制缓存创建出来的对象，做到按需加载获取指定实现类，并不会像JDK SPI那样一次性实例化所有实现类。
+
+在代码层面使用起来也很方便，你看这里的代码：
+
+```java
+///////////////////////////////////////////////////
+// Dubbo SPI 的测试启动类
+///////////////////////////////////////////////////
+public class Dubbo14DubboSpiApplication {
+    public static void main(String[] args) {
+        ApplicationModel applicationModel = ApplicationModel.defaultModel();
+        // 通过 Protocol 获取指定像 ServiceLoader 一样的加载器
+        ExtensionLoader<IDemoSpi> extensionLoader = applicationModel.getExtensionLoader(IDemoSpi.class);
+
+        // 通过指定的名称从加载器中获取指定的实现类
+        IDemoSpi customSpi = extensionLoader.getExtension("customSpi");
+        System.out.println(customSpi + ", " + customSpi.getDefaultPort());
+
+        // 再次通过指定的名称从加载器中获取指定的实现类，看看打印的引用是否创建了新对象
+        IDemoSpi customSpi2 = extensionLoader.getExtension("customSpi");
+        System.out.println(customSpi2 + ", " + customSpi2.getDefaultPort());
+    }
+}
+
+///////////////////////////////////////////////////
+// 定义 IDemoSpi 接口并添加上了 @SPI 注解，
+// 其实也是在定义一种 SPI 思想的规范
+///////////////////////////////////////////////////
+@SPI
+public interface IDemoSpi {
+    int getDefaultPort();
+}
+
+///////////////////////////////////////////////////
+// 自定义一个 CustomSpi 类来实现 IDemoSpi 接口
+// 该 IDemoSpi 接口被添加上了 @SPI 注解，
+// 其实也是在定义一种 SPI 思想的规范
+///////////////////////////////////////////////////
+public class CustomSpi implements IDemoSpi {
+    @Override
+    public int getDefaultPort() {
+        return 8888;
+    }
+}
+
+///////////////////////////////////////////////////
+// 资源目录文件
+// 路径为：/META-INF/dubbo/internal/com.hmilyylimh.cloud.dubbo.spi.IDemoSpi
+///////////////////////////////////////////////////
+customSpi=com.hmilyylimh.cloud.dubbo.spi.CustomSpi
+```
+
+然后运行这段简短的代码，打印出日志。
+
+```
+com.hmilyylimh.cloud.dubbo.spi.CustomSpi@143640d5, 8888
+com.hmilyylimh.cloud.dubbo.spi.CustomSpi@143640d5, 8888
+```
+
+从日志中可以看到，再次通过别名去获取指定的实现类时，打印的实例对象的引用是同一个，说明 Dubbo 框架做了缓存处理。而且整个操作，我们只通过一个简单的别名，就能从 ExtensionLoader 中拿到指定实现类，确实简单方便。
+
 # 15｜Wrapper机制：Wrapper是怎么降低调用开销的？
+
+
+
+
 
 # 16｜Compiler编译：神乎其神的编译你是否有过胆怯？
 
+
+
 # 17｜Adaptive适配：Dubbo的Adaptive特殊在哪里？
+
+
 
 # 18｜实例注入：实例注入机制居然可以如此简单？
 
+
+
 # 19｜发布流程：带你一窥服务发布的三个重要环节
+
+
 
 # 20｜订阅流程：消费方是怎么知道提供方地址信息的？
 
+
+
 # 21｜调用流程：消费方的调用流程体系，你知道多少？
 
+
+
 # 22｜协议编解码：接口调用的数据是如何发到网络中的？
+
+
 
 # ==拓展篇==
 
