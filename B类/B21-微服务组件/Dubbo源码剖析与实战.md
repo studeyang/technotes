@@ -2891,9 +2891,443 @@ com.hmilyylimh.cloud.dubbo.spi.CustomSpi@143640d5, 8888
 
 # 15｜Wrapper机制：Wrapper是怎么降低调用开销的？
 
+今天是我们深入研究Dubbo源码的第四篇，Wrapper 机制。
 
+Wrapper，它是Dubbo中的一种动态生成的代理类。你可能已经想到了 JDK 和 Cglib 两个常见的代理，JDK 代理是动态生成了一个继承 Proxy 的代理类，而 Cglib 代理是动态生成了一个继承被代理类的派生代理类，既然都有现成的动态生成代理类的解决方案了，为什么 Dubbo 还需要动态生成自己的代理类呢？
 
+结合具体的应用场景来思考，有三个请求，每个请求中的四个字段值都不一样，现在要发往提供方服务：
 
+![image-20250326230446680](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503262304026.png)
+
+**JDK 代理**
+
+可以通过反射机制获取接口类名对应的类对象，通过类对象的简称获取到对应的接口服务，通过接口方法名和接口方法参数，来精准定位需要提供方接口服务中的哪个方法进行处理。
+
+```java
+///////////////////////////////////////////////////
+// 提供方服务：统一入口接收请求的控制器，原始的 if...else 方式
+///////////////////////////////////////////////////
+@RestController
+public class CommonController {
+    // 定义统一的URL地址
+    @PostMapping("gateway/{className}/{mtdName}/{parameterTypeName}/request")
+    public String recvCommonRequest(@PathVariable String className,
+                                    @PathVariable String mtdName,
+                                    @PathVariable String parameterTypeName,
+                                    @RequestBody String reqBody) throws Exception {
+        // 统一的接收请求的入口
+        return commonInvoke(className, parameterTypeName, mtdName, reqBody);
+    }
+
+    /**
+     * <h2>统一入口的核心逻辑。</h2>
+     *
+     * @param className：接口归属方法的全类名。
+     * @param mtdName：接口的方法名。
+     * @param parameterTypeName：接口的方法入参的全类名。
+     * @param reqParamsStr：请求数据。
+     * @return 接口方法调用的返回信息。
+     * @throws Exception
+     */
+    public static String commonInvoke(String className,
+                                      String mtdName,
+                                      String parameterTypeName,
+                                      String reqParamsStr) throws Exception {
+        // 通过反射机制可以获取接口类名对应的类对象
+        Class<?> clz = Class.forName(className);
+
+        // 接着通过类对象的简称获取到对应的接口服务
+        Object cacheObj = SpringCtxUtils.getBean(clz);
+
+        // 然后通过接口方法名和接口方法参数
+        if (cacheObj.getClass().getName().equals(className)) {
+            // 来精准定位需要提供方接口服务中的哪个方法进行处理
+            if ("sayHello".equals(mtdName) && String.class.getName().equals(parameterTypeName)) {
+                // 真正的发起对源对象（被代理对象）的方法调用
+                return ((DemoFacade) cacheObj).sayHello(reqParamsStr);
+            } else if("say".equals(mtdName) && Void.class.getName().equals(parameterTypeName)){
+                // 真正的发起对源对象（被代理对象）的方法调用
+                return ((DemoFacade) cacheObj).say();
+            }
+
+            // 如果找不到的话，就抛出异常，提示方法不存在
+            throw new RuntimeException(String.join(".", className, mtdName) + " 的方法不存在");
+        }
+
+        // 如果找不到的话，就抛出异常，提示类不存在
+        throw new RuntimeException(className + " 类不存在");
+    }
+}
+```
+
+不停地利用 if…else 逻辑找到不同方法名对应方法逻辑，让提供方服务的统一入口外表看起来光鲜靓丽，内部实现其实丑陋不堪，一旦将来接口新增了方法，这里的 if…else 逻辑又得继续扩充，没完没了，永无止境。
+
+```java
+///////////////////////////////////////////////////
+// 提供方服务：统一入口接收请求的控制器，反射改善后的方式
+///////////////////////////////////////////////////
+@RestController
+public class CommonController {
+    // 定义URL地址
+    @PostMapping("gateway/{className}/{mtdName}/{parameterTypeName}/request")
+    public String recvCommonRequest(@PathVariable String className,
+                                    @PathVariable String mtdName,
+                                    @PathVariable String parameterTypeName,
+                                    @RequestBody String reqBody) throws Exception {
+        // 统一的接收请求的入口
+        return commonInvoke(className, parameterTypeName, mtdName, reqBody);
+    }
+
+    /**
+     * <h2>统一入口的核心逻辑。</h2>
+     *
+     * @param className：接口归属方法的全类名。
+     * @param mtdName：接口的方法名。
+     * @param parameterTypeName：接口的方法入参的全类名。
+     * @param reqParamsStr：请求数据。
+     * @return 接口方法调用的返回信息。
+     * @throws Exception
+     */
+    public static String commonInvoke(String className,
+                                      String mtdName,
+                                      String parameterTypeName,
+                                      String reqParamsStr) throws Exception {
+        // 通过反射机制可以获取接口类名对应的类对象
+        Class<?> clz = Class.forName(className);
+
+        // 接着通过类对象的简称获取到对应的接口服务的【代理对象】
+        // 相当于不同的 clz 就会获取不同的代理对象，各个代理对象代理的源对象都不一样的
+        ProxyInvoker proxyInvoker = SpringCtxUtils.getBean(clz);
+
+        // 【代理对象】调用自身的统一方法，然后内部会去识别方法名、方法参数调用不同的方法
+        return proxyInvoker.invoke(clz, mtdName, parameterTypeName, reqParamsStr);
+    }
+
+    ///////////////////////////////////////////////////
+    // 提供方服务：模拟的是其中一个代理类结构样子
+    ///////////////////////////////////////////////////
+    public class ProxyInvoker$1 extends ProxyInvoker {
+        // 暴露的统一被调用的方法
+        public Object invoke(Class<?> clz,
+                             String mtdName,
+                             String parameterTypeName,
+                             String reqParamsStr){
+            // 通过反射找到方法对应的 Method 对象
+            Method method = clz.getDeclaredMethod(mtdName, Class.forName(parameterTypeName));
+            method.setAccessible(true);
+            // 反射调用
+            return method.invoke(getSourceTarget(), reqParamsStr);
+        }
+    }
+}
+```
+
+这就是 JDK 的动态代理模式，会动态生成一个继承 Proxy 的代理类。
+
+为什么 Dubbo 不用 JDK 的代理模式呢？我们通过一个示例来对比，代码也非常简单，一段是正常创建对象并调用对象的方法，一段是反射创建对象并反射调用对象的方法，然后各自循环调用一百万次看耗时，看运行结果。
+
+```
+正常调用耗时为：5 毫秒
+反射调用耗时为：745 毫秒
+```
+
+**Cglib 代理**
+
+Cglib 的核心原理，就是通过执行拦截器的回调方法（methodProxy.invokeSuper），从代理类的众多方法引用中匹配正确方法，并执行被代理类的方法。
+
+Cglib的这种方式，就像代理类的内部动态生成了一堆的 if…else 语句来调用被代理类的方法，避免了手工写各种 if…else 的硬编码逻辑，省去了不少硬编码的活。
+
+但是这么一来，如何生成动态代理类的逻辑就至关重要了，而且万一我们以后有自主定制的诉求，想修改这段生成代理类的这段逻辑，反而受 Cglib 库的牵制。
+
+因此为了长远考虑，我们还是自己实现一套有 Cglib 思想的方案更好，并且还可以在此思想上，利用最简单的代码，定制适合自己框架的代理类。这其实也是Dubbo的想法。
+
+> 缺少实际的例子说明。
+
+**自定义代理**
+
+我们总结下使用 JDK 和 Cglib 代理的一些顾虑。
+
+- JDK 代理，核心实现是进行反射调用，性能损耗不小。
+- Cglib 代理，核心实现是生成了各种 if…else 代码来调用被代理类的方法，但是这块生成代理的逻辑不够灵活，难以自主修改。
+
+基于这两点，我们考虑综合一下，自己打造一个简化版的迷你型 Cglib 代理工具，这样一来，就可以在自己的代理工具中做各种与框架密切相关的逻辑了。
+
+我们来设计代码模板：
+
+```java
+///////////////////////////////////////////////////
+// 代码模板
+///////////////////////////////////////////////////
+public class $DemoFacadeCustomInvoker extends CustomInvoker {
+    @Override
+    public Object invokeMethod(Object instance, String mtdName, Class<?>[] types, Object[] args) throws NoSuchMethodException {
+        // 这里就是进行简单的 if 代码判断
+        if ("sayHello".equals(mtdName)) {
+            return ((DemoFacade) instance).sayHello(String.valueOf(args[0]));
+        }
+        if ("say".equals(mtdName)) {
+            return ((DemoFacade) instance).say();
+        }
+        throw new NoSuchMethodException("Method [" + mtdName + "] not found.");
+    }
+}
+```
+
+有了代码模板，我们对照着代码模板用 Java 语言编写生成出来。
+
+```java
+///////////////////////////////////////////////////
+// 自定义代理生成工具类
+///////////////////////////////////////////////////
+public class CustomInvokerProxyUtils {
+    private static final AtomicInteger INC = new AtomicInteger();
+
+    // 创建源对象（被代理对象）的代理对象
+    public static Object newProxyInstance(Object sourceTarget) throws Exception{
+        String packageName = "com.hmilyylimh.cloud.wrapper.custom";
+        // filePath = /E:/工程所在的磁盘路径/dubbo-15-dubbo-wrapper/target/classes/com/hmilyylimh/cloud/wrapper/custom
+        String filePath = CustomInvokerProxyUtils.class.getResource("/").getPath()
+                + CustomInvokerProxyUtils.class.getPackage().toString().substring("package ".length()).replaceAll("\\.", "/");
+        Class<?> targetClazz = sourceTarget.getClass().getInterfaces()[0];
+        // proxyClassName = $DemoFacadeCustomInvoker_1
+        String proxyClassName = "$" + targetClazz.getSimpleName() + "CustomInvoker_" + INC.incrementAndGet();
+        // 获取代理的字节码内容
+        String proxyByteCode = getProxyByteCode(packageName, proxyClassName, targetClazz);
+        // 缓存至磁盘中
+        file2Disk(filePath, proxyClassName, proxyByteCode);
+        // 等刷盘稳定后
+        TimeUtils.sleep(2000);
+        // 再编译java加载class至内存中
+        Object compiledClazz = compileJava2Class(filePath, packageName, proxyClassName, sourceTarget, targetClazz);
+        // 返回实例化的对象
+        return compiledClazz;
+    }
+    // 生成代理的字节码内容，其实就是一段类代码的字符串
+    private static String getProxyByteCode(String packageName, String proxyClassName, Class<?> targetClazz) {
+        StringBuilder sb = new StringBuilder();
+        // pkgContent = package com.hmilyylimh.cloud.wrapper.custom;
+        String pkgContent = "package " + packageName + ";";
+        // importTargetClazz = import com.hmilyylimh.cloud.facade.demo.DemoFacade;
+        String importTargetClazz = "import " + targetClazz.getName() + ";";
+        // importNoSuchMethodException = import org.apache.dubbo.common.bytecode.NoSuchMethodException;
+        String importNoSuchMethodException = "import " + org.apache.dubbo.common.bytecode.NoSuchMethodException.class.getName() + ";";
+        // classHeadContent = public class $DemoFacadeCustomInvoker extends CustomInvoker {
+        String classHeadContent = "public class " + proxyClassName + " extends " + CustomInvoker.class.getSimpleName() + " {" ;
+        // 添加内容
+        sb.append(pkgContent).append(importTargetClazz).append(importNoSuchMethodException).append(classHeadContent);
+        // invokeMethodHeadContent = public Object invokeMethod(Object instance, String mtdName, Class<?>[] types, Object[] args) throws NoSuchMethodException {
+        String invokeMethodHeadContent = "public " + Object.class.getName() + " invokeMethod" +
+                "(" + Object.class.getName() + " instance, "
+                + String.class.getName() + " mtdName, " + Class.class.getName() + "<?>[] types, "
+                + Object.class.getName() + "[] args) throws " + org.apache.dubbo.common.bytecode.NoSuchMethodException.class.getName() + " {\n";
+        sb.append(invokeMethodHeadContent);
+        for (Method method : targetClazz.getDeclaredMethods()) {
+            String methodName = method.getName();
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            // if ("sayHello".equals(mtdName)) {
+            String ifHead = "if (\"" + methodName + "\".equals(mtdName)) {\n";
+            // return ((DemoFacade) instance).sayHello(String.valueOf(args[0]));
+            String ifContent = null;
+            // 这里有 bug ，姑且就入参就传一个入参对象吧
+            if(parameterTypes.length != 0){
+                ifContent = "return ((" + targetClazz.getName() + ") instance)." + methodName + "(" + String.class.getName() + ".valueOf(args[0]));\n";
+            } else {
+                ifContent = "return ((" + targetClazz.getName() + ") instance)." + methodName + "();\n";
+            }
+            // }
+            String ifTail = "}\n";
+            sb.append(ifHead).append(ifContent).append(ifTail);
+        }
+        // throw new NoSuchMethodException("Method [" + mtdName + "] not found.");
+        String invokeMethodTailContent = "throw new " + org.apache.dubbo.common.bytecode.NoSuchMethodException.class.getName() + "(\"Method [\" + mtdName + \"] not found.\");\n}\n";
+        sb.append(invokeMethodTailContent);
+        // 类的尾巴大括号
+        String classTailContent = " } ";
+        sb.append(classTailContent);
+        return sb.toString();
+    }
+    private static void file2Disk(String filePath, String proxyClassName, String proxyByteCode) throws IOException {
+        File file = new File(filePath + File.separator + proxyClassName + ".java");
+        if (!file.exists()) {
+            file.createNewFile();
+        }
+        FileWriter fileWriter = new FileWriter(file);
+        fileWriter.write(proxyByteCode);
+        fileWriter.flush();
+        fileWriter.close();
+    }
+    private static Object compileJava2Class(String filePath, String packageName, String proxyClassName, Object argsTarget, Class<?> targetClazz) throws Exception {
+        // 编译 Java 文件
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null);
+        Iterable<? extends JavaFileObject> compilationUnits =
+                fileManager.getJavaFileObjects(new File(filePath + File.separator + proxyClassName + ".java"));
+        JavaCompiler.CompilationTask task = compiler.getTask(null, fileManager, null, null, null, compilationUnits);
+        task.call();
+        fileManager.close();
+        // 加载 class 文件
+        URL[] urls = new URL[]{new URL("file:" + filePath)};
+        URLClassLoader urlClassLoader = new URLClassLoader(urls);
+        Class<?> clazz = urlClassLoader.loadClass(packageName + "." + proxyClassName);
+        // 反射创建对象，并且实例化对象
+        Constructor<?> constructor = clazz.getConstructor();
+        Object newInstance = constructor.newInstance();
+        return newInstance;
+    }
+}
+```
+
+接下来我们就使用代理工具类，生成代理类并调用方法看看。
+
+```java
+public static void main(String[] args) throws Exception {
+    // 创建源对象（即被代理对象）
+    DemoFacadeImpl demoFacade = new DemoFacadeImpl();
+    // 生成自定义的代理类
+    CustomInvoker invoker =
+         (CustomInvoker)CustomInvokerProxyUtils.newProxyInstance(demoFacade);
+    // 调用代理类的方法
+    invoker.invokeMethod(demoFacade, "sayHello", new Class[]{String.class}, new Object[]{"Geek"});
+}
+```
+
+**Wrapper 机制的原理**
+
+通过一番自定义实现后，想必你已经理解了 Dubbo 的用意了，我们来看看源码层面Dubbo是怎么生成代理类的，有哪些值得关注的细节。
+
+```java
+// org.apache.dubbo.rpc.proxy.javassist.JavassistProxyFactory#getInvoker
+// 创建一个 Invoker 的包装类
+@Override
+public <T> Invoker<T> getInvoker(T proxy, Class<T> type, URL url) {
+    // 这里就是生成 Wrapper 代理对象的核心一行代码
+    final Wrapper wrapper = Wrapper.getWrapper(proxy.getClass().getName().indexOf('$') < 0 ? proxy.getClass() : type);
+    // 包装一个 Invoker 对象
+    return new AbstractProxyInvoker<T>(proxy, type, url) {
+        @Override
+        protected Object doInvoke(T proxy, String methodName,
+                                  Class<?>[] parameterTypes,
+                                  Object[] arguments) throws Throwable {
+            // 使用 wrapper 代理对象调用自己的 invokeMethod 方法
+            // 以此来避免反射调用引起的性能开销
+            // 通过强转来实现统一方法调用
+            return wrapper.invokeMethod(proxy, methodName, parameterTypes, arguments);
+        }
+    };
+}
+```
+
+代码外表看起来很简单，内部的调用情况还是很深的，这里我也总结了代码调用流程图：
+
+![image-20250326233314604](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503262333932.png)
+
+我们来使用一下 Wrapper 机制，方便你更直观地理解，使用方式如下：
+
+```java
+public class InvokeDemoFacade {
+    public static void main(String[] args) throws Exception {
+        // 创建一个源对象（即被代理类）
+        DemoFacadeImpl demoFacade = new DemoFacadeImpl();
+        // 使用 Wrapper 机制获取一个继承  Wrapper 的代理类
+        final Wrapper wrapper = Wrapper.getWrapper(demoFacade.getClass());
+        // 使用生成的 wrapper 代理类调用通用的 invokeMethod 方法获取结果
+        Object result = wrapper.invokeMethod(
+                demoFacade,
+                "sayHello",
+                new Class[]{String.class},
+                new Object[]{"Geek"}
+        );
+        // 然后打印调用的结果
+        System.out.println("wrapper调用结果为：" + result);
+    }
+}
+```
+
+然后把生成是 wrapper 代理类 class 文件反编译为 Java 代码，看看生成的内容到底长什么样的。
+
+```java
+///////////////////////////////////////////////////
+// Wrapper.getWrapper(demoFacade.getClass())
+// 这句代码生成出来的 wrapper 代理对象，对应类的代码结构
+///////////////////////////////////////////////////
+package com.hmilyylimh.cloud.wrapper.demo;
+import java.lang.reflect.InvocationTargetException;
+import java.util.Map;
+import org.apache.dubbo.common.bytecode.NoSuchMethodException;
+import org.apache.dubbo.common.bytecode.NoSuchPropertyException;
+import org.apache.dubbo.common.bytecode.Wrapper;
+import org.apache.dubbo.common.bytecode.ClassGenerator.DC;
+// Dubbo 框架生成代理类的类名为 DemoFacadeImplDubboWrap0，
+// 然后也继承了一个 Wrapper 对象，需要一个 invokeMethod 方法来统一调用
+public class DemoFacadeImplDubboWrap0 extends Wrapper implements DC {
+    public static String[] pns;
+    public static Map pts;
+    public static String[] mns;
+    public static String[] dmns;
+    public static Class[] mts0;
+    public static Class[] mts1;
+    public String[] getPropertyNames() { return pns; }
+    public boolean hasProperty(String var1) { return pts.containsKey(var1); }
+    public Class getPropertyType(String var1) { return (Class)pts.get(var1); }
+    public String[] getMethodNames() { return mns; }
+    public String[] getDeclaredMethodNames() { return dmns; }
+    public void setPropertyValue(Object var1, String var2, Object var3) {
+        try {
+            DemoFacadeImpl var4 = (DemoFacadeImpl)var1;
+        } catch (Throwable var6) {
+            throw new IllegalArgumentException(var6);
+        }
+        throw new NoSuchPropertyException("Not found property \"" + var2 + "\" field or setter method in class com.hmilyylimh.cloud.wrapper.demo.DemoFacadeImpl.");
+    }
+    public Object getPropertyValue(Object var1, String var2) {
+        try {
+            DemoFacadeImpl var3 = (DemoFacadeImpl)var1;
+        } catch (Throwable var5) {
+            throw new IllegalArgumentException(var5);
+        }
+        throw new NoSuchPropertyException("Not found property \"" + var2 + "\" field or getter method in class com.hmilyylimh.cloud.wrapper.demo.DemoFacadeImpl.");
+    }
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // 重点看这里，这才是调用的关键代码
+    // 这里也动态生成了 if...else 代码
+    // 然后通过强转调用源对象（被代理对象）的方法
+    public Object invokeMethod(Object var1, String var2, Class[] var3, Object[] var4) throws InvocationTargetException {
+        DemoFacadeImpl var5;
+        try {
+            var5 = (DemoFacadeImpl)var1;
+        } catch (Throwable var8) {
+            throw new IllegalArgumentException(var8);
+        }
+        try {
+            if ("sayHello".equals(var2) && var3.length == 1) {
+                return var5.sayHello((String)var4[0]);
+            }
+            if ("say".equals(var2) && var3.length == 0) {
+                return var5.say();
+            }
+        } catch (Throwable var9) {
+            throw new InvocationTargetException(var9);
+        }
+        throw new NoSuchMethodException("Not found method \"" + var2 + "\" in class com.hmilyylimh.cloud.wrapper.demo.DemoFacadeImpl.");
+    }
+    public DemoFacadeImplDubboWrap0() {
+    }
+}
+```
+
+我们最后比较一下正常调用、反射调用、Wrapper调用的耗时情况：
+
+```
+正常调用耗时为：8 毫秒
+反射调用耗时为：2019 毫秒
+Wrapper调用耗时为：12 毫秒
+```
+
+**Wrapper 机制的利弊**
+
+Wrapper机制既然这么牛，难道我们可以摒弃已有的 JDK 和 Cglib 代理了么？其实不是的，使用时也有利弊之分的。
+
+Wrapper机制，对于搭建高性能的底层调用框架还是非常高效的，而且开辟了一条直接通过Java代码生成代理类的简便途径，为框架的未来各种定制扩展，提供了非常灵活的自主控制权。但不适合大众化，因为Wrapper机制定制化程度高，对维护人员会有较高的开发门槛要求。
 
 # 16｜Compiler编译：神乎其神的编译你是否有过胆怯？
 
@@ -2925,12 +3359,21 @@ com.hmilyylimh.cloud.dubbo.spi.CustomSpi@143640d5, 8888
 
 # ==拓展篇==
 
-23｜集群扩展：发送请求遇到服务不可用，怎么办？
+# 23｜集群扩展：发送请求遇到服务不可用，怎么办？
 
-24｜拦截扩展：如何利用Filter进行扩展？
 
-25｜注册扩展：如何统一添加注册信息？
 
-26｜线程池扩展：如何选择Dubbo线程池？
+# 24｜拦截扩展：如何利用Filter进行扩展？
+
+
+
+# 25｜注册扩展：如何统一添加注册信息？
+
+
+
+# 26｜线程池扩展：如何选择Dubbo线程池？
+
+
 
 # 27｜协议扩展：如何快速控制应用的上下线？
+
