@@ -1019,6 +1019,12 @@ public class MonsterFacadeImpl implements MonsterFacade {
 }
 ```
 
+这段代码使用Groovy和Spring，完成了万能管控代码的最核心逻辑：
+
+- 首先，将接收的Java代码利用Groovy插件编译为Class对象。
+- 其次，将得到的Class对象移交给Spring容器去创建单例Bean对象。
+- 最后，调用单例Bean对象的run方法，完成最终动态Java代码的逻辑执行，并达到修复功能的目的。
+
 **点点直连的应用**
 
 好，点点直连的代码逻辑我们就掌握了，之后如果能应用到自己的项目中，相信你再也不用担心紧急的数据订正事件了。在日常开发中，哪些应用场景可以考虑点点直连呢？
@@ -3331,7 +3337,626 @@ Wrapper机制，对于搭建高性能的底层调用框架还是非常高效的�
 
 # 16｜Compiler编译：神乎其神的编译你是否有过胆怯？
 
+今天是我们深入研究Dubbo源码的第五篇，Compiler 编译。
 
+**Javassist 编译**
+
+参考 Dubbo 的实现 ClassGenerator，代码如下：
+
+```java
+// org.apache.dubbo.common.bytecode.ClassGenerator#toClass(java.lang.Class<?>, java.lang.ClassLoader, java.security.ProtectionDomain)
+public Class<?> toClass(Class<?> neighborClass, ClassLoader loader, ProtectionDomain pd) {
+    if (mCtc != null) {
+        mCtc.detach();
+    }
+    // 自增长类名尾巴序列号，类似 $Proxy_01.class 这种 JDK 代理名称的 01 数字
+    long id = CLASS_NAME_COUNTER.getAndIncrement();
+    try {
+        // 从 ClassPool 中获取 mSuperClass 类的类型
+        // 我们一般还可以用 mPool 来看看任意类路径对应的 CtClass 类型对象是什么
+        // 比如可以通过 mPool.get("java.lang.String") 看看 String 的 CtClass 类型对象是什么
+        // 之所以要这么做，主要是为了迎合这样的API语法而操作的
+        CtClass ctcs = mSuperClass == null ? null : mPool.get(mSuperClass);
+        if (mClassName == null) {
+            mClassName = (mSuperClass == null || javassist.Modifier.isPublic(ctcs.getModifiers())
+                    ? ClassGenerator.class.getName() : mSuperClass + "$sc") + id;
+        }
+        // 通过 ClassPool 来创建一个叫 mClassName 名字的类
+        mCtc = mPool.makeClass(mClassName);
+        if (mSuperClass != null) {
+            // 然后设置一下 mCtc 这个新创建类的父类为 ctcs
+            mCtc.setSuperclass(ctcs);
+        }
+        // 为 mCtc 新建类添加一个实现的接口
+        mCtc.addInterface(mPool.get(DC.class.getName())); // add dynamic class tag.
+        if (mInterfaces != null) {
+            for (String cl : mInterfaces) {
+                mCtc.addInterface(mPool.get(cl));
+            }
+        }
+        // 为 mCtc 新建类添加一些字段
+        if (mFields != null) {
+            for (String code : mFields) {
+                mCtc.addField(CtField.make(code, mCtc));
+            }
+        }
+        // 为 mCtc 新建类添加一些方法
+        if (mMethods != null) {
+            for (String code : mMethods) {
+                if (code.charAt(0) == ':') {
+                    mCtc.addMethod(CtNewMethod.copy(getCtMethod(mCopyMethods.get(code.substring(1))),
+                            code.substring(1, code.indexOf('(')), mCtc, null));
+                } else {
+                    mCtc.addMethod(CtNewMethod.make(code, mCtc));
+                }
+            }
+        }
+        // 为 mCtc 新建类添加一些构造方法
+        if (mDefaultConstructor) {
+            mCtc.addConstructor(CtNewConstructor.defaultConstructor(mCtc));
+        }
+        if (mConstructors != null) {
+            for (String code : mConstructors) {
+                if (code.charAt(0) == ':') {
+                    mCtc.addConstructor(CtNewConstructor
+                            .copy(getCtConstructor(mCopyConstructors.get(code.substring(1))), mCtc, null));
+                } else {
+                    String[] sn = mCtc.getSimpleName().split("\\$+"); // inner class name include $.
+                    mCtc.addConstructor(
+                            CtNewConstructor.make(code.replaceFirst(SIMPLE_NAME_TAG, sn[sn.length - 1]), mCtc));
+                }
+            }
+        }
+        // 将 mCtc 新创建的类转成 Class 对象
+        try {
+            return mPool.toClass(mCtc, neighborClass, loader, pd);
+        } catch (Throwable t) {
+            if (!(t instanceof CannotCompileException)) {
+                return mPool.toClass(mCtc, loader, pd);
+            }
+            throw t;
+        }
+    } catch (RuntimeException e) {
+        throw e;
+    } catch (NotFoundException | CannotCompileException e) {
+        throw new RuntimeException(e.getMessage(), e);
+    }
+}
+```
+
+基本了解如何使用之后，上一讲的代码模板，我们可以用 Javassist 实现一遍，代码如下：
+
+```java
+///////////////////////////////////////////////////
+// 采用 Javassist 的 API 来动态创建代码模板
+///////////////////////////////////////////////////
+public class JavassistProxyUtils {
+    private static final AtomicInteger INC = new AtomicInteger();
+    public static Object newProxyInstance(Object sourceTarget) throws Exception{
+        // ClassPool：Class对象的容器
+        ClassPool pool = ClassPool.getDefault();
+
+        // 通过ClassPool生成一个public类
+        Class<?> targetClazz = sourceTarget.getClass().getInterfaces()[0];
+        String proxyClassName = "$" + targetClazz.getSimpleName() + "CustomInvoker_" + INC.incrementAndGet();
+        CtClass ctClass = pool.makeClass(proxyClassName);
+        ctClass.setSuperclass(pool.get("com.hmilyylimh.cloud.compiler.custom.CustomInvoker"));
+
+        // 添加方法  public Object invokeMethod(Object instance, String mtdName, Class<?>[] types, Object[] args) throws NoSuchMethodException { {...}
+        CtClass returnType = pool.get("java.lang.Object");
+        CtMethod newMethod=new CtMethod(
+                returnType,
+                "invokeMethod",
+                new CtClass[]{ returnType, pool.get("java.lang.String"), pool.get("java.lang.Class[]"), pool.get("java.lang.Object[]") },
+                ctClass);
+        newMethod.setModifiers(Modifier.PUBLIC);
+        newMethod.setBody(buildBody(targetClazz).toString());
+        ctClass.addMethod(newMethod);
+
+        // 生成 class 类
+        Class<?> clazz = ctClass.toClass();
+
+        // 将 class 文件写到 target 目录下，方便调试查看
+        String filePath = JavassistProxyUtils.class.getResource("/").getPath()
+                + JavassistProxyUtils.class.getPackage().toString().substring("package ".length()).replaceAll("\\.", "/");
+        ctClass.writeFile(filePath);
+
+        // 反射实例化创建对象
+        return clazz.newInstance();
+    }
+    // 构建方法的内容字符串
+    private static StringBuilder buildBody(Class<?> targetClazz) {
+        StringBuilder sb = new StringBuilder("{\n");
+        for (Method method : targetClazz.getDeclaredMethods()) {
+            String methodName = method.getName();
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            // if ("sayHello".equals(mtdName)) {
+            String ifHead = "if (\"" + methodName + "\".equals($2)) {\n";
+            // return ((DemoFacade) instance).sayHello(String.valueOf(args[0]));
+            String ifContent = null;
+            // 这里有 bug ，姑且就入参就传一个入参对象吧
+            if(parameterTypes.length != 0){
+                ifContent = "return ((" + targetClazz.getName() + ") $1)." + methodName + "(" + String.class.getName() + ".valueOf($4[0]));\n";
+            } else {
+                ifContent = "return ((" + targetClazz.getName() + ") $1)." + methodName + "();\n";
+            }
+            // }
+            String ifTail = "}\n";
+            sb.append(ifHead).append(ifContent).append(ifTail);
+        }
+        // throw new NoSuchMethodException("Method [" + mtdName + "] not found.");
+        String invokeMethodTailContent = "throw new " + org.apache.dubbo.common.bytecode.NoSuchMethodException.class.getName() + "(\"Method [\" + $2 + \"] not found.\");\n}\n";
+        sb.append(invokeMethodTailContent);
+        return sb;
+    }
+}
+
+```
+
+可以发现确实比拼接字符串简单多了，而且 API 使用起来也比较清晰明了，完全按照平常的专业术语命名规范，马上就能找到对应的 API，根本不需要花很多准备工作。
+
+用新方案编译源代码后，我们验证一下结果，编写测试验证代码。
+
+```java
+public static void main(String[] args) throws Exception {
+    // 创建源对象（即被代理对象）
+    DemoFacadeImpl demoFacade = new DemoFacadeImpl();
+    // 生成自定义的代理类
+    CustomInvoker invoker = (CustomInvoker) JavassistProxyUtils.newProxyInstance(demoFacade);
+    // 调用代理类的方法
+    invoker.invokeMethod(demoFacade, "sayHello", new Class[]{String.class}, new Object[]{"Geek"});
+}
+```
+
+**ASM 编译**
+
+既然 Javassist 这么好用，为什么公司的大佬还在用 ASM 进行操作呢？其实，ASM 是一款侧重于性能的字节码插件，属于一种轻量级的高性能字节码插件，但同时实现的难度系数也会变大。这么讲你也许会好奇了，能有多难？
+
+我们还是举例来看，例子是把敏感字段加密存储到数据库。
+
+![image-20250327231739352](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503272317784.png)
+
+```java
+public class UserBean {
+    private String name;
+    public UserBean(String name) { this.name = name; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    @Override
+    public String toString() { return "UserBean{name='" + name + '\'' + '}'; }
+}
+```
+
+上层业务有一个对象，创建对象后，需要给对象的 setName 方法进行赋值。
+
+如果想要给传入的 name 字段进行加密，一般我们会这么做。
+
+```java
+// 先创建一个对象
+UserBean userBean = new UserBean();
+// 将即将赋值的 Geek 先加密，然后设置到 userBean 对象中
+userBean.setName(AESUtils.encrypt("Geek"));
+// 最后将 userBean 插入到数据库中
+userDao.insertData(userBean);
+```
+
+把传入 setName 的值先进行加密处理，然后把加密后的值放到 userBean 对象中，在入库时，就能把密文写到数据库了。
+
+但是这样就显得很累赘，今天这个字段需要加密，明天那个字段需要加密，那就没完没了，于是有人就想到了，可以将加密的这段操作内嵌到代理对象中，比如这样：
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503272318799.jpg)
+
+在上层业务中，该怎么赋值还是继续怎么赋值，不用感知加密的操作，所有加密的逻辑全部内嵌到代理对象中。当然，如果这么做，就得设计一个代码模板，借助自定义代理的经验，想必你也有了设计思路：
+
+```java
+///////////////////////////////////////////////////
+// 代码模板，将 UserBean 变成了 UserBeanHandler 代理对象，并且实现一个自己定义的 Handler 接口
+///////////////////////////////////////////////////
+public class UserBeanHandler implements Handler<UserBean> {
+    @Override
+    public void addBefore(UserBean u) {
+        if (u.getName() != null && u.getName().length() > 0) {
+            // 我这里仅仅只是告诉大家我针对了 name 的这个字段做了处理，
+            // 以后大家应用到实际项目中的话，可以在这里将我们的 name 字段进行加密处理
+            u.setName("#BEFORE#" + u.getName());
+        }
+    }
+}
+
+///////////////////////////////////////////////////
+// 配合代码模板设计出来的一个接口
+///////////////////////////////////////////////////
+public interface Handler<T> {
+    public void addBefore(T t);
+}
+
+```
+
+代码模板的思路也很简单，主要注意 2 点。
+
+- 设计一个对象的代理类，暴露一个 addBefore 方法来将字段进行加密操作。
+- 代理类为了迎合具备一个 addBefore 方法，就得设计出一个接口，避免 Java 类单继承无法扩展的瓶颈。
+
+代码模板是定义好了，可是操作字节码的时候，去哪里弄到该 UserBeanHandler 的字节码呢？
+
+其实 IDEA 工具已经为你预留了一个查看字节码的入口。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503272328371.png)
+
+选中代码模板后，展开顶部的 View 菜单，选中 Show Bytecode 看到该类对应的字节码。
+
+```java
+// class version 50.0 (50)
+// access flags 0x21
+// signature Ljava/lang/Object;Lcom/hmilyylimh/cloud/compiler/asm/Handler<Lcom/hmilyylimh/cloud/compiler/asm/UserBean;>;
+// declaration: com/hmilyylimh/cloud/compiler/asm/UserBeanHandler implements com.hmilyylimh.cloud.compiler.asm.Handler<com.hmilyylimh.cloud.compiler.asm.UserBean>
+public class com/hmilyylimh/cloud/compiler/asm/UserBeanHandler extends Ljava/lang/Object; implements com/hmilyylimh/cloud/compiler/asm/Handler {
+
+  // compiled from: UserBeanHandler.java
+
+  // access flags 0x1
+  public <init>()V
+    ALOAD 0
+    INVOKESPECIAL java/lang/Object.<init> ()V
+    RETURN
+    MAXSTACK = 1
+    MAXLOCALS = 1
+
+  // access flags 0x1
+  public addBefore(Lcom/hmilyylimh/cloud/compiler/asm/UserBean;)V
+    ALOAD 1
+    INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBean.getName ()Ljava/lang/String;
+    IFNULL L0
+    ALOAD 1
+    INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBean.getName ()Ljava/lang/String;
+    INVOKEVIRTUAL java/lang/String.length ()I
+    IFLE L0
+    ALOAD 1
+    NEW java/lang/StringBuilder
+    DUP
+    INVOKESPECIAL java/lang/StringBuilder.<init> ()V
+    LDC "#BEFORE#"
+    INVOKEVIRTUAL java/lang/StringBuilder.append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ALOAD 1
+    INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBean.getName ()Ljava/lang/String;
+    INVOKEVIRTUAL java/lang/StringBuilder.append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    INVOKEVIRTUAL java/lang/StringBuilder.toString ()Ljava/lang/String;
+    INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBean.setName (Ljava/lang/String;)V
+   L0
+   FRAME SAME
+    RETURN
+    MAXSTACK = 3
+    MAXLOCALS = 2
+
+  // access flags 0x1041
+  public synthetic bridge addBefore(Ljava/lang/Object;)V
+    ALOAD 0
+    ALOAD 1
+    CHECKCAST com/hmilyylimh/cloud/compiler/asm/UserBean
+    INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBeanHandler.addBefore (Lcom/hmilyylimh/cloud/compiler/asm/UserBean;)V
+    RETURN
+    MAXSTACK = 2
+    MAXLOCALS = 2
+}
+```
+
+看到一大片密密麻麻的字节码指令，想必你已经头都大了，不过别慌，这个问题在 [ASM 的官网指引](https://asm.ow2.io/developer-guide.html) 中也解答了，我们只需要按部就班把字节码指令翻译成为 Java 代码就可以了。
+
+好吧，既然官网都这么贴心了，那就勉强当一回工具人，我们按照官网的指示，依葫芦画瓢把代码模板翻译出来。
+
+经过一番漫长的翻译之后，我们终于写出了自己看看都觉得头皮发麻的长篇大论的代码，关键位置我都加注释了。
+
+```java
+///////////////////////////////////////////////////
+// ASM 字节码操作的代理工具类
+///////////////////////////////////////////////////
+public class AsmProxyUtils implements Opcodes {
+    /**
+     * <h2>创建代理对象。</h2>
+     *
+     * @param originClass：样例：UserBean.class
+     * @return
+     */
+    public static Object newProxyInstance(Class originClass) throws Exception{
+        String newClzNameSuffix = "Handler";
+        byte[] classBytes = generateByteCode(originClass, newClzNameSuffix);
+
+        // 可以想办法将 classBytes 存储为一个文件
+        String filePath = AsmProxyUtils.class.getResource("/").getPath()
+                + AsmProxyUtils.class.getPackage().toString().substring("package ".length()).replaceAll("\\.", "/");
+        FileOutputStream fileOutputStream = new FileOutputStream(new File(filePath,
+                originClass.getSimpleName() + newClzNameSuffix + ".class"));
+        fileOutputStream.write(classBytes);
+        fileOutputStream.close();
+
+        // 还得把 classBytes 加载到 JVM 内存中去
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        Class<?> loaderClass = Class.forName("java.lang.ClassLoader");
+        Method defineClassMethod = loaderClass.getDeclaredMethod("defineClass",
+                String.class,
+                byte[].class,
+                int.class,
+                int.class);
+        defineClassMethod.setAccessible(true);
+        Object respObject = defineClassMethod.invoke(loader, new Object[]{
+                originClass.getName() + newClzNameSuffix,
+                classBytes,
+                0,
+                classBytes.length
+        });
+
+        // 实例化对象
+        return ((Class)respObject).newInstance();
+    }
+    /**
+     * <h2>生成字节码的核心。</h2><br/>
+     *
+     * <li><h2>注意：接下来的重点就是如何用asm来动态产生一个 UserBeanHandler 类。</h2></li>
+     *
+     * @param originClass：样例：UserBean.class
+     * @param newClzNameSuffix： 样例：Handler
+     * @return
+     */
+    private static byte[] generateByteCode(Class originClass, String newClzNameSuffix) {
+        String newClassSimpleNameAndSuffix = originClass.getSimpleName() + newClzNameSuffix + ".java";
+        /**********************************************************************/
+        // 利用 ASM 编写创建类文件头的相关信息
+        /**********************************************************************/
+        ClassWriter classWriter = new ClassWriter(0);
+        /////////////////////////////////////////////////////////
+        // class version 50.0 (50)
+        // access flags 0x21
+        // signature Ljava/lang/Object;Lcom/hmilyylimh/cloud/compiler/asm/Handler<Lcom/hmilyylimh/cloud/compiler/asm/UserBean;>;
+        // declaration: com/hmilyylimh/cloud/compiler/asm/UserBeanHandler implements com.hmilyylimh.cloud.compiler.asm.UserBean<com.hmilyylimh.cloud.compiler.asm.UserBean>
+        // public class com/hmilyylimh/cloud/compiler/asm/UserBeanHandler extends Ljava/lang/Object; implements com/hmilyylimh/cloud/compiler/asm/Handler {
+        /////////////////////////////////////////////////////////
+        classWriter.visit(
+                V1_6,
+                ACC_PUBLIC + ACC_SUPER,
+                Type.getInternalName(originClass) + newClzNameSuffix,
+                Type.getDescriptor(Object.class)+Type.getDescriptor(Handler.class).replace(";","")+"<"+Type.getDescriptor(originClass)+">;",
+                Type.getDescriptor(Object.class),
+                new String[]{ Type.getInternalName(Handler.class) }
+        );
+        /////////////////////////////////////////////////////////
+        // UserBeanHandler.java
+        /////////////////////////////////////////////////////////
+        classWriter.visitSource(newClassSimpleNameAndSuffix, null);
+        /**********************************************************************/
+        // 创建构造方法
+        /**********************************************************************/
+        /////////////////////////////////////////////////////////
+        // compiled from: UserBeanHandler.java
+        // access flags 0x1
+        // public <init>()V
+        /////////////////////////////////////////////////////////
+        MethodVisitor initMethodVisitor = classWriter.visitMethod(
+                ACC_PUBLIC,
+                "<init>",
+                "()V",
+                null,
+                null
+        );
+        initMethodVisitor.visitCode();
+        /////////////////////////////////////////////////////////
+        // ALOAD 0
+        // INVOKESPECIAL java/lang/Object.<init> ()V
+        // RETURN
+        /////////////////////////////////////////////////////////
+        initMethodVisitor.visitVarInsn(ALOAD, 0);
+        initMethodVisitor.visitMethodInsn(INVOKESPECIAL,
+                Type.getInternalName(Object.class),
+                "<init>",
+                "()V"
+                );
+        initMethodVisitor.visitInsn(RETURN);
+        /////////////////////////////////////////////////////////
+        // MAXSTACK = 1
+        // MAXLOCALS = 1
+        /////////////////////////////////////////////////////////
+        initMethodVisitor.visitMaxs(1, 1);
+        initMethodVisitor.visitEnd();
+
+        /**********************************************************************/
+        // 创建 addBefore 方法
+        /**********************************************************************/
+        /////////////////////////////////////////////////////////
+        // access flags 0x1
+        // public addBefore(Lcom/hmilyylimh/cloud/compiler/asm/UserBean;)V
+        /////////////////////////////////////////////////////////
+        MethodVisitor addBeforeMethodVisitor = classWriter.visitMethod(
+                ACC_PUBLIC,
+                "addBefore",
+                "(" + Type.getDescriptor(originClass) + ")V",
+                null,
+                null
+        );
+        addBeforeMethodVisitor.visitCode();
+        /////////////////////////////////////////////////////////
+        // ALOAD 1
+        // INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBean.getName ()Ljava/lang/String;
+        /////////////////////////////////////////////////////////
+        addBeforeMethodVisitor.visitVarInsn(ALOAD, 1);
+        addBeforeMethodVisitor.visitMethodInsn(INVOKEVIRTUAL,
+                Type.getInternalName(originClass),
+                "getName",
+                "()" + Type.getDescriptor(String.class));
+        /////////////////////////////////////////////////////////
+        // IFNULL L0
+        // ALOAD 1
+        // INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBean.getName ()Ljava/lang/String;
+        // INVOKEVIRTUAL java/lang/String.length ()I
+        // IFLE L0
+        /////////////////////////////////////////////////////////
+        Label L0 = new Label();
+        addBeforeMethodVisitor.visitJumpInsn(IFNULL, L0);
+        addBeforeMethodVisitor.visitVarInsn(ALOAD, 1);
+        addBeforeMethodVisitor.visitMethodInsn(INVOKEVIRTUAL,
+                Type.getInternalName(originClass),
+                "getName",
+                "()" + Type.getDescriptor(String.class));
+        addBeforeMethodVisitor.visitMethodInsn(INVOKEVIRTUAL,
+                Type.getInternalName(String.class),
+                "length",
+                "()I");
+        addBeforeMethodVisitor.visitJumpInsn(IFLE, L0);
+        /**********************************************************************/
+        // 接下来要干的事情就是：u.setName("#BEFORE#" + u.getName());
+        /**********************************************************************/
+        /////////////////////////////////////////////////////////
+        // ALOAD 1
+        // NEW java/lang/StringBuilder
+        // DUP
+        /////////////////////////////////////////////////////////
+        addBeforeMethodVisitor.visitVarInsn(ALOAD, 1);
+        addBeforeMethodVisitor.visitTypeInsn(NEW, Type.getInternalName(StringBuilder.class));
+        addBeforeMethodVisitor.visitInsn(DUP);
+        /////////////////////////////////////////////////////////
+        // INVOKESPECIAL java/lang/StringBuilder.<init> ()V
+        // LDC "#BEFORE#"
+        // INVOKEVIRTUAL java/lang/StringBuilder.append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+        /////////////////////////////////////////////////////////
+        addBeforeMethodVisitor.visitMethodInsn(INVOKESPECIAL,
+                Type.getInternalName(StringBuilder.class),
+                "<init>",
+                "()V");
+        addBeforeMethodVisitor.visitLdcInsn("#BEFORE#");
+        addBeforeMethodVisitor.visitMethodInsn(INVOKEVIRTUAL,
+                Type.getInternalName(StringBuilder.class),
+                "append",
+                "("+ Type.getDescriptor(String.class) + ")" + Type.getDescriptor(StringBuilder.class));
+        /////////////////////////////////////////////////////////
+        // ALOAD 1
+        // INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBean.getName ()Ljava/lang/String;
+        // INVOKEVIRTUAL java/lang/StringBuilder.append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+        // NVOKEVIRTUAL java/lang/StringBuilder.toString ()Ljava/lang/String;
+        // INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBean.setName (Ljava/lang/String;)V
+        /////////////////////////////////////////////////////////
+        addBeforeMethodVisitor.visitVarInsn(ALOAD, 1);
+        addBeforeMethodVisitor.visitMethodInsn(INVOKEVIRTUAL,
+                Type.getInternalName(originClass),
+                "getName",
+                "()" + Type.getDescriptor(String.class));
+        addBeforeMethodVisitor.visitMethodInsn(INVOKEVIRTUAL,
+                Type.getInternalName(StringBuilder.class),
+                "append",
+                "("+ Type.getDescriptor(String.class) + ")" + Type.getDescriptor(StringBuilder.class));
+        addBeforeMethodVisitor.visitMethodInsn(INVOKEVIRTUAL,
+                Type.getInternalName(StringBuilder.class),
+                "toString",
+                "()" + Type.getDescriptor(String.class));
+        addBeforeMethodVisitor.visitMethodInsn(INVOKEVIRTUAL,
+                Type.getInternalName(originClass),
+                "setName",
+                "(" + Type.getDescriptor(String.class)+")V");
+        /////////////////////////////////////////////////////////
+        // L0
+        // FRAME SAME
+        // RETURN
+        /////////////////////////////////////////////////////////
+        addBeforeMethodVisitor.visitLabel(L0);
+        addBeforeMethodVisitor.visitFrame(F_SAME, 0, null, 0, null);
+        addBeforeMethodVisitor.visitInsn(RETURN);
+        /////////////////////////////////////////////////////////
+        // LMAXSTACK = 3
+        // MAXLOCALS = 2
+        /////////////////////////////////////////////////////////
+        addBeforeMethodVisitor.visitMaxs(3, 2);
+        addBeforeMethodVisitor.visitEnd();
+        /**********************************************************************/
+        // 创建桥接 addBefore 方法
+        /**********************************************************************/
+        /////////////////////////////////////////////////////////
+        // access flags 0x1041
+        // public synthetic bridge addBefore(Ljava/lang/Object;)V
+        /////////////////////////////////////////////////////////
+        MethodVisitor bridgeAddBeforeMethodVisitor = classWriter.visitMethod(ACC_PUBLIC + ACC_SYNTHETIC + ACC_BRIDGE,
+                "addBefore",
+                "(" + Type.getDescriptor(Object.class) + ")V",
+                null,
+                null
+        );
+        bridgeAddBeforeMethodVisitor.visitCode();
+        /////////////////////////////////////////////////////////
+        // ALOAD 0
+        // ALOAD 1
+        /////////////////////////////////////////////////////////
+        bridgeAddBeforeMethodVisitor.visitVarInsn(ALOAD, 0);
+        bridgeAddBeforeMethodVisitor.visitVarInsn(ALOAD, 1);
+        /////////////////////////////////////////////////////////
+        // CHECKCAST com/hmilyylimh/cloud/compiler/asm/UserBean
+        // INVOKEVIRTUAL com/hmilyylimh/cloud/compiler/asm/UserBeanHandler.addBefore (Lcom/hmilyylimh/cloud/compiler/asm/UserBean;)V
+        // RETURN
+        /////////////////////////////////////////////////////////
+        bridgeAddBeforeMethodVisitor.visitTypeInsn(CHECKCAST, Type.getInternalName(originClass));
+        bridgeAddBeforeMethodVisitor.visitMethodInsn(INVOKEVIRTUAL,
+                Type.getInternalName(originClass) + newClzNameSuffix,
+                "addBefore",
+                "(" + Type.getDescriptor(originClass) + ")V");
+        bridgeAddBeforeMethodVisitor.visitInsn(RETURN);
+        /////////////////////////////////////////////////////////
+        // MAXSTACK = 2
+        // MAXLOCALS = 2
+        /////////////////////////////////////////////////////////
+        bridgeAddBeforeMethodVisitor.visitMaxs(2, 2);
+        bridgeAddBeforeMethodVisitor.visitEnd();
+        /**********************************************************************/
+        // 创建结束
+        /**********************************************************************/
+        classWriter.visitEnd();
+        return classWriter.toByteArray();
+    }
+}
+```
+
+写的过程有些卡壳，难度系数也不低，我们有 3 个小点要注意。
+
+- 有些字节码指令不知道如何使用 ASM API，比如 INVOKESPECIAL 不知道怎么调用 API，你可以网络检索一下“ **MethodVisitor INVOKESPECIAL**”关键字，就能轻松找到与之对应的 API 了。
+- 重点关注调用 API 各参数的位置，千万别放错了，否则问题排查起来比较费时间。
+- 生成的字节码文件直接保存到文件中，然后利用 ClassLoader.defineClass 方法，把字节码交给 JVM 虚拟机直接变成一个 Class 类型实例。
+
+在写的时候，你一定要沉下心慢慢转换，一步都不能错，否则时间浪费了还得不到有效的成果。
+
+写好之后，你一定非常兴奋，我们还是先写个测试代码验证一下：
+
+```java
+public static void main(String[] args) throws Exception {
+    UserBean userBean = new UserBean("Geek");
+    // 从 mybatis 的拦截器里面拿到了准备更新 db 的数据对象，然后创建代理对象
+    Handler handler = (Handler) AsmProxyUtils.newProxyInstance(userBean.getClass());
+    // 关键的一步，在 mybatis 中模拟将入参对象进行加密操作
+    handler.addBefore(userBean);
+    // 这里为了观察效果，先打印一下 userBean 的内容看看
+    System.out.println(userBean);
+
+    // 接下来，假设有执行 db 的操作，那就直接将密文入库了
+
+    // db 操作完成之后，还得将 userBean 的密文变成明文，这里应该还有 addAfter 解密操作
+}
+```
+
+打印输出的内容为：
+
+```java
+打印一下加密内容: UserBean{name='#BEFORE#Geek'}
+```
+
+结果如预期所料，把入参的数据成功加密了，我们终于可以喘口气了，不过辛苦是值得的，学到了大量的底层 ASM 操控字节码的知识，也见识到了底层功能的强大威力。
+
+**Compiler 编译方式的适用场景**
+
+今天我们见识到 Javassist 和 ASM 的强大威力，之前也用过JavaCompiler和Groovy 插件，这么多款工具可以编译生成类信息，有哪些适用场景呢？
+
+- JavaCompiler：是 JDK 提供的一个工具包，我们熟知的 Javac 编译器其实就是 JavaCompiler 的实现，不过JDK 的版本迭代速度快，变化大，我们升级 JDK 的时候，本来在低版本 JDK 能正常编译的功能，跑到高版本就失效了。
+- Groovy：属于第三方插件，功能很多很强大，几乎是开发小白的首选框架，不需要考虑过多 API 和字节码指令，会构建源代码字符串，交给 Groovy 插件后就能拿到类信息，拿起来就可以直接使用，但同时也是比较重量级的插件。
+- Javassist：封装了各种API来创建类，相对于稍微偏底层的风格，可以动态针对已有类的字节码，调用相关的 API 直接增删改查，非常灵活，只要熟练使用 API 就可以达到很高的境界。
+- ASM：是一个通用的字节码操作的框架，属于非常底层的插件了，操作该插件的技术难度相当高，需要对字节码指令有一定的了解，但它体现出来的性能却是最高的，并且插件本身就是定位为一款轻量级的高性能字节码插件。
+
+有了众多动态编译方式的法宝，从简单到复杂，从重量级到轻量级，你都学会了，相信再遇到一堆神乎其神的Compiler 编译方式，内心也不会胆怯了。
+
+不过工具多了，有同学可能就有选择困难症，这里我也讲下个人的选择标准。
+
+如果需要开发一些底层插件，我倾向使用 Javassist 或者 ASM。使用 Javassist 是因为用API 简单而且方便后人维护，使用 ASM 是在一些高度频繁调用的场景出于对性能的极致追求。如果开发应用系统的业务功能，对性能没有太强的追求，而且便于加载和卸载，我倾向使用 Groovy 这款插件。
 
 # 17｜Adaptive适配：Dubbo的Adaptive特殊在哪里？
 
