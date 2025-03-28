@@ -3960,13 +3960,322 @@ public static void main(String[] args) throws Exception {
 
 # 17｜Adaptive适配：Dubbo的Adaptive特殊在哪里？
 
+深入 Dubbo SPI 机制的底层原理时，在加载并解析 SPI 文件的逻辑中，你会看到有一段专门针对 Adaptive 注解进行处理的代码；在 Dubbo 内置的被 @SPI 注解标识的接口中，你同样会看到好多方法上都有一个 @Adaptive 注解。
 
+这么多代码和功能都与 Adaptive 有关，难道有什么特殊含义么？Adaptive究竟是用来干什么的呢？我们开始今天的学习。
+
+**自适应扩展点**
+
+我们还是设计一下验证的大体代码结构：
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503282329646.jpg)
+
+图中，定义了一个 Geek 接口，然后有 3 个实现类，分别是 Dubbo、SpringCloud 和 AdaptiveGeek，但是 AdaptiveGeek 实现类上有 @Adaptive 注解。
+
+有了这种结构图，鉴于刚分析的结论，@Adaptive 在实现类上还是在方法上，会有很大的区别，所以我们做两套验证方案。
+
+- 验证方案一：只有两个实现类 Dubbo 和 SpringCloud，然后 @Adaptive 添加在 Geek 接口的方法上。
+- 验证方法二：在验证方案一的基础之上，再添加一个实现类 AdaptiveGeek 并添加 @Adaptive 注解。
+
+设计完成，我们编写代码。
+
+```java
+///////////////////////////////////////////////////
+// SPI 接口：Geek，默认的扩展点实现类是 Dubbo 实现类
+// 并且该接口的 getCourse 方法上有一个 @Adaptive 注解
+///////////////////////////////////////////////////
+@SPI("dubbo")
+public interface Geek {
+    @Adaptive
+    String getCourse(URL url);
+}
+///////////////////////////////////////////////////
+// Dubbo 实现类
+///////////////////////////////////////////////////
+public class Dubbo implements Geek {
+    @Override
+    public String getCourse(URL url) {
+        return "Dubbo实战进阶课程";
+    }
+}
+///////////////////////////////////////////////////
+// SpringCloud 实现类
+///////////////////////////////////////////////////
+public class SpringCloud implements Geek {
+    @Override
+    public String getCourse(URL url) {
+        return "SpringCloud入门课程100集";
+    }
+}
+///////////////////////////////////////////////////
+// 资源目录文件
+// 路径为：/META-INF/dubbo/com.hmilyylimh.cloud.adaptive.spi.Geek
+///////////////////////////////////////////////////
+dubbo=com.hmilyylimh.cloud.adaptive.spi.Dubbo
+springcloud=com.hmilyylimh.cloud.adaptive.spi.SpringCloud
+
+///////////////////////////////////////////////////
+// 启动类，验证代码用的
+///////////////////////////////////////////////////
+public static void main(String[] args) {
+    ApplicationModel applicationModel = ApplicationModel.defaultModel();
+    // 通过 Geek 接口获取指定像 扩展点加载器
+    ExtensionLoader<Geek> extensionLoader = applicationModel.getExtensionLoader(Geek.class);
+
+    Geek geek = extensionLoader.getAdaptiveExtension();
+    System.out.println("【指定的 geek=springcloud 的情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/?geek=springcloud")));
+    System.out.println("【指定的 geek=dubbo 的情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/?geek=dubbo")));
+    System.out.println("【不指定的 geek 走默认情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/")));
+    System.out.println("【随便指定 geek=xyz 走报错情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/?geek=xyz")));
+}
+```
+
+运行结果如下：
+
+```
+【指定的 geek=springcloud 的情况】动态获取结果为: SpringCloud入门课程100集
+【指定的 geek=dubbo 的情况】动态获取结果为: Dubbo实战进阶课程
+【不指定的 geek 走默认情况】动态获取结果为: Dubbo实战进阶课程
+Exception in thread "main" java.lang.IllegalStateException: No such extension com.hmilyylimh.cloud.adaptive.spi.Geek by name xyz, no related exception was found, please check whether related SPI module is missing.
+	at org.apache.dubbo.common.extension.ExtensionLoader.findException(ExtensionLoader.java:747)
+	at org.apache.dubbo.common.extension.ExtensionLoader.createExtension(ExtensionLoader.java:754)
+	at org.apache.dubbo.common.extension.ExtensionLoader.getExtension(ExtensionLoader.java:548)
+	at org.apache.dubbo.common.extension.ExtensionLoader.getExtension(ExtensionLoader.java:523)
+	at com.hmilyylimh.cloud.adaptive.spi.Geek$Adaptive.getCourse(Geek$Adaptive.java)
+	at com.hmilyylimh.cloud.adaptive.Dubbo17DubboAdaptiveApplication.main(Dubbo17DubboAdaptiveApplication.java:24)
+```
+
+从验证方案一的实施结果来看，在 URL 中指定 geek 参数的值为 springcloud 或 dubbo，都能走到正确的实现类逻辑中，不指定 geek 参数就走默认的实现类，随便指定 geek 参数的值就会抛出异常。
+
+接着实施验证方案二：
+
+```java
+///////////////////////////////////////////////////
+// SPI 接口：Geek，默认的扩展点实现类是 Dubbo 实现类
+// 并且该接口的 getCourse 方法上有一个 @Adaptive 注解
+///////////////////////////////////////////////////
+@SPI("dubbo")
+public interface Geek {
+    @Adaptive
+    String getCourse(URL url);
+}
+///////////////////////////////////////////////////
+// Dubbo 实现类
+///////////////////////////////////////////////////
+public class Dubbo implements Geek {
+    @Override
+    public String getCourse(URL url) {
+        return "Dubbo实战进阶课程";
+    }
+}
+///////////////////////////////////////////////////
+// SpringCloud 实现类
+///////////////////////////////////////////////////
+public class SpringCloud implements Geek {
+    @Override
+    public String getCourse(URL url) {
+        return "SpringCloud入门课程100集";
+    }
+}
+///////////////////////////////////////////////////
+// AdaptiveGeek 实现类，并且该实现类上有一个 @Adaptive 注解
+///////////////////////////////////////////////////
+@Adaptive
+public class AdaptiveGeek implements Geek {
+    @Override
+    public String getCourse(URL url) {
+        return "17｜Adaptive 适配：Dubbo的Adaptive特殊在哪里？";
+    }
+}
+///////////////////////////////////////////////////
+// 资源目录文件
+// 路径为：/META-INF/dubbo/com.hmilyylimh.cloud.adaptive.spi.Geek
+///////////////////////////////////////////////////
+dubbo=com.hmilyylimh.cloud.adaptive.spi.Dubbo
+springcloud=com.hmilyylimh.cloud.adaptive.spi.SpringCloud
+adaptivegeek=com.hmilyylimh.cloud.adaptive.spi.AdaptiveGeek
+
+///////////////////////////////////////////////////
+// 启动类，验证代码用的
+///////////////////////////////////////////////////
+public static void main(String[] args) {
+    ApplicationModel applicationModel = ApplicationModel.defaultModel();
+    // 通过 Geek 接口获取指定像 扩展点加载器
+    ExtensionLoader<Geek> extensionLoader = applicationModel.getExtensionLoader(Geek.class);
+
+    Geek geek = extensionLoader.getAdaptiveExtension();
+    System.out.println("【指定的 geek=springcloud 的情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/?geek=springcloud")));
+    System.out.println("【指定的 geek=dubbo 的情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/?geek=dubbo")));
+    System.out.println("【不指定的 geek 走默认情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/")));
+    System.out.println("【随便指定 geek=xyz 走报错情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/?geek=xyz")));
+}
+```
+
+运行结果如下：
+
+```
+【指定的 geek=springcloud 的情况】动态获取结果为: 17｜Adaptive 适配：Dubbo的Adaptive特殊在哪里？
+【指定的 geek=dubbo 的情况】动态获取结果为: 17｜Adaptive 适配：Dubbo的Adaptive特殊在哪里？
+【不指定的 geek 走默认情况】动态获取结果为: 17｜Adaptive 适配：Dubbo的Adaptive特殊在哪里？
+【随便指定 geek=xyz 走报错情况】动态获取结果为: 17｜Adaptive 适配：Dubbo的Adaptive特殊在哪里？
+```
+
+从方案二的验证结果来看，一旦走进了带有 @Adaptive 注解的实现类后，所有的逻辑就完全按照该实现类去执行了，也就不存在动态代理逻辑一说了。
+
+**源码跟踪**
+
+我们就先从 ExtensionLoader 的 getAdaptiveExtension 方法开始吧。getAdaptiveExtension 方法是如何被使用的呢？
+
+```java
+Cluster cluster = ExtensionLoader
+    // 获取 Cluster 接口对应扩展点加载器
+    .getExtensionLoader(Cluster.class)
+    // 从 Cluster 扩展点加载器中获取自适应的扩展点
+    .getAdaptiveExtension();
+```
+
+getAdaptiveExtension 方法：
+
+![image-20250328234027767](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503282340034.png)
+
+从 getAdaptiveExtension 方法中，我们可以知道，最核心的方法是 createAdaptiveExtension 方法。
+
+```java
+// org.apache.dubbo.common.extension.ExtensionLoader#getAdaptiveExtensionClass
+// 创建自适应扩展点方法
+private T createAdaptiveExtension() {
+    try {
+        // 这一行从 newInstance 这个关键字便知道这行代码就是创建扩展点的核心代码
+        T instance = (T) getAdaptiveExtensionClass().newInstance();
+
+        // 这里针对创建出来的实例对象做的一些类似 Spring 的前置后置的方式处理
+        instance = postProcessBeforeInitialization(instance, null);
+        instance = injectExtension(instance);
+        instance = postProcessAfterInitialization(instance, null);
+        initExtension(instance);
+        return instance;
+    } catch (Exception e) {
+        throw new IllegalStateException("Can't create adaptive extension " + type + ", cause: " + e.getMessage(), e);
+    }
+}
+                  ↓
+// 获取自适应扩展点的类对象
+private Class<?> getAdaptiveExtensionClass() {
+    // 获取当前扩展点（Cluster）的加载器（ExtensionLoader）中的所有扩展点
+    getExtensionClasses();
+    // 如果缓存的自适应扩展点不为空的话，就提前返回
+    // 这里也间接的说明了一点，每个扩展点（Cluster）只有一个自适应扩展点对象
+    if (cachedAdaptiveClass != null) {
+        return cachedAdaptiveClass;
+    }
+    // 这里便是创建自适应扩展点类对象的逻辑，我们需要直接进入没有缓存时的创建逻辑
+    return cachedAdaptiveClass = createAdaptiveExtensionClass();
+}
+                  ↓
+// 创建自适应扩展点类对象
+private Class<?> createAdaptiveExtensionClass() {
+    // Adaptive Classes' ClassLoader should be the same with Real SPI interface classes' ClassLoader
+    ClassLoader classLoader = type.getClassLoader();
+    try {
+        if (NativeUtils.isNative()) {
+            return classLoader.loadClass(type.getName() + "$Adaptive");
+        }
+    } catch (Throwable ignore) {
+    }
+    // 看见这行关键代码，发现使用了一个叫做扩展点源码生成器的类
+    // 看意思，就是调用 generate 方法生成一段 Java 编写的源代码
+    String code = new AdaptiveClassCodeGenerator(type, cachedDefaultName).generate();
+    // 紧接着把源代码传入了 Compiler 接口的扩展点
+    // 这个 Compiler 接口不就是我们上一讲思考题刚学过的知识点么
+    org.apache.dubbo.common.compiler.Compiler compiler = extensionDirector.getExtensionLoader(
+        org.apache.dubbo.common.compiler.Compiler.class).getAdaptiveExtension();
+    // 通过调用 compile 方法，也就大致明白了，就是通过源代码生成一个类对象而已
+    return compiler.compile(type, code, classLoader);
+}
+```
+
+进入 createAdaptiveExtension 源码，通读一遍大致的逻辑，我们总结出了 3 点。
+
+1. 在 Dubbo 框架里，自适应扩展点是通过双检索（DCL）以线程安全的形式创建出来的。
+2. 创建自适应扩展点时，每个接口有且仅有一个自适应扩展点。
+3. 自适应扩展点的创建，是通过生成了一段 Java 的源代码，然后使用 Compiler 接口编译生成了一个类对象，这说明自适应扩展点是动态生成的。
+
+我们通过断点的方式，把 code 源代码拷贝出来。
+
+```java
+package org.apache.dubbo.rpc.cluster;
+import org.apache.dubbo.rpc.model.ScopeModel;
+import org.apache.dubbo.rpc.model.ScopeModelUtil;
+// 类名比较特别，是【接口的简单名称】+【$Adaptive】构成的
+// 这就是自适应动态扩展点对象的类名
+public class Cluster$Adaptive implements org.apache.dubbo.rpc.cluster.Cluster {
+    public org.apache.dubbo.rpc.Invoker join(org.apache.dubbo.rpc.cluster.Directory arg0, boolean arg1) throws org.apache.dubbo.rpc.RpcException {
+        // 如果 Directory 对象为空的话，则抛出异常
+        // 一般正常的逻辑是不会走到为空的逻辑里面的，这是一种健壮性代码考虑
+        if (arg0 == null) throw new IllegalArgumentException("org.apache.dubbo.rpc.cluster.Directory argument == null");
+        // 若 Directory  对象中的 URL 对象为空抛异常，同样是健壮性代码考虑
+        if (arg0.getUrl() == null)
+            throw new IllegalArgumentException("org.apache.dubbo.rpc.cluster.Directory argument getUrl() == null");
+        org.apache.dubbo.common.URL url = arg0.getUrl();
+        // 这里关键点来了，如果从 url 中取出 cluster 为空的话
+        // 则使用默认的 failover 属性，这不恰好就证实了若不配置的走默认逻辑，就在这里体现了
+        String extName = url.getParameter("cluster", "failover");
+        if (extName == null)
+            throw new IllegalStateException("Failed to get extension (org.apache.dubbo.rpc.cluster.Cluster) name from" +
+                    " url (" + url.toString() + ") use keys([cluster])");
+        ScopeModel scopeModel = ScopeModelUtil.getOrDefault(url.getScopeModel(),
+                org.apache.dubbo.rpc.cluster.Cluster.class);
+        // 反正得到了一个 extName 扩展点名称，则继续获取指定的扩展点
+        org.apache.dubbo.rpc.cluster.Cluster extension =
+                (org.apache.dubbo.rpc.cluster.Cluster) scopeModel.getExtensionLoader(org.apache.dubbo.rpc.cluster.Cluster.class)
+                .getExtension(extName);
+        // 拿着指定的扩展点继续调用其对应的方法
+        return extension.join(arg0, arg1);
+    }
+    // 这里默认抛异常，说明不是自适应扩展点需要处理的业务逻辑
+    public org.apache.dubbo.rpc.cluster.Cluster getCluster(org.apache.dubbo.rpc.model.ScopeModel arg0,
+                                                           java.lang.String arg1) {
+        throw new UnsupportedOperationException("The method public static org.apache.dubbo.rpc.cluster.Cluster org" +
+                ".apache.dubbo.rpc.cluster.Cluster.getCluster(org.apache.dubbo.rpc.model.ScopeModel,java.lang.String)" +
+                " of interface org.apache.dubbo.rpc.cluster.Cluster is not adaptive method!");
+    }
+    // 这里默认也抛异常，说明也不是自适应扩展点需要处理的业务逻辑
+    public org.apache.dubbo.rpc.cluster.Cluster getCluster(org.apache.dubbo.rpc.model.ScopeModel arg0,
+                                                           java.lang.String arg1, boolean arg2) {
+        throw new UnsupportedOperationException("The method public static org.apache.dubbo.rpc.cluster.Cluster org" +
+                ".apache.dubbo.rpc.cluster.Cluster.getCluster(org.apache.dubbo.rpc.model.ScopeModel,java.lang.String," +
+                "boolean) of interface org.apache.dubbo.rpc.cluster.Cluster is not adaptive method!");
+    }
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // 重点推导
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // 然后继续看看 Cluster，得搞清楚为什么两个 getCluster 方法会抛异常，而 join 方法不抛异常
+    // 结果发现接口中的 join 方法被 @Adaptive 注解标识了，但是另外 2 个 getCluster 方法没有被 @Adaptive 标识
+    // 由此可以说明一点，含有被 @Adaptive 注解标识的 SPI 接口，是会生成自适应代理对象的
+}
+```
+
+仔细看完自适应扩展点对应的源代码，你会发现一个很奇怪的现象，为什么 join 方法不抛异常，而另外两个 getCluster 方法会抛异常呢？
+
+我们进入 Cluster 接口看看，发现： **CLuster 接口中的 join 方法被 @Adaptive 注解标识了，但是另外 2 个 getCluster 方法没有被 @Adaptive 标识。**所以，我们可以大胆推测，在生成自适应扩展点源代码的时候，应该是识别了具有 @Adaptive 注解的方法，方法有注解的话，就为这个方法生成对应的代理逻辑。
 
 # 18｜实例注入：实例注入机制居然可以如此简单？
 
 
 
+
+
 # 19｜发布流程：带你一窥服务发布的三个重要环节
+
+
 
 
 
