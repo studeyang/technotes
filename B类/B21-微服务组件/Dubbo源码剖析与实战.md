@@ -4269,9 +4269,173 @@ public class Cluster$Adaptive implements org.apache.dubbo.rpc.cluster.Cluster {
 
 # 18｜实例注入：实例注入机制居然可以如此简单？
 
+Dubbo 的实例注入机制是怎样的？与Spring有哪些异同？我们开始今天的学习。
 
+**Dubbo 实例注入验证**
 
+先设计一下验证的大体代码结构：
 
+![image-20250407231314165](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504072313414.png)
+
+先定义一个 Geek 接口，有 4 个实现类，分别是 Dubbo、SpringCloud 、AppleWrapper 和 GeekWrapper，但是 AppleWrapper、GeekWrapper 包装类上有 @Wrapper 注解。然后定义了一个 Animal 接口，只有 1 个实现类 Monkey。
+
+我们需要验证3个功能点：
+
+- 功能点一：通过 setter 可以实现指定实现类的注入。
+- 功能点二：通过设计一个构造方法只有一个入参，且入参对应的 SPI 接口，可以把实现类变成包装类。比如这样：
+
+```java
+public class GeekWrapper implements Geek {
+    private Geek geek;
+    // GeekWrapper 的带参构造方法，只不过参数是当前实现类对应的 SPI 接口（Geek）
+    public GeekWrapper(Geek geek) {
+        this.geek = geek;
+    }
+    // 省略其他部分代码...
+}
+```
+
+- 功能点三：@Wrapper 注解中的 mismatches 是可以剔除一些扩展点名称的，比如这样：
+
+```java
+@Wrapper(order = 10, mismatches = {"springcloud"})
+```
+
+设计完成，我们编写代码。
+
+```java
+///////////////////////////////////////////////////
+// SPI 接口：Geek，默认的扩展点实现类是 Dubbo 实现类
+// 并且该接口的 getCourse 方法上有一个 @Adaptive 注解
+///////////////////////////////////////////////////
+@SPI("dubbo")
+public interface Geek {
+    @Adaptive
+    String getCourse(URL url);
+}
+///////////////////////////////////////////////////
+// Dubbo 实现类
+///////////////////////////////////////////////////
+public class Dubbo implements Geek {
+    @Override
+    public String getCourse(URL url) {
+        return "Dubbo实战进阶课程";
+    }
+}
+///////////////////////////////////////////////////
+// SpringCloud 实现类
+///////////////////////////////////////////////////
+public class SpringCloud implements Geek {
+    @Override
+    public String getCourse(URL url) {
+        return "SpringCloud入门课程100集";
+    }
+}
+///////////////////////////////////////////////////
+// AppleWrapper 实现类，并且该实现类上有一个 @Wrapper 注解, order 越小越先执行
+///////////////////////////////////////////////////
+@Wrapper(order = 1)
+public class AppleWrapper implements Geek {
+    private Geek geek;
+    public AppleWrapper(Geek geek) {
+        this.geek = geek;
+    }
+    @Override
+    public String getCourse(URL url) {
+        return "【课程AppleWrapper前...】" + geek.getCourse(url) + "【课程AppleWrapper后...】";
+    }
+}
+///////////////////////////////////////////////////
+// GeekWrapper 实现类，并且该实现类上有一个 @Wrapper 注解,
+// order 越小越先执行，所以 GeekWrapper 会比 AppleWrapper 后执行
+// 然后还有一个 mismatches 属性为 springcloud
+///////////////////////////////////////////////////
+@Wrapper(order = 10, mismatches = {"springcloud"})
+public class GeekWrapper implements Geek {
+    private Geek geek;
+    private Animal monkey;
+    public void setMonkey(Animal monkey){
+        this.monkey = monkey;
+    }
+    public GeekWrapper(Geek geek) {
+        this.geek = geek;
+    }
+    @Override
+    public String getCourse(URL url) {
+        return "【课程GeekWrapper前...】" + geek.getCourse(url) + "【课程GeekWrapper后...】||【"+monkey.eat(url)+"】";
+    }
+}
+
+///////////////////////////////////////////////////
+// SPI 接口：Animal ，默认的扩展点实现类是 Monkey 实现类
+// 并且该接口的 eat 方法上有一个 @Adaptive 注解
+///////////////////////////////////////////////////
+@SPI("monkey")
+public interface Animal {
+    @Adaptive
+    String eat(URL url);
+}
+///////////////////////////////////////////////////
+// Dubbo 实现类
+///////////////////////////////////////////////////
+public class Monkey implements Animal {
+    @Override
+    public String eat(URL url) {
+        return "猴子吃香蕉";
+    }
+}
+///////////////////////////////////////////////////
+// 资源目录文件
+// 路径为：/META-INF/dubbo/com.hmilyylimh.cloud.inject.spi.Geek
+// 注意：GeekWrapper、AppleWrapper 两个包装类是可以不用写别名的
+///////////////////////////////////////////////////
+dubbo=com.hmilyylimh.cloud.inject.spi.Dubbo
+springcloud=com.hmilyylimh.cloud.inject.spi.SpringCloud
+com.hmilyylimh.cloud.inject.spi.GeekWrapper
+com.hmilyylimh.cloud.inject.spi.AppleWrapper
+
+///////////////////////////////////////////////////
+// 资源目录文件
+// 路径为：/META-INF/dubbo/com.hmilyylimh.cloud.inject.spi.Animal
+///////////////////////////////////////////////////
+monkey=com.hmilyylimh.cloud.inject.spi.Monkey
+
+///////////////////////////////////////////////////
+// 启动类，验证代码用的
+///////////////////////////////////////////////////
+public static void main(String[] args) {
+    ApplicationModel applicationModel = ApplicationModel.defaultModel();
+    // 通过 Geek 接口获取指定像 扩展点加载器
+    ExtensionLoader<Geek> extensionLoader = applicationModel.getExtensionLoader(Geek.class);
+    Geek geek = extensionLoader.getAdaptiveExtension();
+    System.out.println("日志1：【指定的 geek=springcloud 的情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/?geek=springcloud")));
+    System.out.println("日志2：【指定的 geek=dubbo 的情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/?geek=dubbo")));
+    System.out.println("日志3：【不指定的 geek 走默认情况】动态获取结果为: "
+            + geek.getCourse(URL.valueOf("xyz://127.0.0.1/")));
+}
+```
+
+运行一下，看打印结果。
+
+```
+日志1：【指定的 geek=springcloud 的情况】动态获取结果为: 【课程AppleWrapper前...】SpringCloud入门课程100集【课程AppleWrapper后...】
+日志2：【指定的 geek=dubbo 的情况】动态获取结果为: 【课程AppleWrapper前...】【课程GeekWrapper前...】Dubbo实战进阶课程【课程GeekWrapper后...】||【猴子吃香蕉】【课程AppleWrapper后...】
+日志3：【不指定的 geek 走默认情况】动态获取结果为: 【课程AppleWrapper前...】【课程GeekWrapper前...】Dubbo实战进阶课程【课程GeekWrapper后...】||【猴子吃香蕉】【课程AppleWrapper后...】
+```
+
+日志1，指定 geek=springcloud 的时候，我们发现 GeekWrapper 并没有执行，说明当@Wrapper 中的 mismatches 属性值，包含入参给定的扩展名称，那么这个 GeekWrapper 就不会触发执行。
+
+日志2，指定 geek=dubbo 的时候，两个包装器都执行了，说明构造方法确实注入成功了，构造方法的注入让实现类变成了一个包装类。
+
+日志2和3，发现了“猴子吃香蕉”的文案，说明在 GeekWrapper 中 setter 注入也成功了。另外，还可以看到 AppleWrapper 总是在 GeekWrapper 之前打印执行，说明 @Wrapper 注解中的 order 属性值越小就越先执行，并且包装类还有一种类似切面思想的功能，在方法调用之前、之后进行额外的业务逻辑处理。
+
+最后，从资源目录 SPI 文件内容中可以发现，包装类不需要设置别名，也可以被正确无误地识别出来。
+
+**Spring 和 Dubbo 在实例注入层面的区别**
+
+Spring 支持三种方式注入，字段属性注入、setter 方法注入、构造方法注入。Dubbo 的注入方式只有 setter 方法注入和构造方法注入这2种，并且 Dubbo 的构造方法注入还有局限性，构造方法的入参个数只能是一个，且入参类型必须为当前实现类对应的 SPI 接口类型。
 
 # 19｜发布流程：带你一窥服务发布的三个重要环节
 
