@@ -4439,9 +4439,101 @@ Spring 支持三种方式注入，字段属性注入、setter 方法注入、构
 
 # 19｜发布流程：带你一窥服务发布的三个重要环节
 
+发布的大致流程就 3 个环节“ **配置 -> 导出 -\> 注册**”。
 
+![image-20250409231717397](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504092317591.png)
 
+第 ① 步编写提供方的 XML 配置文件，服务的发布首先需要进行一系列的配置，配置好后，可以通过 dubbo:service 标签进行服务的导出与注册，然后，在第 ③ 步中，提供方可以通过设置 dubbo.application.register-mode 属性来自由控制服务的注册方式。
 
+**配置**
+
+我们开始吧，先来简单看看提供方的一段代码。
+
+```java
+///////////////////////////////////////////////////
+// 提供方应用工程的启动类
+///////////////////////////////////////////////////
+// 启动Dubbo框架的注解
+@EnableDubbo
+// SpringBoot应用的一键式启动注解
+@SpringBootApplication
+public class Dubbo19DubboDeployProviderApplication {
+    public static void main(String[] args) {
+        // 调用最为普通常见的应用启动API
+        SpringApplication.run(Dubbo19DubboDeployProviderApplication.class, args);
+        // 启动成功后打印一条日志
+        System.out.println("【【【【【【 Dubbo19DubboDeployProviderApplication 】】】】】】已启动.");
+    }
+}
+///////////////////////////////////////////////////
+// 提供方应用工程的启动配置
+///////////////////////////////////////////////////
+@Configuration
+public class DeployProviderConfig {
+    // 提供者的应用服务名称
+    @Bean
+    public ApplicationConfig applicationConfig() {
+        return new ApplicationConfig("dubbo-19-dubbo-deploy-provider");
+    }
+    // 注册中心的地址，通过 address 填写的地址提供方就可以联系上 zk 服务
+    @Bean
+    public RegistryConfig registryConfig() {
+        return new RegistryConfig("zookeeper://127.0.0.1:2181");
+    }
+    // 提供者需要暴露服务的协议，提供者需要暴露服务的端口
+    @Bean
+    public ProtocolConfig protocolConfig(){
+        return new ProtocolConfig("dubbo", 28190);
+    }
+}
+///////////////////////////////////////////////////
+// 提供方应用工程的一个DemoFacade服务
+///////////////////////////////////////////////////
+@Component
+@DubboService(timeout = 8888)
+public class DemoFacadeImpl implements DemoFacade {
+    @Override
+    public String sayHello(String name) {
+        String result = String.format("Hello %s, I'm in 'dubbo-19-dubbo-deploy-provider.", name);
+        System.out.println(result);
+        return result;
+    }
+}
+///////////////////////////////////////////////////
+// 资源目录文件
+// 路径为：/dubbo.properties
+// 只进行接口级别注册
+///////////////////////////////////////////////////
+dubbo.application.register-mode=interface
+```
+
+我总结了一下逆向排查的查找流程。
+
+![image-20250409230601332](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504092306570.png)
+
+**导出**
+
+通过 dubbo:service 标签进行服务的导出。
+
+现在，你应该知道 @DubboService 注解中的配置怎么嫁接到了 ServiceBean 上了吧，第一步“配置”环节的源码我们就学好了，接下来看第二步“导出”，走进 doExport 核心导出逻辑的大门。
+
+**注册**
+
+第二步导出的源码我们探索完成，最后我们看看第三步注册，服务接口信息又是如何写到注册中心的？
+
+![image-20250409231133576](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504092311741.png)
+
+从 RegistryProtocol 的注册入口，经过几步深入，最终可以发现，向 Zookeeper 服务写数据其实也非常简单，我们调用了 CuratorFramework 框架的类来向 Zookeeper 写数据。
+
+**总结**
+
+今天，我们和Dubbo 总体架构示意图中的 ①②③ 步再续前缘，通过熟知的流程，引出了陌生的发布流程，从配置、导出、注册三方面深入研究了源码。
+
+- 配置流程，通过扫描指定包路径下含有 @DubboService 注解的 Bean 定义，把扫描出来的 Bean 定义属性，全部转移至新创建的 ServiceBean 类型的 Bean 定义中，为后续导出做准备。
+- 导出流程，主要有两块，一块是 injvm 协议的本地导出，一块是暴露协议的远程导出，远程导出与本地导出有着实质性的区别，远程导出会使用协议端口通过 Netty 绑定来提供端口服务。
+- 注册流程，其实是远程导出的一个分支流程，会将提供方的服务接口信息，通过 Curator 客户端，写到 Zookeeper 注册中心服务端去。
+
+![image-20250409231302323](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504092313471.png)
 
 # 20｜订阅流程：消费方是怎么知道提供方地址信息的？
 
