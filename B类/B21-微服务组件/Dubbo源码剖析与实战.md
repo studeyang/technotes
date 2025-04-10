@@ -81,7 +81,6 @@ public class Dubbo04XmlBootProviderApplication {
 ```
 
 ```xml
-
 ///////////////////////////////////////////////////
 // 提供方应用工程的Dubbo XML配置文件内容：dubbo-04-xml-boot-provider.xml
 ///////////////////////////////////////////////////
@@ -4537,7 +4536,69 @@ dubbo.application.register-mode=interface
 
 # 20｜订阅流程：消费方是怎么知道提供方地址信息的？
 
+今天我们深入研究Dubbo源码的第九篇，订阅流程。
 
+![image-20250410231154047](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504102311286.png)
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.registry.zookeeper.ZookeeperRegistry#doSubscribe
+// 订阅的核心逻辑，读取 zk 目录下的数据，然后通知刷新内存中的数据
+///////////////////////////////////////////////////
+@Override
+public void doSubscribe(final URL url, final NotifyListener listener) {
+    try {
+        checkDestroyed();
+        // 因为这里用 * 号匹配，我们在真实的线上环境也不可能将服务接口配置为 * 号
+        // 因此这里的 * 号逻辑暂且跳过，直接看后面的具体接口的逻辑
+        if ("*".equals(url.getServiceInterface())) {
+            // 省略其他部分代码...
+        }
+        // 能来到这里，说明 ServiceInterface 不是 * 号
+        // url.getServiceInterface() = com.hmilyylimh.cloud.facade.demo.DemoFacade
+        else {
+            CountDownLatch latch = new CountDownLatch(1);
+            try {
+                List<URL> urls = new ArrayList<>();
+                // toCategoriesPath(url) 得出来的集合有以下几种：
+                // 1、/dubbo/com.hmilyylimh.cloud.facade.demo.DemoFacade/providers
+                // 2、/dubbo/com.hmilyylimh.cloud.facade.demo.DemoFacade/configurators
+                // 3、/dubbo/com.hmilyylimh.cloud.facade.demo.DemoFacade/routers
+                for (String path : toCategoriesPath(url)) {
+                    ConcurrentMap<NotifyListener, ChildListener> listeners = zkListeners.computeIfAbsent(url, k -> new ConcurrentHashMap<>());
+                    ChildListener zkListener = listeners.computeIfAbsent(listener, k -> new RegistryChildListenerImpl(url, path, k, latch));
+                    if (zkListener instanceof RegistryChildListenerImpl) {
+                        ((RegistryChildListenerImpl) zkListener).setLatch(latch);
+                    }
+                    // 向 zk 创建持久化目录，一种容错方式，担心目录被谁意外的干掉了
+                    zkClient.create(path, false);
+
+                    // !!!!!!!!!!!!!!!!
+                    // 这段逻辑很重要了，添加对 path 目录的监听，
+                    // 添加监听完成后，还能拿到 path 路径下所有的信息
+                    // 那就意味着监听一旦添加完成，那么就能立马获取到该 DemoFacade 接口到底有多少个提供方节点
+                    List<String> children = zkClient.addChildListener(path, zkListener);
+                    // 将返回的信息全部添加到 urls 集合中
+                    if (children != null) {
+                        urls.addAll(toUrlsWithEmpty(url, path, children));
+                    }
+                }
+
+                // 从 zk 拿到了所有的信息后，然后调用 notify 方法
+                // url.get(0) = dubbo://192.168.100.183:28200/com.hmilyylimh.cloud.facade.demo.DemoFacade?anyhost=true&application=dubbo-20-subscribe-consumer&background=false&check=false&deprecated=false&dubbo=2.0.2&dynamic=true&generic=false&interface=com.hmilyylimh.cloud.facade.demo.DemoFacade&methods=sayHello,say&register-mode=interface&release=3.0.7&side=provider
+                // url.get(1) = empty://192.168.100.183/com.hmilyylimh.cloud.facade.demo.DemoFacade?application=dubbo-20-subscribe-consumer&background=false&category=configurators&dubbo=2.0.2&interface=com.hmilyylimh.cloud.facade.demo.DemoFacade&methods=sayHello,say&pid=11560&qos.enable=false&release=3.0.7&side=consumer&sticky=false&timestamp=1670846788876
+                // url.get(2) = empty://192.168.100.183/com.hmilyylimh.cloud.facade.demo.DemoFacade?application=dubbo-20-subscribe-consumer&background=false&category=routers&dubbo=2.0.2&interface=com.hmilyylimh.cloud.facade.demo.DemoFacade&methods=sayHello,say&pid=11560&qos.enable=false&release=3.0.7&side=consumer&sticky=false&timestamp=1670846788876
+                notify(url, listener, urls);
+            } finally {
+                // tells the listener to run only after the sync notification of main thread finishes.
+                latch.countDown();
+            }
+        }
+    } catch (Throwable e) {
+        throw new RpcException("Failed to subscribe " + url + " to zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
+    }
+}
+```
 
 # 21｜调用流程：消费方的调用流程体系，你知道多少？
 
