@@ -4602,7 +4602,376 @@ public void doSubscribe(final URL url, final NotifyListener listener) {
 
 # 21｜调用流程：消费方的调用流程体系，你知道多少？
 
+今天我们深入研究Dubbo源码的第十篇，调用流程。
 
+在消费方你一定见过这样一段代码：
+
+```java
+@DubboReference
+private DemoFacade demoFacade;
+```
+
+我们现在看到的这个 demoFacade 变量，在内存运行时，值类型还属于 DemoFacade 这个类型么？如果不是，那拿着 demoFacade 变量去调用里面的方法时，在消费方到底会经历怎样的调用流程呢？
+
+**sayHello 调试**
+
+先来看下我们的消费方调用代码。
+
+```java
+///////////////////////////////////////////////////
+// 消费方的一个 Spring Bean 类
+// 1、里面定义了下游 Dubbo 接口的成员变量，并且还用 @DubboReference 修饰了一下。
+// 2、还定义了一个 invokeDemo 方法被外部调用，但其重点是该方法可以调用下游的 Dubbo 接口
+///////////////////////////////////////////////////
+@Component
+public class InvokeDemoService {
+
+    // 定义调用下游接口的成员变量，
+    // 并且用注解修饰
+    @DubboReference
+    private DemoFacade demoFacade;
+
+    // 该 invokeDemo 逻辑中调用的是下游 DemoFacade 接口的 sayHello 方法
+    public String invokeDemo() {
+        return demoFacade.sayHello("Geek");
+    }
+}
+```
+
+**1\. JDK代理**
+
+我们在调用 sayHello 方法的这行打上一个断点，先运行提供方，再 Debug 运行消费方，很快断点就到来了。
+
+![image-20250415230641100](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504152306377.png)
+
+从图中，我们可以清楚地看到，demoFacade 的类型，是一个随机生成的代理类名，不再属于 DemoFacade 这个类型了，而且结合 $Proxy 类名、代理类中的 h 成员变量属于 JdkDynamicAopProxy 类型，综合判断，这是采用 JDK 代理动态，生成了一个继承 Proxy 的代理类。
+
+我们再来看 interfacaces 变量。这里除了有我们调用下游的接口 DemoFacade，还有一个回声测试接口（EchoService）和一个销毁引用的接口（Destroyable）。
+
+好，简单整理一下。demoFacade 在运行时并非我们所见的 DemoFacade 类型，而是由 JDK 动态代理生成的一个代理对象类型。
+
+在生成的代理对象中，targetSource 成员变量创建的底层核心逻辑还是 ReferenceConfig 的 get 方法，不得不说 ReferenceConfig 是消费方引用下游接口逻辑中非常重要的一个类。
+
+同时还认识了 EchoService 和 Destroyable 两个接口，让我们使用 demoFacade 时不仅可以调用 sayHello 方法，还可以强转为这两个接口调用不同的方法，使得一个 demoFacade 变量拥有三种能力，这就是代理增强的魅力所在。
+
+**2\. InvokerInvocationHandler**
+
+接下来，我们继续 Debug 进入 sayHello 方法中，发现了一个名字有点眼熟的 InvokerInvocationHandler 类，它实现了 JDK 代理中的 InvocationHandler 接口，所以，我们可以认为，这个 InvokerInvocationHandler 类是 Dubbo 框架接收 JDK 代理触发调用的入口。
+
+来看看 InvokerInvocationHandler 的 invoke 方法，验证一下。
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.rpc.proxy.InvokerInvocationHandler#invoke
+// JDK 代理被触发调用后紧接着就开始进入 Dubbo 框架的调用，
+// 因此跟踪消费方调用的入口，一般直接搜索这个 InvokerInvocationHandler 即可，
+// 再说一点，这个 InvokerInvocationHandler 继承了 InvocationHandler 接口。
+///////////////////////////////////////////////////
+@Override
+public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    // 省略不重要的代码 ...
+
+    RpcInvocation rpcInvocation = new RpcInvocation(serviceModel, method, invoker.getInterface().getName(), protocolServiceKey, args);
+    if (serviceModel instanceof ConsumerModel) {
+        rpcInvocation.put(Constants.CONSUMER_MODEL, serviceModel);
+        rpcInvocation.put(Constants.METHOD_MODEL, ((ConsumerModel) serviceModel).getMethodModel(method));
+    }
+    // 然后转手就把逻辑全部收口到一个 InvocationUtil 类中，
+    // 从命名也看得出，就是一个调用的工具类
+    return InvocationUtil.invoke(invoker, rpcInvocation);
+}
+```
+
+发现最终并没有使用 proxy 代理对象，而是使用了 invoker + rpcInvocation 传入 InvocationUtil 工具类，完成了逻辑收口。
+
+**3\. MigrationInvoker**
+
+Debug 一直往后走，来到了一个 MigrationInvoker 的调用类，从类的名字上看是“迁移”的意思，有点 Dubbo2 与 Dubbo3 新老兼容迁移的味道。
+
+那来看看 MigrationInvoker 的 invoke 方法代码逻辑。
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.registry.client.migration.MigrationInvoker#invoke
+// 迁移兼容调用器
+///////////////////////////////////////////////////
+@Override
+public Result invoke(Invocation invocation) throws RpcException {
+    if (currentAvailableInvoker != null) {
+        if (step == APPLICATION_FIRST) {
+            // call ratio calculation based on random value
+            if (promotion < 100 && ThreadLocalRandom.current().nextDouble(100) > promotion) {
+                return invoker.invoke(invocation);
+            }
+        }
+        return currentAvailableInvoker.invoke(invocation);
+    }
+
+    switch (step) {
+        case APPLICATION_FIRST:
+            if (checkInvokerAvailable(serviceDiscoveryInvoker)) {
+                currentAvailableInvoker = serviceDiscoveryInvoker;
+            } else if (checkInvokerAvailable(invoker)) {
+                currentAvailableInvoker = invoker;
+            } else {
+                currentAvailableInvoker = serviceDiscoveryInvoker;
+            }
+            break;
+        case FORCE_APPLICATION:
+            currentAvailableInvoker = serviceDiscoveryInvoker;
+            break;
+        case FORCE_INTERFACE:
+        default:
+            currentAvailableInvoker = invoker;
+    }
+
+    return currentAvailableInvoker.invoke(invocation);
+}
+```
+
+**4\. MockClusterInvoker**
+
+然后走进”step == APPLICATION\_FIRST“的分支逻辑，进入 currentAvailableInvoker 的 invoke 方法，来到了 MockClusterInvoker 这个类，看名字是“模拟集群调用”的意思。
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.rpc.cluster.support.wrapper.MockClusterInvoker#invoke
+// 调用异常时进行使用mock逻辑来处理数据的返回
+///////////////////////////////////////////////////
+@Override
+public Result invoke(Invocation invocation) throws RpcException {
+    Result result;
+    // 从远程引用的url中看看有没有 mock 属性
+    String value = getUrl().getMethodParameter(invocation.getMethodName(), "mock", Boolean.FALSE.toString()).trim();
+    // mock 属性值为空的话，相当于没有 mock 逻辑，则直接继续后续逻辑调用
+    if (ConfigUtils.isEmpty(value)) {
+        //no mock
+        result = this.invoker.invoke(invocation);
+    }
+    // 如果 mock 属性值是以 force 开头的话
+    else if (value.startsWith("force")) {
+        // 那么就直接执行 mock 调用逻辑，
+        // 用事先准备好的模拟逻辑或者模拟数据返回
+        //force:direct mock
+        result = doMockInvoke(invocation, null);
+    }
+    // 还能来到这说明只是想在调用失败的时候尝试一下 mock 逻辑
+    else {
+        //fail-mock
+        try {
+            // 先正常执行业务逻辑调用
+            result = this.invoker.invoke(invocation);
+            //fix:#4585
+            // 当业务逻辑执行有异常时，并且这个异常类属于RpcException或RpcException子类时，
+            // 还有异常的原因如果是 Dubbo 框架层面的业务异常时，则不做任何处理。
+            // 如果不是业务异常的话，则会继续尝试执行 mock 业务逻辑
+            if(result.getException() != null && result.getException() instanceof RpcException){
+                RpcException rpcException= (RpcException)result.getException();
+                // 如果异常是 Dubbo 系统层面所认为的业务异常时，就不错任何处理
+                if(rpcException.isBiz()){
+                    throw rpcException;
+                }else {
+                    // 能来到这里说明是不是业务异常的话，那就执行模拟逻辑
+                    result = doMockInvoke(invocation, rpcException);
+                }
+            }
+        } catch (RpcException e) {
+            // 业务异常直接往上拋
+            if (e.isBiz()) {
+                throw e;
+            }
+            // 不是 Dubbo 层面所和认为的异常信息时代，
+            // 直接
+            result = doMockInvoke(invocation, e);
+        }
+    }
+    return result;
+}
+```
+
+**5\. 过滤器链**
+
+这里，看到 Cluster 这个关键字，想必你也想到了它是一个 SPI 接口，那在“发布流程”中我们也学过，远程导出和远程引用的时候，会用过滤器链把 invoker 层层包装起来。
+
+那么我们就接着断点下去，发现确实进入 FutureFilter、MonitorFilter 等过滤器，这也证明了过滤器链包裹消费方 invoker 的存在。
+
+**6\. FailoverClusterInvoker**
+
+断点一层层走完了所有的过滤器，接着又来到了 FailoverClusterInvoker 这个类，从名字上一看就是在“ [温故知新](https://time.geekbang.org/column/article/611355)”中接触的故障转移策略，是不是有点好奇故障到底是怎么转移的？
+
+我们不妨继续断点，进入它的 doInvoke 方法看看。
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.rpc.cluster.support.FailoverClusterInvoker#doInvoke
+// 故障转移策略的核心逻辑实现类
+///////////////////////////////////////////////////
+@Override
+@SuppressWarnings({"unchecked", "rawtypes"})
+public Result doInvoke(Invocation invocation, final List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
+    List<Invoker<T>> copyInvokers = invokers;
+    checkInvokers(copyInvokers, invocation);
+    // 获取此次调用的方法名
+    String methodName = RpcUtils.getMethodName(invocation);
+    // 通过方法名计算获取重试次数
+    int len = calculateInvokeTimes(methodName);
+    // retry loop.
+    // 循环计算得到的 len 次数
+    RpcException le = null; // last exception.
+    List<Invoker<T>> invoked = new ArrayList<Invoker<T>>(copyInvokers.size()); // invoked invokers.
+    Set<String> providers = new HashSet<String>(len);
+    for (int i = 0; i < len; i++) {
+        //Reselect before retry to avoid a change of candidate `invokers`.
+        //NOTE: if `invokers` changed, then `invoked` also lose accuracy.
+        // 从第2次循环开始，会有一段特殊的逻辑处理
+        if (i > 0) {
+            // 检测 invoker 是否被销毁了
+            checkWhetherDestroyed();
+            // 重新拿到调用接口的所有提供者列表集合，
+            // 粗俗理解，就是提供该接口服务的每个提供方节点就是一个 invoker 对象
+            copyInvokers = list(invocation);
+            // check again
+            // 再次检查所有拿到的 invokes 的一些可用状态
+            checkInvokers(copyInvokers, invocation);
+        }
+        // 选择其中一个，即采用了负载均衡策略从众多 invokers 集合中挑选出一个合适可用的
+        Invoker<T> invoker = select(loadbalance, invocation, copyInvokers, invoked);
+        invoked.add(invoker);
+        // 设置 RpcContext 上下文
+        RpcContext.getServiceContext().setInvokers((List) invoked);
+        boolean success = false;
+        try {
+            // 得到最终的 invoker 后也就明确了需要调用哪个提供方节点了
+            // 反正继续走后续调用流程就是了
+            Result result = invokeWithContext(invoker, invocation);
+            // 如果没有抛出异常的话，则认为正常拿到的返回数据
+            // 那么设置调用成功标识，然后直接返回 result 结果
+            success = true;
+            return result;
+        } catch (RpcException e) {
+            // 如果是 Dubbo 框架层面认为的业务异常，那么就直接抛出异常
+            if (e.isBiz()) { // biz exception.
+                throw e;
+            }
+            // 其他异常的话，则不继续抛出异常，那么就意味着还可以有机会再次循环调用
+            le = e;
+        } catch (Throwable e) {
+            le = new RpcException(e.getMessage(), e);
+        } finally {
+            // 如果没有正常返回拿到结果的话，那么把调用异常的提供方地址信息记录起来
+            if (!success) {
+                providers.add(invoker.getUrl().getAddress());
+            }
+        }
+    }
+
+    // 如果 len 次循环仍然还没有正常拿到调用结果的话，
+    // 那么也不再继续尝试调用了，直接索性把一些需要开发人员关注的一些信息写到异常描述信息中，通过异常方式拋出去
+    throw new RpcException(le.getCode(), "Failed to invoke the method "
+            + methodName + " in the service " + getInterface().getName()
+            + ". Tried " + len + " times of the providers " + providers
+            + " (" + providers.size() + "/" + copyInvokers.size()
+            + ") from the registry " + directory.getUrl().getAddress()
+            + " on the consumer " + NetUtils.getLocalHost() + " using the dubbo version "
+            + Version.getVersion() + ". Last error is: "
+            + le.getMessage(), le.getCause() != null ? le.getCause() : le);
+}
+```
+
+代码流程分析也比较简单。
+
+- 从代码流程看，主要就是一个大的 for 循环，循环体中进行了 select 操作，拿到了一个合适的 invoker，发起后续逻辑调用。
+- 从方法的入参和返回值看，入参是 invocation、invokers、loadbalance 三个参数，猜测应该就是利用 loadbalance 负载均衡器，从 invokers 集合中，选择一个 invoker 来发送 invocation 数据，发送完成后得到了返参的 Result 结果。
+- 再看看方法实现体的一些细节，通过计算 retries 属性值得到重试次数并循环，每次循环都是利用负载均衡器选择一个进行调用，如果出现非业务异常，继续循环调用，直到所有次数循环完，还是没能拿到结果的话就会抛出 RpcException 异常了。
+
+**7\. DubboInvoker**
+
+了解完故障转移策略，我们继续 Debug，结果来到了 DubboInvoker 这个类。
+
+**8\. ReferenceCountExchangeClient**
+
+因为我们没有单独设置调用不需要响应，就继续断点进入 currentClient 的 request 方法，看看到底是怎么发送的，来到了 ReferenceCountExchangeClient 类。
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.rpc.protocol.dubbo.ReferenceCountExchangeClient#request(java.lang.Object, int, java.util.concurrent.ExecutorService)
+// 这里将构建好的 request 对象发送出去，然后拿到了一个 CompletableFuture 异步化的对象
+///////////////////////////////////////////////////
+@Override
+public CompletableFuture<Object> request(Object request, int timeout, ExecutorService executor) throws RemotingException {
+    // client为：HeaderExchangeClient
+    return client.request(request, timeout, executor);
+}
+```
+
+**9\. NettyClient**
+
+仍然没有看到数据是怎么发送的，我们继续深入 HeaderExchangeClient 的 request 方法中，Debug 几步后发现，进入了抽象类 AbstractPeer 的 send 方法。
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.remoting.transport.AbstractPeer#send
+// this：NettyClient
+// NettyClient 负责和提供方服务建立连接、发送数据等操作
+///////////////////////////////////////////////////
+@Override
+public void send(Object message) throws RemotingException {
+    send(message, url.getParameter(Constants.SENT_KEY, false));
+}
+```
+
+那我们从 NettyClient 的 send 方法细看，结果发现了最终调用了 NioSocketChannel 的 writeAndFlush 方法，这个不就是 Netty 网络通信框架的 API 么？
+
+到这里，我们在代码层面解释了数据原来是通过 Netty 框架的 NioSocketChannel 发送出去的。
+
+**10\. NettyCodecAdapter**
+
+一旦进入到 Netty 框架，再通过断点一步步跟踪数据就有点难了，因为 Netty 框架内部处处都是“线程+队列”的异步操作方式，这里我们走个捷径，进入 NettyClient 类，找找初始化 NettyClient 的相关 Netty 层面的配置。
+
+你会找到一个 NettyCodecAdapter 类，对数据进行编解码，直接在类中的 encode 方法打个断点，等断点过来。
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.remoting.transport.netty4.NettyCodecAdapter.InternalEncoder#encode
+// 将对象按照一定的序列化方式发送出去
+///////////////////////////////////////////////////
+private class InternalEncoder extends MessageToByteEncoder {
+
+    @Override
+    protected void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception {
+        ChannelBuffer buffer = new NettyBackedChannelBuffer(out);
+        Channel ch = ctx.channel();
+        NettyChannel channel = NettyChannel.getOrAddChannel(ch, url, handler);
+        codec.encode(channel, buffer, msg);
+    }
+}
+```
+
+可以看到，编码的方法简单干脆。
+
+- 从代码流程看，调用了一个 codec 编码器的变量，对入参编码处理。
+- 从方法的入参和返回值看，msg 是请求数据对象，out 变量是 ByteBuf 缓冲区，应该是将 msg 编码之后的数据流。
+- 再看看方法实现体的一些细节，没什么特别之处，无非就是走后续编解码器的编码方法，编码完成后，再通过 Netty 框架把数据流发送出去。
+
+![image-20250415234820136](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504152348520.png)
+
+**调用流程的其他案例**
+
+第一，Tomcat 容器接收请求流程，通过在 HttpServlet 的 service 方法打个断点，从调用堆栈的最下面开始，可以分析出 Tomcat 的整体架构。
+
+第二，SpringMvc 处理请求的流程，通过在 Controller 的任意方法打个断点，就可以逐步分析出一个 SpringMvc 处理请求的大致流程框架。
+
+第三，Spring 的 getBean 方法，通过这个方法的层层深入，可以分析出一个庞大的 Spring 对象生成体系，也能挖掘出非常多 Spring 各种操控对象的扩展机制。
+
+**总结**
+
+总结一下跟踪源码的 12 字方针。
+
+- “不钻细节：只看流程。”代码虽然多，但我们不必研究每个细节，要先捡方法中的重要分支流程，一些提前返回的边边角角的流程一概忽略不看。
+- “不看过程：只看结论。”每个方法的代码逻辑可长可短，我们可以重点研究这个方法需要什么入参，又能给出什么返参，以此推测方法在干什么，到底要完成一件什么样的事情，搞清楚并得出结论。
+- “再看细节：再看过程。”当你按照前两点认真调试后，大概的调用流程体系就清楚了。在此基础之上，再来细看被遗忘的边角料代码，有助于你进一步丰富调用流程图，体会源码细节中那些缜密的思维逻辑。
+
+![image-20250415234942042](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504152349555.png)
 
 # 22｜协议编解码：接口调用的数据是如何发到网络中的？
 
