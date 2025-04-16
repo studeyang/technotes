@@ -4975,13 +4975,151 @@ private class InternalEncoder extends MessageToByteEncoder {
 
 # 22｜协议编解码：接口调用的数据是如何发到网络中的？
 
+今天我们深入研究Dubbo源码的最后一篇，协议编解码。
 
+> 用处不大。
 
 # ==拓展篇==
 
 # 23｜集群扩展：发送请求遇到服务不可用，怎么办？
 
+今天我们来实操第一个扩展，集群扩展。
 
+你有没有遇到过这样的情况，对于多机房部署的系统应用，线上运行一直比较稳定，可是突然在某一段时间内，部分流量请求先出现一些超时异常，紧接着又出现一些无提供者的异常，最后部分功能就不可用了。
+
+![image-20250416233302549](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504162333790.png)
+
+对于这样一个看似非常简单的异常现象，我们该怎么解决呢？
+
+**异常如何解决？**
+
+要想知道怎么解决，首先就得弄清楚异常发生的原因。调用链路图中可以看到有两个异常，一个是超时异常，一个是无提供者异常。我们先从超时异常开始分析。
+
+**1、超时异常和原因**
+
+遇到异常，我们的第一反应就是去认真阅读异常堆栈的详细信息。
+
+```
+Caused by: org.apache.dubbo.remoting.TimeoutException: Waiting server-side response timeout by scan timer. start time: 2022-10-25 20:14:16.718, end time: 2022-10-25 20:14:16.747, client elapsed: 1 ms, server elapsed: 28 ms, timeout: 5 ms, request: Request [id=2, version=2.0.2, twoway=true, event=false, broken=false, data=RpcInvocation [methodName=sayHello, parameterTypes=[class java.lang.String], arguments=[Geek], attachments={path=com.hmilyylimh.cloud.facade.demo.DemoFacade, remote.application=dubbo-04-api-boot-consumer, interface=com.hmilyylimh.cloud.facade.demo.DemoFacade, version=0.0.0, timeout=5}]], channel: /192.168.100.183:62231 -> /192.168.100.183:28043
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture.doReceived(DefaultFuture.java:212)
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture.received(DefaultFuture.java:176)
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture$TimeoutCheckTask.notifyTimeout(DefaultFuture.java:295)
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture$TimeoutCheckTask.lambda$run$0(DefaultFuture.java:282)
+	at org.apache.dubbo.common.threadpool.ThreadlessExecutor$RunnableWrapper.run(ThreadlessExecutor.java:184)
+	at org.apache.dubbo.common.threadpool.ThreadlessExecutor.waitAndDrain(ThreadlessExecutor.java:103)
+	at org.apache.dubbo.rpc.AsyncRpcResult.get(AsyncRpcResult.java:193)
+	... 29 more
+```
+
+对于这个异常，可以从 3 个线索来进一步排查：
+
+1. 可以从CAT监控平台上观察一下目标IP是否可以继续接收流量；
+2. 也可以从Prometheus上观察消费方到目标IP的TCP连接状况
+3. 还可以从网络层面通过tcpdump抓包检测消费方到目标IP的连通性等等。
+
+好，为求证目标IP的健康状况，我们把刚刚提到的检监测工具挨个试一下：
+
+- 在CAT上发现了目标IP在出问题期间几乎没有任何流量进来。
+- 在Prometheus上发现在最近一段时间内TCP的连接耗时特别大，基本上都是有SYN请求握手包，但是没有SYN ACK响应包。
+- 找网络人员帮忙实时tcpdump抓包测试，结果仍然发现没有SYN ACK响应包。
+
+于是通过监测结论，我们基本确认了目标IP处于不可连通的状态，接着只需要去确认目标IP服务是宕机了还是流量被拦截了，就大概知道真相了。
+
+**2、无提供者异常和原因**
+
+无提供者异常，相信你看到这样的异常应该也不陌生，异常堆栈信息长这样。
+
+```
+org.apache.dubbo.rpc.RpcException: Failed to invoke the method sayHello in the service com.hmilyylimh.cloud.facade.demo.DemoFacade. No provider available for the service com.hmilyylimh.cloud.facade.demo.DemoFacade from registry 127.0.0.1:2181 on the consumer 192.168.100.183 using the dubbo version 3.0.7. Please check if the providers have been started and registered.
+	at org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker.checkInvokers(AbstractClusterInvoker.java:366)
+	at org.apache.dubbo.rpc.cluster.support.FailoverClusterInvoker.doInvoke(FailoverClusterInvoker.java:73)
+	at org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker.invoke(AbstractClusterInvoker.java:340)
+	at org.apache.dubbo.rpc.cluster.router.RouterSnapshotFilter.invoke(RouterSnapshotFilter.java:46)
+	at org.apache.dubbo.rpc.cluster.filter.FilterChainBuilder$CopyOfFilterChainNode.invoke(FilterChainBuilder.java:321)
+	at org.apache.dubbo.monitor.support.MonitorFilter.invoke(MonitorFilter.java:99)
+	... 48 more
+```
+
+发现报错的关键点日志，是在 AbstractClusterInvoker 类中的第 366 行报错。可以得知， **消费方在内存中找不到对应的提供者，才会提示无提供者异常**。
+
+**3、问题总结**
+
+分析了超时异常、无提供者异常，我们最终发现是因为某些提供方的 IP 节点宕机，但是还有些提供方的节点 IP 是正常提供服务的，这又是为什么呢？
+
+通过对 IP 的分析，梳理出了一张不同机房之间消费者调用提供者的链路图。
+
+![image-20250416233945028](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504162339269.png)
+
+我们可以看到机房A与机房B是不能相互访问的，这也正符合机房的隔离性。
+
+那么假设机房A的某些提供者宕机了，且机房A的消费者状态正常，难道就预示着机房A的消费方发起的请求就无法正常调用了么？这样明显不合理，为什么机房A的提供者有问题，非得把机房A的消费者拉下水导致各种功能无法正常运转。
+
+遇到这种状况，我们该如何改善呢？
+
+**定制Cluster扩展**
+
+消费者可以将请求发给 **中间商** 啊，然后中间商想办法找可用提供者，貌似这条路可行。
+
+![image-20250416234230460](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504162342692.png)
+
+我们来编写代码。
+
+```java
+public class TransferClusterInvoker<T> extends FailoverClusterInvoker<T> {
+    // 按照父类 FailoverClusterInvoker 要求创建的构造方法
+    public TransferClusterInvoker(Directory<T> directory) {
+        super(directory);
+    }
+    // 重写父类 doInvoke 发起远程调用的接口
+    @Override
+    public Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
+        try {
+            // 先完全按照父类的业务逻辑调用处理，无异常则直接将结果返回
+            return super.doInvoke(invocation, invokers, loadbalance);
+        } catch (RpcException e) {
+            // 这里就进入了 RpcException 处理逻辑
+
+            // 当调用发现无提供者异常描述信息时则向转发服务发起调用
+            if (e.getMessage().toLowerCase().contains("no provider available")){
+                // TODO 从 invocation 中拿到所有的参数，然后再处理调用转发服务的逻辑
+                return doTransferInvoke(invocation);
+            }
+            // 如果不是无提供者异常，则不做任何处理，异常该怎么抛就怎么抛
+            throw e;
+        }
+    }
+}
+```
+
+最核心的逻辑我们已经实现了，那在代码中该怎么触发这个 TransferClusterInvoker 运作呢？
+
+我们还是可以借鉴已有源码编写调用的思路，经过一番查找 FailoverClusterInvoker 代码编写调用关系后，我们可以定义一个 TransferCluster 类。
+
+```java
+public class TransferCluster implements Cluster {
+    // 返回自定义的 Invoker 调用器
+    @Override
+    public <T> Invoker<T> join(Directory<T> directory, boolean buildFilterChain) throws RpcException {
+        return new TransferClusterInvoker<T>(directory);
+    }
+}
+```
+
+当 TransferClusterInvoker、TransferCluster 都实现好后，按照 Dubbo SPI 的规范将 TransferCluster 类路径配置到 META-INF/dubbo/org.apache.dubbo.rpc.cluster.Cluster 文件中，看配置。
+
+```plain
+transfer＝com.hmilyylimh.cloud.TransferCluster
+```
+
+这段配置为 TransferCluster 取了个 transfer 名字，将来程序调用的时候能够被用上。
+
+最后我们只需要在 dubbo.properties 指定全局使用，看配置。
+
+```java
+dubbo.consumer.cluster=transfer
+```
+
+全局指定名字叫 transfer 的集群扩展器，然后在调用时会触发 TransferCluster 来执行遇到无提供者异常时，掉头转向调用转发服务器。
 
 # 24｜拦截扩展：如何利用Filter进行扩展？
 
