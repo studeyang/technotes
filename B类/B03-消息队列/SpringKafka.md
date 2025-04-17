@@ -336,7 +336,7 @@ public void sendToKafka(final MyOutputData data) {
 
 从版本 2.5 开始，您可以使用`RoutingKafkaTemplate`根据目标`topic`名称在运行时选择生产者。
 
-以下简单的 Spring Boot 应用程序提供了一个示例，说明如何使用相同的模板发送到不同的主题，每个主题使用不同的值序列化器。
+以下简单的 Spring Boot 应用程序提供了一个示例，说明如何使用相同的模板发送到不同的 Topic，每个 Topic 使用不同的值序列化器。
 
 ```javascript
 @SpringBootApplication
@@ -537,7 +537,11 @@ public ContainerProperties(String... topics)
 public ContainerProperties(Pattern topicPattern)
 ```
 
-第一个构造函数采用`TopicPartitionOffset`参数数组来显式指示容器要使用哪些分区（使用使用者的`assign()`方法）并带有可选的初始偏移量。默认情况下，正值是绝对偏移量。默认情况下，负值是相对于分区内当前最后一个偏移量的。提供了带有附加`boolean`参数的`TopicPartitionOffset`构造函数。如果这是`true` ，则初始偏移（正或负）相对于该消费者的当前位置。偏移量在容器启动时应用。第二个采用主题数组，Kafka 根据`group.id`属性分配分区 - 在组中分配分区。第三个使用正则表达式`Pattern`来选择主题。
+第一个构造函数采用`TopicPartitionOffset`参数数组来显式指示容器要使用哪些分区（使用 Consumer 的`assign()`方法）并带有可选的初始偏移量。默认情况下，正值是绝对偏移量。默认情况下，负值是相对于分区内当前最后一个偏移量的。提供了带有附加`boolean`参数的`TopicPartitionOffset`构造函数。如果这是`true` ，则初始偏移（正或负）相对于该消费者的当前位置。偏移量在容器启动时应用。
+
+第二个采用主题数组，Kafka 根据`group.id`属性分配分区 - 在 Group 中分配分区。
+
+第三个使用正则表达式`Pattern`来选择主题。
 
 要将`MessageListener`分配给容器，您可以使用 `ContainerProps.setMessageListener` 创建Container时的方法。以下示例展示了如何执行此操作：
 
@@ -778,7 +782,7 @@ public void listen(String str, ConsumerRecordMetadata meta) {
 
 #### 批量监听器
 
-要配置侦听器容器工厂以创建批量侦听器，您可以设置`batchListener`属性。以下示例展示了如何执行此操作：
+要配置 ListenerContainerFactory 以创建批量侦听器，您可以设置`batchListener`属性。以下示例展示了如何执行此操作：
 
 ```java
 @Bean
