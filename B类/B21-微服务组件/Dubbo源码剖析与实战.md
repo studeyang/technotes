@@ -5123,7 +5123,115 @@ dubbo.consumer.cluster=transfer
 
 # 24｜拦截扩展：如何利用Filter进行扩展？
 
+今天我们继续学习Dubbo拓展的第二篇，拦截扩展。
 
+**四个案例**
+
+我们先看四个可以使用拦截的实际场景，分析一下“拦截”在其中的作用。
+
+![image-20250421230656305](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504212306530.png)
+
+- 案例一，已有的功能在之前和完成时，都记录一下日志的打印。
+- 案例二，查询发票详情功能，需要在查询之前先看看有没有缓存数据。
+- 案例三，用户在进行支付功能操作时，需要增加一些对入参字段的合法性校验操作。
+- 案例四，获取分布式ID时，需要增加重试次数，如果重试次数达到上限后，仍无法获取结果，会在后置环节进行失败兜底逻辑处理，防止意外网络抖动影响正常的业务功能运转。
+
+**解密需求**
+
+需求案例是这样的，原先系统 A 调用了系统 B 的一个方法，方法的入参主要是接收一些用户信息，做一些业务逻辑处理，而且入参值都是明文的。
+
+![image-20250421231940402](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504212319584.png)
+
+后来，出现了安全层面出现了一些整改需求，需要你把用户信息中的一些敏感字段，比如名称 name、身份证号 idNo 用密文传输。到时候系统 B 在接收用户信息name 和 idNo 的值时，就是密文了，对于这样一个简单的需求优化，你该怎么解决呢？
+
+首先要在过滤器中，通过方法级别来进行细粒度控制，我们可以参考“ [流量控制](https://time.geekbang.org/column/article/614130)”中关于计数逻辑的设计，通过服务名+方法名构成唯一，形成一种“约定大于配置”的理念。就像这样。
+
+![image-20250421232111100](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504212321287.png)
+
+有了配置中心的介入，我们可以动态针对某个方法的部分字段进行解密处理了，看代码。
+
+```java
+///////////////////////////////////////////////////
+// 提供方：解密过滤器，仅在提供方有效，因为 @Activate 注解中设置的是 PROVIDER 侧
+// 功能：通过 “类名 + 方法名” 从配置中心获取解密配置，有值就执行解密操作，没值就跳过
+///////////////////////////////////////////////////
+@Activate(group = PROVIDER)
+public class DecryptProviderFilter implements Filter {
+
+    /** <h2>配置中心 AES 密钥的配置名称，通过该名称就能从配置中心拿到对应的密钥值</h2> **/
+    public static final String CONFIG_CENTER_KEY_AES_SECRET = "CONFIG_CENTER_KEY_AES_SECRET";
+
+    @Override
+    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 从 OPS 配置中心里面获取到 aesSecretOpsKey 对应的密钥值
+        String privateKey = OpsUtils.getAesSecret(CONFIG_CENTER_KEY_AES_SECRET);
+
+        // 获取此次请求的类名、方法名，并且构建出一个唯一的 KEY
+        String serviceName = invocation.getServiceModel().getServiceKey();
+        String methodName = RpcUtils.getMethodName(invocation);
+        String uniqueKey = String.join("_", serviceName, methodName);
+
+        // 通过唯一 KEY 从配置中心查询出来的值为空，则说明该方法不需要解密
+        // 那么就当作什么事也没发生，继续走后续调用逻辑
+        String configVal = OpsUtils.get(uniqueKey);
+        if (StringUtils.isBlank(configVal)) {
+            return invoker.invoke(invocation);
+        }
+
+        // 能来到这里说明通过唯一 KEY 从配置中心找到了配置，那么就直接将找到的配置值反序列化为对象
+        DecryptConfig decryptConfig = JSON.parseObject(configVal, DecryptConfig.class);
+        // 循环解析配置中的所有字段列表，然后挨个解密并回填明文值
+        for (String fieldPath : decryptConfig.getFieldPath()) {
+            // 通过查找节点工具类，通过 fieldPath 字段路径从 invocation 中找出对应的字段值
+            String encryptContent = PathNodeUtils.failSafeGetValue(invocation, fieldPath);
+            // 找出来的字段值为空的话，则不做任何处理，继续处理下一个字段
+            if (StringUtils.isBlank(encryptContent)) {
+                continue;
+            }
+
+            // 解密成为明文后，则继续将明文替换掉之前的密文
+            String plainContent = AesUtils.decrypt(encryptContent, privateKey);
+            PathNodeUtils.failSafeSetValue(invocation, fieldPath, plainContent);
+        }
+
+        // 能来到这里，说明解密完成，invocation 中已经是明文数据了，然后继续走后续调用逻辑
+        return invoker.invoke(invocation);
+    }
+
+    /**
+     * <h1>解密配置。</h1>
+     */
+    @Setter
+    @Getter
+    public static class DecryptConfig {
+        List<String> fieldPath;
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方资源目录文件
+// 路径为：/META-INF/dubbo/org.apache.dubbo.rpc.Filter
+///////////////////////////////////////////////////
+decryptProviderFilter=com.hmilyylimh.cloud.filter.config.DecryptProviderFilter
+```
+
+这段代码也非常简单。
+
+- 首先，从 invocation 中找出类名和方法名，构建出一个唯一 KEY 值。
+- 然后，通过唯一 KEY 值去从配置中心查找，如果没找到，就继续走后续调用逻辑。
+- 最后，如果找到了对应配置内容，反序列化后，挨个循环配置好的字段路径，依次解密后将明文再次放回到 invocation 对应位置中，继续走后续调用逻辑。
+
+**拦截扩展的源码案例**
+
+通过这个简单的案例，相信你已经掌握如何针对解密过滤器扩展了，在我们日常开发的过程中，有一些框架的源码，其实也有着类似的拦截扩展的机制，这里我也举 4 个常见的拦截机制的源码关键类。
+
+第一，SpringMvc 的拦截过滤器，通过扩展 org.springframework.web.servlet.HandlerInterceptor 接口，就可以在控制器的方法执行之前、成功之后、异常时，进行扩展处理。
+
+第二，Mybatis 的拦截器，通过扩展 org.apache.ibatis.plugin.Interceptor 接口，可以拦截执行的 SQL 方法，在方法之前、之后进行扩展处理。
+
+第三，Spring 的 BeanDefinition 后置处理器，通过扩展 org.springframework.beans.factory.config.BeanFactoryPostProcessor 接口，可以针对扫描出来的 BeanDefinition 对象进行修改操作，改变对象的行为因素。
+
+第四，Spring 的 Bean 后置处理器，还可以通过扩展 org.springframework.beans.factory.config.BeanPostProcessor 接口，在对象初始化前、初始化后做一些额外的处理，比如为 bean 对象创建代理对象的经典操作，就是在 org.springframework.aop.framework.autoproxy.AbstractAutoProxyCreator#postProcessAfterInitialization 方法完成的。
 
 # 25｜注册扩展：如何统一添加注册信息？
 
