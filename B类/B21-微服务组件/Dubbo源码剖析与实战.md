@@ -5235,7 +5235,291 @@ decryptProviderFilter=com.hmilyylimh.cloud.filter.config.DecryptProviderFilter
 
 # 25｜注册扩展：如何统一添加注册信息？
 
+今天我们继续学习Dubbo拓展的第三篇，注册扩展。
 
+在需求并行迭代开发的节奏下，不同的 IP 节点，可能部署的是你这个后端应用的不同版本，我们怎么能保证每次前端发起的请求，都会命中需要测试的那个后端应用 IP 节点呢？
+
+![image-20250424232050759](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504242321559.png)
+
+**手动配置 IP**
+
+回忆之前在“ [配置加载顺序](https://time.geekbang.org/column/article/615345)”中学过的四层配置覆盖关系，System Properties 优先级最高，Externalized Configuration 次之，API / XML / 注解的优先级再低一点，Local File 优先级最低。
+
+![image-20250424232209756](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504242322978.png)
+
+我们可以在 System Properties、Externalized Configuration 两个层级进行动态化的配置。
+
+```
+///////////////////////////////////////////////////
+// System Properties 层级配置
+// JVM 启动命令中添加如下 -D 的这一串属性
+///////////////////////////////////////////////////
+-Ddubbo.reference.com.hmily.dubbo.api.UserQueryFacade.url=dubbo://192.168.0.6:20884
+
+///////////////////////////////////////////////////
+// Externalized Configuration 层级配置
+// 比如外部配置文件为：dubbo.properties
+///////////////////////////////////////////////////
+dubbo.reference.com.hmily.dubbo.api.UserQueryFacade.url=dubbo://192.168.0.6:20884
+```
+
+**自动识别 IP**
+
+我们想在消费方调用提供方时，通过一些标识，来精准找到指定的 IP 进行远程调用，那回忆一下“ [调用流程](https://time.geekbang.org/column/article/621733)”中的各个步骤，看看能否找到惊喜。看我们当时画的调用流程的总结图。
+
+![image-20250424232643380](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504242326727.png)
+
+在 Cluster 层次模块中，有个故障转移策略的调用步骤，通过重试多次来达到容错目的，恰好这里能拿到多个提供者的 invoker 对象，每个 invoker 对象中就有提供方的 IP 地址。
+
+所有，现在问题变成了， **怎么给 invoker 对象增加一个新字段？**
+
+invoker 是框架层面实打实的硬编码类，想要修改可能有点难，我们得采取一种巧妙的方式，看看这个 invoker 有没有一些扩展属性的字段能用的。我们之前在“ [配置加载顺序](https://time.geekbang.org/column/article/615345)”中见过 invoker 内部的一些属性，看当时的截图。
+
+![image-20250424232852986](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504242328305.png)
+
+果然，我们找到了一个 urlParam 参数，可以在 urlParam 中添加一个新字段，这样一来，我们只需要循环 invoker 列表中的 urlParam 属性，寻找含有新字段的 invoker 对象就可以了。
+
+怎么往 ZooKeeper 写数据，我们之前也学过，在“ [发布流程](https://time.geekbang.org/column/article/620988)”中讲 RegistryProtocol 的 export 方法中，有一段向 ZooKeeper 写数据的代码，这里我也复制过来了。
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.registry.integration.RegistryProtocol#export
+// 远程导出核心逻辑，开启Netty端口服务 + 向注册中心写数据
+///////////////////////////////////////////////////
+@Override
+public <T> Exporter<T> export(final Invoker<T> originInvoker) throws RpcException {
+    // originInvoker.getUrl()：其实是注册中心地址
+    // originInvoker.getUrl().toFullString()：registry://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?REGISTRY_CLUSTER=registryConfig&application=dubbo-19-dubbo-deploy-provider&dubbo=2.0.2&pid=13556&qos.enable=false&register-mode=interface&registry=zookeeper&release=3.0.7&timestamp=1670717595475
+    // registryUrl：zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?REGISTRY_CLUSTER=registryConfig&application=dubbo-19-dubbo-deploy-provider&dubbo=2.0.2&pid=13556&qos.enable=false&register-mode=interface&release=3.0.7&timestamp=1670717595475
+
+    // 从 originInvoker 取出 "registry" 的属性值，结果取出了 zookeeper 值
+    // 然后将 zookeeper 替换协议 "protocol" 属性的值就变成了 registryUrl
+    URL registryUrl = getRegistryUrl(originInvoker);
+
+    // providerUrl：dubbo://192.168.100.183:28190/com.hmilyylimh.cloud.facade.demo.DemoFacade?anyhost=true&application=dubbo-19-dubbo-deploy-provider&background=false&bind.ip=192.168.100.183&bind.port=28190&deprecated=false&dubbo=2.0.2&dynamic=true&generic=false&interface=com.hmilyylimh.cloud.facade.demo.DemoFacade&methods=sayHello,say&pid=13556&qos.enable=false&register-mode=interface&release=3.0.7&side=provider&timeout=8888&timestamp=1670717595488
+    // 从 originInvoker.getUrl() 注册中心地址中取出 "export" 属性值
+    URL providerUrl = getProviderUrl(originInvoker);
+    // 省略部分其他代码...
+
+    // 又看到了一个“本地导出”，此本地导出并不是之前看到的“本地导出”
+    // 这里是注册中心协议实现类的本地导出，是需要本地开启20880端口的netty服务
+    final ExporterChangeableWrapper<T> exporter = doLocalExport(originInvoker, providerUrl);
+
+    // 根据 registryUrl 获取对应的注册器，这里获取的是对象从外层到内层依次是：
+    // ListenerRegistryWrapper -> ZookeeperRegistry，最终拿到了 zookeeper 注册器
+    final Registry registry = getRegistry(registryUrl);
+    final URL registeredProviderUrl = getUrlToRegistry(providerUrl, registryUrl);
+    boolean register = providerUrl.getParameter(REGISTER_KEY, true) && registryUrl.getParameter(REGISTER_KEY, true);
+    if (register) {
+        // 向 zookeeper 进行写数据，将 registeredProviderUrl 写到注册中心服务中去
+        register(registry, registeredProviderUrl);
+    }
+    // 省略部分其他代码...
+.
+}
+```
+
+再细看这段代码，我们只需要认真研究 getRegistry 方法，拿到一个新的实现类就好了，利用这个新的实现类，把新字段写到 ZooKeeper 中。
+
+**注册扩展**
+
+接下来就来研究怎么扩展 Registry 接口，看看怎么从 getRegistry 方法中拿到另外一个新实现类。
+
+话不多说，我们直接进入 getRegistry。
+
+```java
+///////////////////////////////////////////////////
+// org.apache.dubbo.registry.integration.RegistryProtocol#getRegistry
+// 通过注册中心地址来获取 Registry 实现类
+///////////////////////////////////////////////////
+/**
+ * Get an instance of registry based on the address of invoker
+ *
+ * @param registryUrl
+ * @return
+ */
+protected Registry getRegistry(final URL registryUrl) {
+    // 获取 RegistryFactory 接口的自适应扩展点代理对象
+    // 主要是调用了 getAdaptiveExtension 方法即可知道拿到了一个代理对象
+    RegistryFactory registryFactory = ScopeModelUtil.getExtensionLoader(RegistryFactory.class, registryUrl.getScopeModel()).getAdaptiveExtension();
+
+    // 通过代理对象获取入参指定扩展点的实现类
+    // 默认逻辑是从 address 注册中心地址（zookeeper://127.0.0.1:2181）中根据 zookeeper 来找到对应的实现类
+    // 到时候就只需要模仿 ZookeeperRegistry 就行
+    return registryFactory.getRegistry(registryUrl);
+}
+```
+
+方法非常简短，可以得到 2 个重要结论。
+
+1. 拿到了 RegistryFactory 接口的自适应扩展点代理对象。
+2. 把注册的地址 registryUrl 对象传入代理对象中，然后返回一个可以向注册中心进行写操作的实现类。提供方，如果是接口级注册模式，拿到的是 ZookeeperRegistry 核心实现类，如果是应用级注册模式，拿到的是 ServiceDiscoveryRegistry 核心实现类。
+
+我们的需求是扩展 Registry 接口， **看看怎么从 getRegistry 方法中拿到另外一个新实现类**。
+
+现在可以锁定一个重要的 RegistryFactory 接口，它的实现类也有两个 ServiceDiscoveryRegistryFactory、ZookeeperRegistryFactory，而且两个都重写了 createRegistry 方法。虽然，功能侧重点不同，但这两个类实现思路是一样的，任意模仿一个就行， 这里我就挑 ZookeeperRegistryFactory 来模仿。
+
+仿照 ZookeeperRegistryFactory 和 ZookeeperRegistry 两个类来写，能继承使用的话就继承使用，不能继承的话可以考虑简单粗暴的 copy 一份。
+
+```java
+///////////////////////////////////////////////////
+// 功能：RegistryFactory 在实现类：路由编码注册工厂，
+// 主要得到一个 RouteNoZkRegistryFactory  对象可以向 zk 进行写操作
+// 摘抄源码 ZookeeperRegistryFactory，然后稍加改造了一番，重写了 createRegistry 方法
+///////////////////////////////////////////////////
+public class RouteNoZkRegistryFactory extends AbstractRegistryFactory {
+    private ZookeeperTransporter zookeeperTransporter;
+    // 这个方法什么也没改
+    public RouteNoZkRegistryFactory() {
+        this(ApplicationModel.defaultModel());
+    }
+    // 这个方法什么也没改
+    public RouteNoZkRegistryFactory(ApplicationModel applicationModel) {
+        this.applicationModel = applicationModel;
+        this.zookeeperTransporter = ZookeeperTransporter.getExtension(applicationModel);
+    }
+    // 该方法返回了自己创建的实现类
+    @Override
+    public Registry createRegistry(URL url) {
+        return new RouteNoZkRegistry(url, zookeeperTransporter);
+    }
+}
+
+///////////////////////////////////////////////////
+// 功能：分发路由属性注册器，
+// 尽量不做大的改动，继承了 ZookeeperRegistry，然后重写了注册与注销的方法
+// 在重写的 doRegister、doUnregister 方法中添加了一个新字段，用于标识当前机器的一个身份标识
+///////////////////////////////////////////////////
+public class RouteNoZkRegistry extends ZookeeperRegistry {
+    // 这个方法什么也没改
+    public RouteNoZkRegistry(URL url, ZookeeperTransporter zookeeperTransporter) {
+        super(url, zookeeperTransporter);
+    }
+    // 这个方法将 url 对象再次叠加一个 routeNo 新字段
+    @Override
+    public void doRegister(URL url) {
+        super.doRegister(appendRouteNo(url));
+    }
+    // 这个方法将 url 对象再次叠加一个 routeNo 新字段
+    @Override
+    public void doUnregister(URL url) {
+        super.doUnregister(appendRouteNo(url));
+    }
+    // 针对入参的 url 对象叠加一个 routeNo 新字段
+    private URL appendRouteNo(URL url) {
+        // routeNo 属性值，比如填上机器别名，最好具备唯一性
+        url = url.addParameter("routeNo", "M20221219");
+        return url;
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方资源目录文件
+// 路径为：/META-INF/dubbo/org.apache.dubbo.registry.RegistryFactory
+///////////////////////////////////////////////////
+routenoregistry=com.hmilyylimh.cloud.registry.config.RouteNoZkRegistryFactory
+```
+
+改造后的代码关注 4 点。
+
+- 复制了 ZookeeperRegistryFactory 的源码，并改了个名字为路由编码注册工厂（RouteNoZkRegistryFactory），其中，重写了 createRegistry 方法，返回了自己创建的路由编码注册器（RouteNoZkRegistry）。
+- 在路由编码注册器（RouteNoZkRegistry）中，主要继承了已有的 ZookeeperRegistry 类，并重写了注册与注销的方法，在两个方法中都额外添加了一个新字段 routeNo 属性，属性值为当前 IP 机器易于识别的简单别名。
+- 把路由编码注册工厂（RouteNoZkRegistryFactory）添加到资源目录对应的 SPI 接口文件中（/META-INF/dubbo/org.apache.dubbo.registry.RegistryFactory）。
+- 在设置注册中心地址时，把已有的 zookeeper 替换为 routenoregistry。
+
+```java
+///////////////////////////////////////////////////
+// Java 代码的配置类，替换 zookeeper 为 routenoregistry
+///////////////////////////////////////////////////
+@Bean
+public RegistryConfig registryConfig() {
+    // return new RegistryConfig("zookeeper://127.0.0.1:2181");
+    return new RegistryConfig("routenoregistry://127.0.0.1:2181");
+}
+
+或者：
+
+///////////////////////////////////////////////////
+// dubbo.properties，直接指定 dubbo.registry.address 的值
+///////////////////////////////////////////////////
+dubbo.registry.address=routenoregistry://127.0.0.1:2181
+```
+
+写好之后，相信你迫不及待想验证一下了，我们写测试代码。
+
+```java
+///////////////////////////////////////////////////
+// 自定义集群包装类，完全模拟 MockClusterWrapper 的源码抄袭改写了一下
+///////////////////////////////////////////////////
+public class CustomClusterWrapper implements Cluster {
+
+    private final Cluster cluster;
+
+    public CustomClusterWrapper(Cluster cluster) {
+        this.cluster = cluster;
+    }
+
+    @Override
+    public <T> Invoker<T> join(Directory<T> directory, boolean buildFilterChain) throws RpcException {
+        return new CustomClusterInvoker<T>(directory,
+                this.cluster.join(directory, buildFilterChain));
+    }
+}
+
+///////////////////////////////////////////////////
+// 自定义集群包类对应的 invoker 处理类
+// 完全继承了 MockClusterInvoker 类，就是想打印点日志，
+// 看看集群扩展器中的所有 invoker 对象，到底有没有拉取到提供方那边新增的 routeNo 标识
+///////////////////////////////////////////////////
+public class CustomClusterInvoker<T> extends MockClusterInvoker<T> {
+    public CustomClusterInvoker(Directory<T> directory, Invoker<T> invoker) {
+        super(directory, invoker);
+    }
+    @Override
+    public Result invoke(Invocation invocation) throws RpcException {
+        // 重点就看这里的日志打印就好了，也没什么特殊的操作
+        List<Invoker<T>> invokers = getDirectory().list(invocation);
+        for (Invoker<T> invoker : invokers) {
+            System.out.print("invoker信息：");
+            System.out.println(invoker.toString());
+            System.out.println();
+        }
+        return super.invoke(invocation);
+    }
+}
+
+///////////////////////////////////////////////////
+// 消费方资源目录文件
+// 路径为：/META-INF/dubbo/org.apache.dubbo.rpc.cluster.Cluster
+///////////////////////////////////////////////////
+com.hmilyylimh.cloud.registry.cluster.CustomClusterWrapper
+```
+
+测试代码也比较简单，就是想在消费方调用时，借用自定义的集群包装类，打印一下内存中的 invoker 信息，看看到底有没有拉取到提供方设置的 routeNo 标识。
+
+接下来就是见证奇迹的时刻了，运行一下看打印结果。
+
+> invoker信息：interface com.hmilyylimh.cloud.facade.demo.DemoFacade -> dubbo://192.168.100.183:28250/com.hmilyylimh.cloud.facade.demo.DemoFacade?anyhost=true&application=dubbo-25-registry-ext-provider&background=false&category=providers,configurators,routers&check=false&deprecated=false& **routeNo=M20221219**&dubbo=2.0.2&dynamic=true&generic=false&interface=com.hmilyylimh.cloud.facade.demo.DemoFacade&methods=sayHello,say&pid=8512&qos.enable=false&release=3.0.7&service-name-mapping=true&side=provider&sticky=false
+
+从打印的日志中，看到了 routeNo 字段（加粗显示的部分），说明我们使用注册扩展的方式，通过新增一个 routeNo 字段，消费方可以根据这个标识来自动筛选具体 IP ，省去了手工动态配置 IP 的环节了，彻底解放了我们开发人员的双手。
+
+写好注册扩展机制，已经完成了动态路由最重要的一环，不过，其他辅助的操作也不能落下，主要有 3 个关键点。
+
+- 在申请多台机器的时候，可以自己手动为这一批机器设置一个别名，保证分发路由注册器中 appendrouteNo 能读取到整个别名就行。
+- 在消费方自定义一个集群扩展器，把集群扩展器中的 invoker 列表按照 routeNo 进行分组后，再从接收请求的上下文对象中拿到 routeNo 属性值，从分组集合中选出过滤后的 invoker 列表，最后使用过滤后的 invoker 进行负载均衡调用。
+- 前端若需要在哪个环境下测试，就在请求头中设置对应的 routeNo 属性以及属性值，这样就充分通过 routeNo 标识，体现了不同环境的隔离。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504242332331.jpg)
+
+**注册扩展的应用**
+
+注册扩展如何使用，想必你已经非常清楚了，在我们日常开发的过程中，哪些场景会使用到注册扩展呢？我举 3 个常见的应用场景。
+
+第一，添加路由标识，统一在消费方进行动态路由，以选择正确标识对应的 IP 地址进行远程调用。
+
+第二，添加系统英文名，统一向注册信息中补齐接口归属的系统英文名，当排查一些某些接口的问题时，可以迅速从注册中心查看接口归属的系统英文名。
+
+第三，添加环境信息，统一从请求的入口处，控制产线不同环境的流量比例，主要是控制少量流量对一些新功能进行内测验证。
 
 # 26｜线程池扩展：如何选择Dubbo线程池？
 
