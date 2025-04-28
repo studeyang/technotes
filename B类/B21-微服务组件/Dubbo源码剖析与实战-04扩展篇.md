@@ -963,3 +963,200 @@ public ProtocolConfig protocolConfig(){
 
 # 27｜协议扩展：如何快速控制应用的上下线？
 
+今天我们学习Dubbo拓展的最后一篇，协议扩展。
+
+很多公司使用 Dubbo 的项目，可能都在使用 dubbo-admin 控制台进行应用的上下线发布。当面临要处理四五百个系统甚至上千个系统的上下线发布，你很可能会遇到控制台页面数据更新混乱的情况，极端情况下，还会导致应该上线的没有上线，就像莫名其妙少了几台机器提供服务一样。
+
+这个问题关键在于发布期间大批系统集中进行上下线发布，这意味着 ZooKeeper 注册中心的目录节点，时刻在发生变化。而 dubbo-admin 是个管理功能的控制台系统，自然就会监听 ZooKeeper 上所有系统目录节点。
+
+所以， **短时间内 dubbo-admin 的内存数据急剧变化**，就极可能造成页面刷新不及时。无法快速确保系统的哪些节点发布上线了，哪些节点没有发布上线。
+
+面对这个情况，你的小组经过商讨后，最终决定要把应用的上下线稍微改造一下。
+
+**去掉控制台**
+
+我们从 dubbo-admin 控制台上的“下线”按钮一路跟踪到源码，结果发现最终调用了这样一段代码。
+
+```java
+public void disableProvider(Long id) {
+	// 省略了其他代码
+	Provider oldProvider = findProvider(id);
+	if (oldProvider == null) {
+		throw new IllegalStateException("Provider was changed!");
+	}
+
+	if (oldProvider.isDynamic()) {
+		// 保证disable的override唯一
+		if (oldProvider.isEnabled()) {
+			Override override = new Override();
+			override.setAddress(oldProvider.getAddress());
+			override.setService(oldProvider.getService());
+			override.setEnabled(true);
+			override.setParams("disabled" + "=true");
+			overrideService.saveOverride(override);
+			return;
+		}
+		// 省略了其他代码
+	} else {
+		oldProvider.setEnabled(false);
+		updateProvider(oldProvider);
+	}
+}
+```
+
+这段代码表明服务“下线”，就是把指定的服务接口设置了 enable=true、disabled=true 两个变量，同时协议变成 override 协议，然后把这串 URL 信息写到注册中心去，就完成了“下线”操作。
+
+原来控制台的下线操作看起来这么简单，就是向注册中心写一条 URL 信息， **我们好像还真可以干掉控制台，下线的时候直接把这串信息写到注册中心去就行了。**
+
+不过，我们手动操作注册中心下线了，等系统重新启动，同样又会把接口写到注册中心，消费方又可以调用了，那这个重新启动之前的下线操作岂不是没什么作用？
+
+这时，联想之前学过的拦截操作，我们可以在系统重启的时候，直接以下线的命令写到注册中心，这样，消费方会认为没有可用的提供方，等提供方认为时机成熟，自己再想办法重新上线，应该就可以了。
+
+思路感觉可行，我们梳理下，主要分为 3 步。
+
+- 第一步，手动操作应用的下线操作，完全模拟控制台的 override 协议 + enable=true + disabled=true 三个主要因素，向注册中心进行写操作。
+- 第二步，重新启动应用，应用的启动过程中会把服务注册到注册中心去，我们需要拦截这个注册环节的操作，用第一步的指令操作取而代之，让提供方以毫无存在感的方式默默启动成功。
+- 第三步，找个合适的时机，想办法把应用上线，让消费方感知到提供方的存在，然后消费方就可以向提供方发起调用了。
+
+**协议扩展**
+
+我们总结一下，可以绘出大概流程图。
+
+![image-20250428230622217](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202504282306371.png)
+
+可以把流程归纳出 5 个重要的环节。
+
+- 进行协议拦截，主要以禁用协议的方式进行接口注册。
+- 在拦截协议的同时，把原始注册信息 URL 保存到磁盘文件中。
+- 待服务重新部署成功后，利用自制的简单页面进行简单操作，发布上线指令操作。
+- 发布上线的指令的背后操作，就是把对应应用机器上磁盘文件中的原始注册信息 URL 取出来。
+- 最后利用操作注册中心的工具类，把取出来的原始注册信息 URL 全部写到注册中心。
+
+有了这关键的五个环节，针对系统协议拦截环节的代码实现，应该就不是很难了。
+
+```java
+///////////////////////////////////////////////////
+// 禁用协议包装器
+///////////////////////////////////////////////////
+public class OverrideProtocolWrapper implements Protocol {
+    private final Protocol protocol;
+    private Registry registry;
+    // 存储原始注册信息的，模拟存储硬盘操作
+    private static final List<URL> UN_REGISTRY_URL_LIST = new ArrayList<>();
+    // 包装器的构造方法写法
+    public OverrideProtocolWrapper(Protocol protocol) {
+        this.protocol = protocol;
+    }
+
+    @Override
+    public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
+        // 如果是注册协议的话，那么就先注册一个 override 到 zk 上，表示禁用接口被调用
+        if (UrlUtils.isRegistry(invoker.getUrl())) {
+            if (registry == null) {
+                registry = getRegistry(invoker);
+            }
+            // 注册 override url，主要是在这一步让提供方无法被提供方调用
+            doRegistryOverrideUrl(invoker);
+        }
+        // 接下来原来该怎么调用还是接着怎么进行下一步调用
+        return this.protocol.export(invoker);
+    }
+
+    private <T> void doRegistryOverrideUrl(Invoker<T> invoker) {
+        // 获取原始接口注册信息
+        URL originalProviderUrl = getProviderUrl(invoker);
+        // 顺便将接口注册的原始信息保存到内存中，模拟存储磁盘的过程
+        UN_REGISTRY_URL_LIST.add(originalProviderUrl);
+
+        // 构建禁用协议对象
+        OverrideBean override = new OverrideBean();
+        override.setAddress(originalProviderUrl.getAddress());
+        override.setService(originalProviderUrl.getServiceKey());
+        override.setEnabled(true);
+        override.setParams("disabled=true");
+
+        // 将禁用协议写到注册中心去
+        registry.register(override.toUrl());
+    }
+    
+    // 获取操作 Zookeeper 的注册器
+    private Registry getRegistry(Invoker<?> originInvoker) {
+        URL registryUrl = originInvoker.getUrl();
+        if (REGISTRY_PROTOCOL.equals(registryUrl.getProtocol())) {
+            String protocol = registryUrl.getParameter(REGISTRY_KEY, DEFAULT_REGISTRY);
+            registryUrl = registryUrl.setProtocol(protocol).removeParameter(REGISTRY_KEY);
+        }
+        RegistryFactory registryFactory = ScopeModelUtil.getExtensionLoader
+                (RegistryFactory.class, registryUrl.getScopeModel()).getAdaptiveExtension();
+        return registryFactory.getRegistry(registryUrl);
+    }
+    
+    // 获取原始注册信息URL对象
+    private URL getProviderUrl(final Invoker<?> originInvoker) {
+        return (URL) originInvoker.getUrl().getAttribute("export");
+    }
+    @Override
+    public <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException {
+        return protocol.refer(type, url);
+    }
+    @Override
+    public int getDefaultPort() {
+        return protocol.getDefaultPort();
+    }
+    @Override
+    public void destroy() {
+        protocol.destroy();
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方资源目录文件
+// 路径为：/META-INF/dubbo/org.apache.dubbo.rpc.Protocol
+///////////////////////////////////////////////////
+com.hmilyylimh.cloud.protocol.config.ext.OverrideProtocolWrapper
+
+///////////////////////////////////////////////////
+// 资源目录文件
+// 路径为：/dubbo.properties
+// 只进行接口级别注册
+///////////////////////////////////////////////////
+dubbo.application.register-mode=interface
+```
+
+代码实现起来也比较简单，关注 4 个关键点。
+
+- 在包装器的 export 方法中，仅针对注册协议进行禁用协议处理。
+- 禁用协议主要关注 override 协议 + enable=true + disabled=true 三个重要参数。
+- 尝试把原始注册信息存储起来，这里使用内存来存储，间接模拟存储磁盘的过程。
+- 最后通过适当的协议转换操作，拿到具体操作 ZooKeeper 的注册器，然后把禁用协议写到 ZooKeeper 中去。
+
+接下来只需要按照相应的操作，把提供方上线就行，模拟上线的代码我也写在这里了。
+
+```java
+public void online() {
+    // 模拟取出之前保存的原始注册信息列表
+    for (URL url : UN_REGISTRY_URL_LIST) {
+        OverrideBean override = new OverrideBean();
+        override.setAddress(url.getAddress());
+        override.setService(url.getServiceKey());
+        override.setEnabled(true);
+        override.setParams("disabled=false");
+        // 先取消禁用
+        registry.register(override.toUrl());
+
+        // 然后将原始的注册信息写到注册中心去即可
+        registry.register(url);
+    }
+}
+```
+
+**协议扩展的应用场景**
+
+协议扩展除了可以处理上下线功能，还有哪些应用场景呢？
+
+第一，收集接口发布列表，当我们需要统计系统的接口是否都已经发布时，可以通过协议扩展的方式来统计处理。
+
+第二，禁用接口注册，根据一些黑白名单，在应用层面控制哪些接口需要注册，哪些接口不需要注册。
+
+第三，多协议扩展，比如当市场上冒出一种新的协议，你也想在 Dubbo 框架这边支持，可以考虑像 DubboProtocol、HttpProtocol 这些类一样，扩展新的协议实现类。
+
