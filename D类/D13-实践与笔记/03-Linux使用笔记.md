@@ -36,3 +36,12 @@ pgrep -f 'docsify serve -p 4000'
 hostname -I
 ```
 
+## 六、文件操作
+
+```shell
+# 查找 /etc 目录下是否存在 nginx.conf 文件
+find /etc -name "nginx.conf"
+# 查找log目录
+find / -type d -name "log"
+```
+
