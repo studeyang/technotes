@@ -1,28 +1,13 @@
 # 开篇词｜带你玩转Dubbo微服务框架
 
-在这个专栏里，我会带着你以“发现问题——分析问题——解决问题”的案例驱动的思路，从一个问题现象出发，分析如何思考问题，一步步推导出需要怎样的技术支撑，再从我们已有的知识储备搜刮出可以有哪些解决方案，最后针对这些解决方案，快速有效地细化出落地方案，逐渐找到透过现象看本质的方法论。
+在这个专栏里，我会带着你以“发现问题——分析问题——解决问题”的案例驱动的思路，从一个问题现象出发，分析问题，一步步推导出需要怎样的技术支撑，再从我们已有的知识储备搜刮出可以有哪些解决方案，最后针对这些解决方案，快速有效地细化出落地方案，逐渐找到透过现象看本质的方法论。
 
 具体会分为 4 个模块：
 
-- 基础篇
-
-用一张 Dubbo 的总体架构图，把日常的开发流程串联起来，勾勒起你对 Dubbo 数十个基础知识点的整体印象；在此基础上，用视频形式带你统一梳理 Dubbo 日常开发必须掌握的基础特性，查漏补缺。
-
-如果你是初学者，掌握好基础篇就能应付日常开发实践了。
-
-- 特色篇
-
-以真实案例为背景，逐步分析并推导出需要的技术手段，带你灵活应用框架中的高级特性来解决实际问题。深入理解高级特性外，也有助于你利用高级特性开发出比较通用的产品功能。
-
-如果你是有 Dubbo 基础的开发者，掌握特色篇基本上可以在实战中横着走了。
-
-- 源码篇
-
-通过源码的学习，达到知其然知其所以然。我们会站在框架设计者的角度，体会 Dubbo 框架每个机制设计的亮点所在，锻炼你对 Dubbo 掌握的纵向深度。如果你对自己有更高要求，掌握了源码篇，你可以称得上 Dubbo 框架高手了。
-
-- 拓展篇
-
-在这里我们将针对一些工作中的实际诉求，分析出需要的功能解决方案，并且从前面已学的知识点中，提取关键要素尝试解决，在应用中进一步提升你对 Dubbo 的理解，晋级宗师。
+- 基础篇：用一张 Dubbo 的总体架构图，把日常的开发流程串联起来。如果你是初学者，掌握好基础篇就能应付日常开发实践了。
+- 特色篇：以真实案例为背景，逐步分析并推导出需要的技术手段，带你灵活应用框架中的高级特性来解决实际问题。如果你是有 Dubbo 基础的开发者，掌握特色篇基本上可以在实战中横着走了。
+- 源码篇：通过源码的学习，达到知其然知其所以然。如果你对自己有更高要求，掌握了源码篇，你可以称得上 Dubbo 框架高手了。
+- 拓展篇：在这里我们将针对一些工作中的实际诉求，分析出解决方案，并且从前面已学的知识点中，提取关键要素尝试解决，在应用中进一步提升你对 Dubbo 的理解，晋级宗师。
 
 ![image-20250226224621979](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202502262246060.png)
 
@@ -30,13 +15,12 @@
 
 # ==基础篇==
 
-# 01｜温故知新：Dubbo基础知识你掌握得如何？
+# 01｜温故知新：Dubbo基础知识
 
 **总体架构**
 
-Dubbo 的主要节点角色有五个：
+Dubbo 的主要节点角色有四个：
 
-- Container：服务运行容器，为服务的稳定运行提供运行环境。
 - Provider：提供方，暴露接口提供服务。
 - Consumer：消费方，调用已暴露的接口。
 - Registry：注册中心，管理注册的服务与接口。
@@ -52,13 +36,7 @@ Dubbo 的主要节点角色有五个：
 
 在这样的完整流程中，每个角色在 Dubbo 架构体系中具体起到了什么样的作用？每一步我们有哪些操作注意点呢？
 
-**1、Container 服务运行容器**
-
-首先，提供方、消费方的正常运转，离不开一个大前提——运行的环境。首先，提供方、消费方的正常运转，离不开一个大前提——运行的环境。
-
-**2、Provider 提供方**
-
-有了 Container 为服务的稳定运行提供环境后，我们就可以开始新建工程了。
+**1、Provider 提供方**
 
 第 ① 步，先自己新建一个提供方的工程，引用一个 facade.jar 包来对外暴露服务，编写的关键代码如下：
 
@@ -138,7 +116,7 @@ public class Dubbo04XmlBootProviderApplication {
 - instance：只应用级注册。
 - all：接口级注册、应用级注册都会存在，同时也是默认值。
 
-**3、Consumer 消费方**
+**2、Consumer 消费方**
 
 提供方启动完成后，我们就可以接着新建消费方的工程了。第 ④ 步，在新建的消费方工程中，同样需要引用 facade.jar 来进行后续的远程调用，你可以参考要编写的关键代码：
 
@@ -183,7 +161,7 @@ public class Dubbo04XmlBootConsumerApplication {
     <dubbo:registry address="zookeeper://127.0.0.1:2181"></dubbo:registry>
     <!-- 引用远程服务 -->
     <dubbo:reference id="demoFacade"
-            interface="com.hmilyylimh.cloud.facade.demo.DemoFacade">
+                     interface="com.hmilyylimh.cloud.facade.demo.DemoFacade">
     </dubbo:reference>
 </beans>
 ```
@@ -252,6 +230,8 @@ DemoFacade demoFacade = ctx.getBean(DemoFacade.class);
 System.out.println(demoFacade.sayHello("Geek"));
 ```
 
+> ------------重试------------
+
 区区两行代码，就跨越了网络从提供方那边拿到了结果，非常方便简单。不过总有调用不顺畅的时候，尤其是在提供方服务有点耗时的情况下，你可能会遇到这样的异常信息：
 
 ```
@@ -277,7 +257,7 @@ private DefaultFuture(Channel channel, Request request, int timeout) {
 ```xml
 <!-- 引用远程服务 -->
 <dubbo:reference id="demoFacade" timeout="5000"
-        interface="com.hmilyylimh.cloud.facade.demo.DemoFacade">
+                 interface="com.hmilyylimh.cloud.facade.demo.DemoFacade">
 </dubbo:reference>
 ```
 
@@ -286,16 +266,18 @@ private DefaultFuture(Channel channel, Request request, int timeout) {
 ```xml
 <!-- 引用远程服务 -->
 <dubbo:reference id="demoFacade" timeout="5100" retries="3"
-        interface="com.hmilyylimh.cloud.facade.demo.DemoFacade">
+                 interface="com.hmilyylimh.cloud.facade.demo.DemoFacade">
 </dubbo:reference>
 ```
+
+> ------------容错------------
 
 除了网络抖动影响调用，更多时候可能因为有些服务器故障了，比如消费方调着调着，提供方突然就挂了，消费方如果换台提供方，继续重试调用一下也许就正常了，所以你可以继续设置 cluster="failover" 来进行故障转移，比如：
 
 ```xml
 <!-- 引用远程服务 -->
 <dubbo:reference id="demoFacade" cluster="failover" timeout="5000" retries="3"
-        interface="com.hmilyylimh.cloud.facade.demo.DemoFacade">
+                 interface="com.hmilyylimh.cloud.facade.demo.DemoFacade">
 </dubbo:reference>
 ```
 
@@ -309,6 +291,8 @@ Dubbo 框架为了尽可能保障运行，除了有 failover 故障转移策略�
 
 容错设置帮我们尽可能保障服务稳定调用。但调用也有流量高低之分，一旦流量比较高，你可能会发现提供方总是有那么几台服务器流量特别高，另外几个服务器流量特别低。
 
+> ------------负载均衡------------
+
 这是因为 Dubbo 默认使用的是 loadbalance="random" 随机类型的负载均衡策略，为了尽可能雨露均沾调用到提供方各个节点，你可以继续设置 loadbalance="roundrobin" 来进行轮询调用，比如：
 
 ```xml
@@ -318,7 +302,7 @@ Dubbo 框架为了尽可能保障运行，除了有 failover 故障转移策略�
 </dubbo:reference>
 ```
 
-**4、Registry 注册中心**
+**3、Registry 注册中心**
 
 前面我们只是新增并注册了一个提供方，当我们逐渐增加节点的时候：
 
