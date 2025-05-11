@@ -389,21 +389,21 @@ public class AsyncOrderFacadeImpl implements AsyncOrderFacade {
 
 因为这个变量和当前处理业务的线程息息相关，我们要么借助本地线程 ThreadLocal 来存储，要么借助处理业务的上下文对象来存储。
 
-如果借助本地线程 ThreadLocal 来存储，又会遇到 queryOrderById 所在的线程与 cachedThreadPool 中的线程相互通信的问题。因为 ThreadLocal 存储的内容位于线程私有区域，从代码层面则体现在 java.lang.Thread#threadLocals 这个私有变量上，这也决定了，不同的线程，私有区域是无法相互访问的。
+如果借助本地线程 ThreadLocal 来存储，又会遇到 queryOrderById 所在的线程与 cachedThreadPool 中的线程相互通信的问题。因为 ThreadLocal 存储的内容位于线程私有区域，不同的线程，私有区域是无法相互访问的。
 
-所以这里 **采用上下文对象来存储，那异步化的结果也就毋庸置疑存储在上下文对象中**。
-
-首先拦截识别异步，当拦截处发现有异步化模式的变量，从上下文对象中取出异步化结果并返回。
+所以这里 **采用上下文对象来存储，那异步化的结果也就毋庸置疑存储在上下文对象中**。我们再来顺一遍流程，首先拦截识别异步，当拦截处发现有异步化模式的变量，从上下文对象中取出异步化结果并返回。
 
 ![image-20250303225030458](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503032250568.png)
 
-这里要注意一点，凡是异步问题，都需要考虑当前线程如何获取其他线程内数据，所以这里我们要思考：如果异步化处理有点耗时，拦截处从异步化结果中取不到结果该怎么办呢？不停轮询等待吗？还是要作何处理呢？
+> ----------线程间通信问题----------
+
+这里我们要思考：如果异步化处理有点耗时，拦截处从异步化结果中取不到结果该怎么办呢？不停轮询等待吗？还是要作何处理呢？
 
 这个问题抽象一下其实就是：A线程执行到某个环节，需要B线程的执行结果，但是B线程还未执行完，A线程是如何应对的？所以，本质回归到了多线程通信上。
 
-相信熟悉 JDK 的你已经想到了，非 java.util.concurrent.Future 莫属，这是 Java 1.5 引入的用于异步结果的获取，当异步执行结束之后，结果将会保存在 Future 当中。但 java.util.concurrent.Future 是一个接口，我们得找一个它的实现类来用，也就是 java.util.concurrent.CompletableFuture，而且它的 java.util.concurrent.CompletableFuture#get(long timeout, TimeUnit unit) 方法支持传入超时时间，也正好适合我们的场景。
+相信熟悉 JDK 的你已经想到了，非 java.util.concurrent.Future 莫属，当异步执行结束之后，结果将会保存在 Future 当中。但 java.util.concurrent.Future 是一个接口，我们得找一个它的实现类来用，也就是 java.util.concurrent.CompletableFuture，而且它的 java.util.concurrent.CompletableFuture#get(long timeout, TimeUnit unit) 方法支持传入超时时间，也正好适合我们的场景。
 
-接下来就一起来看看该如何改造 queryOrderById 这个方法：
+接下来就一起来看看如何用 Dubbo 改造 queryOrderById 这个方法：
 
 ```java
 @DubboService
@@ -455,15 +455,17 @@ public class AsyncOrderFacadeImpl implements AsyncOrderFacade {
 
 ![image-20250303223619489](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503032236640.png)
 
-们追踪源码的调用流程，可以发现最终是通过 CAS 原子性的方式创建了一个 java.util.concurrent.CompletableFuture 对象，这个对象就存储在当前的上下文 org.apache.dubbo.rpc.RpcContextAttachment 对象中。
+们追踪源码的调用流程，可以发现最终创建了一个 java.util.concurrent.CompletableFuture 对象，这个对象就存储在当前的上下文 org.apache.dubbo.rpc.RpcContextAttachment 对象中。
 
 然后，需要在异步线程中同步父线程的上下文信息：
 
 ![image-20250303223702215](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503032237302.png)
 
-可以看到，Dubbo 框架，也是用的 asyncContext 同步不同线程间的信息，也就是信息的拷贝，只不过这个拷贝需要利用到异步模式开启之后的返回对象 asyncContext。
+可以看到，Dubbo 框架用的是 AsyncContext 同步不同线程间的信息，也就是信息的拷贝，只不过这个拷贝需要利用到异步模式下的对象 AsyncContext。
 
-因为 asyncContext 富含上下文信息，只需要把这个所谓的 asyncContext 对象传入到子线程中，然后将 asyncContext 中的上下文信息充分拷贝到子线程中，这样，子线程处理所需要的任何信息就不会因为开启了异步化处理而缺失。
+> 思考：RpcContext, RpcContextAttachment, AsyncContext, AsyncContextImpl 几者的关系？
+
+因为 AsyncContext 富含上下文信息，只需要把这个所谓的 AsyncContext 对象传入到子线程中，然后将 AsyncContext 中的上下文信息充分拷贝到子线程中，这样，子线程处理所需要的任何信息就不会因为开启了异步化处理而缺失。
 
 最后的第三步就是在异步线程中，将异步结果写入到异步线程的上下文信息中：
 
@@ -491,9 +493,7 @@ Dubbo 用 asyncContext.write 写入异步结果，这样拦截处只需要调用
 
 Dubbo 的异步实现原理，相信你已经非常清楚了，那哪些应用场景可以考虑异步呢？
 
-- 第一，我们定义了线程池，你可能会认为定义线程池的目的就是为了异步化操作，其实不是，因为异步化的操作会使 queryOrderById 方法立马返回，也就是说，异步化耗时的操作并没有在 queryOrderById 方法所在线程中继续占用资源，而是在新开辟的线程池中占用资源。
-
-  所以对于一些 IO 耗时的操作，比较影响客户体验和使用性能的一些地方，我们是可以采用异步处理的。
+- 第一，我们定义了线程池，你可能会认为定义线程池的目的就是为了异步化操作，其实不是，异步化耗时的操作并没有在 queryOrderById 方法所在线程中继续占用资源，而是在新开辟的线程池中占用资源。所以对于一些 IO 耗时的操作，比较影响客户体验和使用性能的一些地方，我们是可以采用异步处理的。
 
 - 其次，因为 queryOrderById 开启异步操作后就立马返回了，queryOrderById 所在的线程和异步线程没有太多瓜葛，异步线程的完成与否，不太影响 queryOrderById 的返回操作。
 
@@ -503,11 +503,63 @@ Dubbo 的异步实现原理，相信你已经非常清楚了，那哪些应用�
 
 **思考**
 
-问：asyncContext.write(resultInfo); 这里将resultInfo 写入 Future 之后，Dubbo框架什么时候调用Future.get 获取计算结果？
+问：asyncContext.write(resultInfo); 这里将 resultInfo 写入 Future 之后，Dubbo 框架什么时候调用 Future.get 获取计算结果？
 
 答：asyncContext.write(resultInfo); 执行之后是将结果写入到了 Future 当中，但是还有另外一个底层在调用这个 Future#get 的结果，这个调用的地方就是在【org.apache.dubbo.remoting.exchange.support.header.HeaderExchangeHandler#handleRequest】方法中的【handler.reply(channel, msg);】代码处。
 
 【handler.reply(channel, msg);】返回的对象就是 Future 对象，然后调用 Future 对象的 whenComplete 方法，调用完后若没有结果就会等待，有结果的话就会立马进入 whenComplete 方法的回调逻辑中。
+
+> 思考：既然主线程还是在等待，异步化调用能释放 Dubbo 线程池资源吗？
+>
+> DeepSeek：主线程不会阻塞。
+>
+> - 如果 `Future` 已经完成，回调可能在调用 `whenComplete` 的线程（主线程）中立即执行
+> - 如果 `Future` 未完成，回调将在完成 `Future` 的线程（子线程）中执行
+>
+> ```
+> future.get(); // 这会阻塞主线程
+> future.whenComplete(...); // 这不会阻塞
+> ```
+>
+> 当业务线程完成处理完成后，是由 Netty 的 EventLoop 线程发送响应的。
+>
+> ```java
+> // Dubbo 底层处理逻辑（简化版）
+> public void handleRequest(Channel channel, Request request) {
+>     // 1. 从线程池获取线程（dubbo-protocol-200-thread-1）
+>     ThreadPoolExecutor threadPool = getThreadPool(); 
+>     threadPool.execute(() -> {
+>         // 2. 调用服务方法
+>         Object result = serviceMethod.invoke(params);
+>         
+>         // 3. 如果返回null且存在AsyncContext，立即归还线程
+>         if (result == null && RpcContext.hasAsyncContext()) {
+>             return; // 线程被释放回线程池
+>         }
+>         
+>         // 同步模式：正常发送响应
+>         channel.write(result);
+>     });
+> }
+> ```
+>
+> 
+>
+> ```java
+> // 业务代码调用asyncContext.write()时
+> public void write(Object value) {
+>     // 1. 获取挂起的Netty Channel
+>     Channel channel = asyncContext.getChannel();
+>     
+>     // 2. 通过Netty的EventLoop线程发送响应（非业务线程池！）
+>     // 线程名示例：nioEventLoopGroup-3-1
+>     channel.eventLoop().execute(() -> {
+>         channel.writeAndFlush(value);
+>     });
+> }
+> ```
+>
+> 
 
 # 03｜隐式传递：如何精准找出一次请求的全部日志？
 

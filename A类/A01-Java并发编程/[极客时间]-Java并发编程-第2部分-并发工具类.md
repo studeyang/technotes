@@ -206,29 +206,33 @@ Lock&Condition 实现的管程里只能使用 await()、signal()、signalAll()<b
 
 两种方式来实现异步：
 
-1. 调用方创建一个子线程，在子线程中执行方法调用，这种调用我们称为异步调用；
+第一，调用方创建一个子线程，在子线程中执行方法调用，这种调用我们称为异步调用；
 
-   ```java
-   new Thread(
-       @Override
-       public void run() {
-           pai1M();
-       }
-   ).start();
-   printf("hello world")
-   ```
+```java
+public void call() {
+    new Thread(
+        @Override
+        public void run() {
+            pai1M();
+        }
+    ).start();
+    printf("hello world")
+}
+```
 
-2. 方法实现的时候，创建一个新的线程执行主要逻辑，主线程直接 return，这种方法我们一般称为异步方法。
+第二，方法实现的时候，创建一个新的线程执行主要逻辑，主线程直接 return，这种方法我们一般称为异步方法。
 
-   ```java
-   new Thread(
-       @Override
-       public void run() {
-           // 逻辑代码
-       }
-   ).start();
-   return "";
-   ```
+```java
+public String call() {
+    new Thread(
+        @Override
+        public void run() {
+            // 逻辑代码
+        }
+    ).start();
+    return "";
+}
+```
 
 **Dubbo 源码分析**
 
