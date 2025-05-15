@@ -728,7 +728,7 @@ public class UserController {
 
 如果现在有十几个的运营页面，大约五十个请求接口，每个请求的核心逻辑都在后端系统，你预估一下，在 Web 服务器中写 Java 代码大概要写多久？
 
-**泛化调用**
+**反射调用**
 
 我们可以使用类似这种 /projects/{project}/versions 占位符形式的 URL，利用 RequestMappingHandlerMapping 中的 URL 注册器去匹配。如果可以把一些变化的因子放到 URL 占位符中，精简 URL 的概率就非常大了。
 
@@ -787,13 +787,17 @@ public class CommonController {
 
 这段代码有一个重要的核心逻辑还没解决，tryFindBean，我们该通过什么样的办法拿到下游接口的实例对象呢？或者说，该怎么仿照 @DubboReference 注解，拿到下游接口的实例对象呢？
 
+> 当前服务集成了 Dubbo 服务，并且也已经定义了接口的 Consumer，可通过上述代码泛化调用。如果有新的接口转发，当前服务会有改动。
+>
+> 如果实现网关式透传？即新的接口也能直接转发。
+
 虽然不知道 @DubboReference 注解是怎么做到的，但是我们起码能明白一点，只要通过 @DubboReference 修饰的字段就能拿到实例对象，那接下来就是需要一点耐心的环节了，顺着 @DubboReference 注解的核心实现逻辑探索一下源码：
 
 ![image-20250310230950063](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503102309227.png)
 
 最终，我们会发现是通过 ReferenceConfig#get 方法创建了代理对象。
 
-**编码实现**
+**透传式调用**
 
 经过一番源码探索后，最难解决的 tryFindBean 逻辑也有了头绪。我们找到了 ReferenceConfig 这个核心类，接下来要做的就是拿到 referenceConfig#get 返回的泛化对象 GenericService，然后调用 GenericService#$invoke 方法进行远程调用。
 
@@ -810,7 +814,7 @@ public class CommonController {
     public String commonRequest(@PathVariable String className,
                                 @PathVariable String mtdName,
                                 @PathVariable String parameterTypeName,
-                                @RequestBody String reqBody){
+                                @RequestBody String reqBody) {
         // 将入参的req转为下游方法的入参对象，并发起远程调用
         return commonInvoke(className, parameterTypeName, mtdName, reqBody);
     }
@@ -857,7 +861,8 @@ public class CommonController {
         applicationConfig.setName(dubboBootstrap.getApplicationModel().getApplicationName());
         
         // 设置注册中心的地址
-        String address = dubboBootstrap.getConfigManager().getRegistries().iterator().next().getAddress();
+        String address = dubboBootstrap.getConfigManager().
+            getRegistries().iterator().next().getAddress();
         RegistryConfig registryConfig = new RegistryConfig(address);
         ReferenceConfig<GenericService> referenceConfig = new ReferenceConfig<>();
         referenceConfig.setApplication(applicationConfig);
