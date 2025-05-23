@@ -136,12 +136,9 @@ public class HandleAfterRepayProcessor {
 
 ## 三、Java 8 Map 的优雅写法
 
-```java
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+### 添加元素
 
+```java
 public class MapListExample {
     public static void main(String[] args) {
         // 创建一个Map<String, List<String>>
@@ -158,5 +155,23 @@ public class MapListExample {
 }
 
 // Map内容: {fruits=[Apple, Banana], vegetables=[Carrot]}
+```
+
+### 收集
+
+```java
+// List<List<String>> 怎么收集到一个 List<String> 中？用 Java8 实现
+
+List<List<String>> listOfLists = Arrays.asList(
+    Arrays.asList("a", "b"),
+    Arrays.asList("c", "d", "e"),
+    Collections.singletonList("f")
+);
+
+List<String> flattenedList = listOfLists.stream()
+    .flatMap(List::stream)  // 将每个内部List转换为流，然后合并
+    .collect(Collectors.toList());
+
+System.out.println(flattenedList); // 输出: [a, b, c, d, e, f]
 ```
 
