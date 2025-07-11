@@ -387,7 +387,7 @@ public class AsyncOrderFacadeImpl implements AsyncOrderFacade {
 
 **如何实现拦截并返回结果**
 
-因为这个变量和当前处理业务的线程息息相关，我们要么借助本地线程 ThreadLocal 来存储，要么借助处理业务的上下文对象来存储。
+因为 resultInfo 这个变量和当前处理业务的线程息息相关，我们要么借助本地线程 ThreadLocal 来存储，要么借助处理业务的上下文对象来存储。
 
 如果借助本地线程 ThreadLocal 来存储，又会遇到 queryOrderById 所在的线程与 cachedThreadPool 中的线程相互通信的问题。因为 ThreadLocal 存储的内容位于线程私有区域，不同的线程，私有区域是无法相互访问的。
 
