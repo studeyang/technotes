@@ -567,7 +567,7 @@ Dubbo 的异步实现原理，相信你已经非常清楚了，那哪些应用�
 
 在我们日常开发工作中，查日志是很常见一环了。实际开发会涉及很多系统，如果出问题的功能调用流程非常复杂，你可能都不确定找到的日志是不是出问题时的日志，也可能只是找到了出问题时日志体系中的小部分，还可能找到一堆与问题毫无关系的日志。比如下面这个复杂调用关系：
 
-![image-20250305220918569](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503052209682.png)
+![image-20250712231834957](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202507122318165.png)
 
 通过请求中的关键字，我们在 A、B、C、D 系统中找到了相关日志：
 
@@ -627,7 +627,6 @@ public class ReqNoProviderFilter implements Filter {
 ```
 
 ```java
-
 @Activate(group = CONSUMER, order = Integer.MIN_VALUE + 1000)
 public class ReqNoConsumerFilter implements Filter, Filter.Listener {
     public static final String TRACE_ID = "TRACE-ID";
