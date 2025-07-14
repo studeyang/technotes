@@ -90,6 +90,8 @@
   - [Disconf](B类/B20-其他/Disconf.md)
 - **微服务组件**
   - [Dubbo](B类/B21-微服务组件/Dubbo.md)
-  - [Dubbo源码剖析与实战](B类/B21-微服务组件/Dubbo源码剖析与实战.md)
+  - [Dubbo源码剖析与实战](B类/B21-微服务组件/Dubbo源码剖析与实战-01基础&特色篇.md)
+  - [Dubbo源码剖析与实战](B类/B21-微服务组件/Dubbo源码剖析与实战-03源码篇.md)
+  - [Dubbo源码剖析与实战](B类/B21-微服务组件/Dubbo源码剖析与实战-04扩展篇.md)
   - [Netflix-Hystrix](B类/B21-微服务组件/Netflix-Hystrix.md)
 
