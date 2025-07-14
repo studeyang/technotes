@@ -923,10 +923,12 @@ public class CommonController {
 
 在这样的开发过程中，动态编译一般有两种方式：
 
-- 自主编码实现，比如通过Runtime调用javac，或者通过JavaCompile调用run。
-- 调用插件实现，比如使用市面上常用的groovy-all.jar插件。
+- 自主编码实现，比如通过 Runtime 调用 javac，或者通过 JavaCompile 调用 run。
+- 调用插件实现，比如使用市面上常用的 groovy-all.jar 插件。
 
-那接下来该如何发起调用呢？我们整理思绪，设计了一下改造的大致思路：
+那接下来该如何发起调用呢？
+
+Dubbo url 的构成规则和 http 的构成规则如出一辙，那我们通过赋值url为 `dubbo://[机器IP节点]:[机器IP提供Dubbo服务的端口]`，应该就大功告成了。我们整理思绪，设计了一下改造的大致思路：
 
 ![image-20250311230153722](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503112301867.png)
 
@@ -1006,7 +1008,13 @@ public class RepairRequest {
 }
 ```
 
-MonsterFacade代码如下：
+这段代码在Web服务器中完成了页面数据的转发，主要步骤是3点：
+
+- 首先，定义一个MonsterController控制器专门来接收页面的请求。
+- 其次，创建泛化调用所需的referenceConfig对象，并将 url 设置到referenceConfig对象中。
+- 最后，套用之前学过的泛化调用代码，完成页面数据的转发。
+
+有了Web服务器的代码还不够，缺少了最重要的万能管控 MonsterFacade 的核心逻辑：
 
 ```java
 public interface MonsterFacade {
