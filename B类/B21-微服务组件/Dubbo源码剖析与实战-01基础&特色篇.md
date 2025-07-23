@@ -2460,3 +2460,292 @@ public class InvokeAuthFacade {
 
 今天我们探索Dubbo框架的第十道特色风味，配置加载顺序。
 
+我们有这样一个敏感信息系统群，部分系统拓扑图如下：
+
+![image-20250723221952225](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202507232219576.png)
+
+图中有提供方和消费方应用，都从 dubbo2 升级到了 dubbo3 版本，升级后放到测试环境验证了一圈都挺正常的，然而在发布日当晚，刚把系统发布到预发环境，就开始出现了一些消费方调用超时的现象，截取了一段异常日志：
+
+```
+Caused by: org.apache.dubbo.remoting.TimeoutException: Waiting server-side response timeout by scan timer. start time: 2022-11-24 21:36:57.228, end time: 2022-11-24 21:36:58.246, client elapsed: 2 ms, server elapsed: 1016 ms, timeout: 1000 ms, request: Request [id=3, version=2.0.2, twoway=true, event=false, broken=false, data=RpcInvocation [methodName=decrypt, parameterTypes=[class java.lang.String], arguments=[Geek], attachments={path=com.hmilyylimh.cloud.facade.crypto.CryptoFacade, remote.application=dubbo-11-loadcfg-consumer, interface=com.hmilyylimh.cloud.facade.crypto.CryptoFacade, version=0.0.0, timeout=1000}]], channel: /192.168.100.183:49527 -> /192.168.100.183:28110
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture.doReceived(DefaultFuture.java:212)
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture.received(DefaultFuture.java:176)
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture$TimeoutCheckTask.notifyTimeout(DefaultFuture.java:295)
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture$TimeoutCheckTask.lambda$run$0(DefaultFuture.java:282)
+	at org.apache.dubbo.common.threadpool.ThreadlessExecutor$RunnableWrapper.run(ThreadlessExecutor.java:184)
+	at org.apache.dubbo.common.threadpool.ThreadlessExecutor.waitAndDrain(ThreadlessExecutor.java:103)
+	at org.apache.dubbo.rpc.AsyncRpcResult.get(AsyncRpcResult.java:193)
+	... 29 more
+```
+
+我们去扒一下提供方和消费方的代码，看看设置的超时时间：
+
+```java
+///////////////////////////////////////////////////
+// 提供方：应用配置类，用 Java 代码的编写方式代替了以前 XML 编写配置
+///////////////////////////////////////////////////
+@Configuration
+public class LoadCfgProviderConfig {
+    // 提供者的应用服务名称
+    @Bean
+    public ApplicationConfig applicationConfig() {
+        return new ApplicationConfig("dubbo-11-loadcfg-provider");
+    }
+    // 注册中心的地址，通过 address 填写的地址提供方就可以联系上 zk 服务
+    @Bean
+    public RegistryConfig registryConfig() {
+        return new RegistryConfig("zookeeper://127.0.0.1:2181");
+    }
+    // 提供者需要暴露服务的协议，提供者需要暴露服务的端口
+    @Bean
+    public ProtocolConfig protocolConfig() {
+        return new ProtocolConfig("dubbo", 28110);
+    }
+    // 提供者暴露接口的全路径为 com.hmilyylimh.cloud.facade.crypto.CryptoFacade 的服务过程
+    @Bean
+    public ServiceConfig<CryptoFacade> serviceConfigCryptoFacade(
+        CryptoFacade cryptoFacade, ApplicationConfig applicationConfig, RegistryConfig registryConfig) {
+        // 创建服务发布的配置对象，类比于 <dubbo:service/> 标签的效果
+        ServiceConfig<CryptoFacade> serviceConfig = new ServiceConfig<>();
+        // 设置需要暴露接口的全路径，类比于 
+        // <dubbo:service interface="com.hmilyylimh.cloud.facade.crypto.CryptoFacade">
+        // </dubbo:service> 标签中 interface 属性的效果
+        serviceConfig.setInterface(CryptoFacade.class);
+        // 设置需要暴露<dubbo:service ref="cryptoFacade"></dubbo:service> 标签中 ref 属性的效果
+        serviceConfig.setRef(cryptoFacade);
+        // 设置应用名称，类比于 <dubbo:application name="dubbo-11-loadcfg-provider">
+        // </dubbo:application> 标签的效果
+        serviceConfig.setApplication(applicationConfig);
+        // 设置注 <dubbo:registry address="zookeeper://127.0.0.1:2181"></dubbo:registry> 标签的效果
+        serviceConfig.setRegistry(registryConfig);
+        // 设置该 CryptoFacade 接口的默认超时时间为 5000 毫秒
+        serviceConfig.setTimeout(5000);
+
+        // 专门指定 CryptoFacade 中的 decrypt 方法超时时间为 3000 毫秒
+        List<MethodConfig> methods = new ArrayList<>();
+        MethodConfig methodConfig = new MethodConfig();
+        methodConfig.setName("decrypt");
+        methodConfig.setTimeout(3000);
+        methods.add(methodConfig);
+        serviceConfig.setMethods(methods);
+
+        // 最终将 serviceConfig 对象导出服务（暴露服务过程）
+        serviceConfig.export();
+        return serviceConfig;
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方：加解密服务，目前只是实现了解密方法的实现逻辑
+///////////////////////////////////////////////////
+@Component
+@DubboService
+public class CryptoFacadeImpl implements CryptoFacade {
+    @Override
+    public String decrypt(String encryptContent) {
+        // 睡眠 5000 毫秒，模拟解密耗时情况
+        TimeUtils.sleep(5 * 1000);
+        // 象征性的组装一下返回的明文结果
+        String result = String.format("密文为: %s, 解密后的明文为: %s", encryptContent, "PLAIN-" + encryptContent);
+        // 顺便在提供方打印一下返回的结果
+        System.out.println(result);
+        return result;
+    }
+}
+
+///////////////////////////////////////////////////
+// 提供方：应用启动类
+///////////////////////////////////////////////////
+@EnableDubbo
+@SpringBootApplication
+public class Dubbo11LoadcfgProviderApplication {
+    public static void main(String[] args) {
+        // 一行代码搞定 SpringBoot 应用的启动
+        SpringApplication.run(Dubbo11LoadcfgProviderApplication.class, args);
+        // 启动成功后，打印一下日志，方便肉眼可以直观的看到启动成功了
+        System.out.println("【【【【【【 Dubbo11LoadcfgProviderApplication 】】】】】】已启动.");
+    }
+}
+
+///////////////////////////////////////////////////
+// 消费方：应用启动类
+///////////////////////////////////////////////////
+@ImportResource("classpath:dubbo-11-loadcfg-consumer.xml")
+@SpringBootApplication
+public class Dubbo11LoadcfgConsumerApplication {
+    public static void main(String[] args) {
+        // 一行代码搞定 SpringBoot 应用的启动
+        ConfigurableApplicationContext ctx =
+                SpringApplication.run(Dubbo11LoadcfgConsumerApplication.class, args);
+        // 启动成功后，打印一下日志，方便肉眼可以直观的看到启动成功了
+        System.out.println("【【【【【【 Dubbo11LoadcfgConsumerApplication 】】】】】】已启动.");
+        // 然后模拟触发调用一下提供方的加解密服务
+        CryptoFacade cryptoFacade = ctx.getBean(CryptoFacade.class);
+        // 打印解密结果
+        System.out.println(cryptoFacade.decrypt("Geek"));
+    }
+}
+
+///////////////////////////////////////////////////
+// 消费方：应用启动类的 @ImportResource 注解加载的
+// dubbo-11-loadcfg-consumer.xml 配置文件内容
+///////////////////////////////////////////////////
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:dubbo="http://dubbo.apache.org/schema/dubbo"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans        http://www.springframework.org/schema/beans/spring-beans-4.3.xsd        http://dubbo.apache.org/schema/dubbo        http://dubbo.apache.org/schema/dubbo/dubbo.xsd">
+    <!-- 消费者的应用服务名称 -->
+    <dubbo:application name="dubbo-11-loadcfg-consumer"></dubbo:application>
+    <!-- 注册中心的地址，通过 address 填写的地址提供方就可以联系上 zk 服务 -->
+    <dubbo:registry address="zookeeper://127.0.0.1:2181"></dubbo:registry>
+    <!-- 引用加解密服务 -->
+    <dubbo:reference id="cryptoFacade"
+            interface="com.hmilyylimh.cloud.facade.crypto.CryptoFacade"></dubbo:reference>
+</beans>
+```
+
+从异常信息中看到超时时间是 `timeout: 1000 ms`，明明解密系统在暴露接口的时候指定了超时时间是 5000 ms，为什么就没生效呢？
+
+从提供方的暴露接口的代码来看，加解密服务的默认超时时间是 5000 毫秒（第39行），加解密服务中的解密方法设置的是 3000 毫秒（第45行），代码已经细化到方法级别来设置超时时间了，何况消费方也只是升级了 pom 文件的版本号，为什么发布到预发环境就超时了？
+
+**Debug 调试**
+
+我们先来梳理下目前代码的现状：
+
+- 提供方和消费方都升级了 Dubbo 版本号。
+- 提供方为加解密服务明确指定了超时时间，消费方代码也没有指定超时时间。
+- 消费方和提供方都按照未升级之前的老样子进行调用。
+
+既然消费方发生了超时异常，那我们就从刚才这段超时异常开始吧。细看超时异常的调用堆栈：
+
+```
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture.doReceived(DefaultFuture.java:212)
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture.received(DefaultFuture.java:176)
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture$TimeoutCheckTask.notifyTimeout(DefaultFuture.java:295)
+	at org.apache.dubbo.remoting.exchange.support.DefaultFuture$TimeoutCheckTask.lambda$run$0(DefaultFuture.java:282)
+	at org.apache.dubbo.common.threadpool.ThreadlessExecutor$RunnableWrapper.run(ThreadlessExecutor.java:184)
+	at org.apache.dubbo.common.threadpool.ThreadlessExecutor.waitAndDrain(ThreadlessExecutor.java:103)
+	at org.apache.dubbo.rpc.AsyncRpcResult.get(AsyncRpcResult.java:193)
+	... 29 more
+```
+
+乍一看，核心逻辑是在 DefaultFuture 中出现了异常。看 DefaultFuture 的成员变量和一些方法的入参，在 DefaultFuture 的构造方法中发现了成员变量 timeout 的赋值逻辑：
+
+```java
+// DefaultFuture 构造方法
+private DefaultFuture(Channel channel, Request request, int timeout) {
+    // 向外发送数据的通道，比如可以是 NettyClient 操作 netty 来发送数据
+    this.channel = channel;
+    // 该对象包含发送至提供方的所有数据
+    this.request = request;
+    // 能够表示请求对象的唯一ID
+    this.id = request.getId();
+    // 接收构造方法中传入的 timeout 参数值
+    // 如果大于0则直接使用，否则直接从channel的url中获取
+    this.timeout = timeout > 0 ? timeout :
+          channel.getUrl().getPositiveParameter("timeout", 1000);
+    // 构建唯一ID与当前对象的关系，唯一ID与发送数据通道的关系
+    // put into waiting map.
+    FUTURES.put(id, this);
+    CHANNELS.put(id, channel);
+}
+```
+
+构造方法支持 3 个参数的传入，其中一个就是 timeout 超时参数，如果 timeout 大于 0 ，直接使用，否则就从 channel 的 url 获取超时时间。
+
+所以，接下来我们就要弄清楚 DefaultFuture 构造方法入参中的 timeout 是怎么计算出来的？
+
+通过打断点的方式，找到下图中的调用堆栈：
+
+![image-20250723225753559](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202507232257903.png)
+
+最终在 DubboInvoker 的 doInvoke 方法中，你会找到 timeout 参数的局部变量，看图中红框的位置，可以看到该局部变量的值是通过一个 calculateTimeout 方法计算得到的。
+
+**两个可疑点**
+
+我们从 DubboInvoker 中找到了两个引起 timeout 不能正确赋值的可疑点：
+
+1. calculateTimeout 为什么没有得到正确的值？可以怎样得到正确的值呢？
+2. 为什么使用的是新版本的服务发现类进行远程调用呢？
+
+**可疑点一**
+
+先分析可疑点一，首先要进入 calculateTimeout 方法看下具体逻辑，这个方法内部大致的代码调用流程，你可以参考：
+
+![image-20250723230126118](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202507232301432.png)
+
+调用流程整体分为三大块， **先取方法级别的参数，再取服务级别的参数，最后取实例级别的参数**；在每一块的内部 **按照先取消费方，再提供方的顺序读取参数**。
+
+我们来验证一下这个结论，去服务方加解密服务的 @DubboService 注解中修改下：
+
+```java
+@DubboService(timeout = 2800, methods = {@Method(
+        name = "decrypt",
+        timeout = 2400,
+        parameters = {
+                "timeout", "2000"
+        })}
+)
+```
+
+在 @DubboService 注解中，为 decrypt 进行服务级别配置 timeout = 2800，方法级别配置 timeout = 2400，方法级别的参数配置 timeout = 2000。
+
+最终，再启动提供方和消费方，你会看到消费方的超时异常日志中提示目前的超时时间 timeout = 2000。
+
+在 [官网覆盖关系图](https://dubbo.apache.org/imgs/blog/configuration.jpg) 的基础之上，我们看看常用的配置写法，如图：
+
+![image-20250723224521923](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202507232245216.png)
+
+主要有四个层级关系：
+
+- System Properties，最高优先级，我们一般会在启动命令中通过 JVM 的 -D 参数进行指定，图中通过 -D 参数从指定的磁盘路径加载配置，也可以从公共的 NAS 路径加载配置。
+- Externalized Configuration，优先级次之，外部化配置，我们可以直接从统一的配置中心加载配置，图中就是从 Nacos 配置中心加载配置。
+- API / XML / 注解，优先级再次降低，这三种应该是我们开发人员最熟悉不过的配置方式了。
+- Local File，优先级最低，一般是项目中默认的一份基础配置，当什么都不配置的时候会读取。
+
+所以，我们可以尝试在提供方的 resources 资源目录下新增一个 dubbo.properties 文件，配上默认的超时时间为 5000 毫秒：
+
+```java
+# 在提供方工程中的 resources/dubbo.properties 增加默认超时时间
+dubbo.provider.timeout=5000
+```
+
+这样一来提供方就有了自己默认的一套超时时间了，消费方也不会走默认的 1000 毫秒超时逻辑了。
+
+**可疑点二**
+
+为什么使用的是新版本的服务发现类进行远程调用呢？
+
+还记得我们在“ [温故知新](https://time.geekbang.org/column/article/611355)”中在提供方和消费方中都提到过一个概念吗，应用级注册和接口级注册。提供方这边默认情况下，不但会进行应用级注册，还会进行接口级注册；而在消费方这边，有个智能决策的兼容过度方案，优先使用应用级注册信息。
+
+所以，可疑点二这个问题，估计就是因为提供方走进了默认的注册服务策略，消费方那边又恰好采用的是智能决策策略，就变成使用新版本服务发现类进行远程调用了。
+
+说到这，想必你已经想到如何应对了。我们可以在消费方设置只订阅接口级注册：
+
+```java
+# 在消费方工程中的 resources/dubbo.properties 增加只订阅接口级注册
+dubbo.application.service-discovery.migration=FORCE_INTERFACE
+```
+
+也可以在提供方设置只进行接口级注册：
+
+```java
+# 在提供方工程中的 resources/dubbo.properties 增加只进行接口级注册
+dubbo.application.register-mode=interface
+```
+
+这样一来，虽然升级到了 Dubbo3 版本，但其实还是走着 Dubbo2 旧的分支逻辑，这也侧面佐证了 Dubbo3 对 Dubbo2 的向下兼容友好特性。
+
+**不同层级配置的适用场景**
+
+从 Dubbo 框架的四层属性覆盖关系可以看出，一个简单的配置居然有如此之多的配置来源，那它们的应用场景有什么区别么？
+
+System Properties，一般是固定不能被覆盖的参数，这些参数基本上不会变化，由运维人员按照公司的标准化 JVM 启动参数统一控制应用。
+
+Externalized Configuration，一般是偏应用系统层面的公共参数，可以从公共的配置中心读取，这些参数很大程度上也不会经常变化，一旦遇到突发情况或想统一修改公共参数，可以在不改代码的情况下，通过重启或动态加载最新配置。
+
+API / XML / 注解，这种属于开发层面比较个性化的配置方式了，主要是因为实际开发的项目中，不同的功能，需要根据实际情况合理配置不同的参数。
+
+Local File，这种属于兜底级别了，如果其他层级都没有配置的话，至少还有个当前系统全局默认的兜底配置。
+
