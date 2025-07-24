@@ -6,6 +6,8 @@
 
 **模块流程图**
 
+讲到Dubbo框架在代码层面是如何分层搭建的，逃不开官方提供的 [Dubbo 官网的整体设计图](https://dubbo.apache.org/imgs/dev/dubbo-framework.jpg)。
+
 ![image-20250320224933167](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202503202249814.png)
 
 这10个模块各自的作用是什么，之间又有着怎样的联系？今天，我们将会从消费方发起一次调用开始，尝试把这十个模块串联起来，看看在调用过程中一步步会涉及哪些模块。
