@@ -254,7 +254,7 @@ public class DubboFeignScanner extends ClassPathBeanDefinitionScanner {
 public class DubboFeignScanner extends ClassPathBeanDefinitionScanner {
     // ...省略部分同上代码
     
-// 重写父类中“是否是候选组件”的方法，即我们认为哪些扫描到的类可以是候选类
+    // 重写父类中“是否是候选组件”的方法，即我们认为哪些扫描到的类可以是候选类
     @Override
     protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
         AnnotationMetadata metadata = beanDefinition.getMetadata();
@@ -262,8 +262,7 @@ public class DubboFeignScanner extends ClassPathBeanDefinitionScanner {
             return false;
         }
         // 针对扫描到的类，然后看看扫描到的类中是否有 DubboFeignClient 注解信息
-        Map<String, Object> attributes = metadata
-        .getAnnotationAttributes(DubboFeignClient.class.getName());
+        Map<String, Object> attributes = metadata.getAnnotationAttributes(DubboFeignClient.class.getName());
         // 若扫描到的类上没有 DubboFeignClient 注解信息则认为不是认可的类
         if (attributes == null) {
             return false;
@@ -328,7 +327,7 @@ public class DubboClientFactoryBean<T> implements FactoryBean<T>, ApplicationCon
 }
 ```
 
-代码中 getObject 是我们创建代理对象的核心过程，细心的你可能会发现我们还创建了一个 DubboClientProxy 对象，这个对象放在 `java.lang.reflect.Proxy#newProxyInstance(java.lang.ClassLoader, java.lang.Class<?>[], **java.lang.reflect.InvocationHandler**)` 方法中的第三个参数。
+代码中 getObject 是我们创建代理对象的核心过程，细心的你可能会发现我们还创建了一个 DubboClientProxy 对象，这个对象放在 `java.lang.reflect.Proxy#newProxyInstance(java.lang.ClassLoader, java.lang.Class<?>[], java.lang.reflect.InvocationHandler)` 方法中的第三个参数。
 
 这意味着，将来含有 @DubboFeignClient 注解的类的方法被调用时，一定会触发调用 DubboClientProxy 类，也就说我们可以在 DubboClientProxy 类拦截方法，这正是我们梦寐以求的核心拦截方法的地方。
 
@@ -361,7 +360,7 @@ public class DubboClientProxy<T> implements InvocationHandler, Serializable {
 
 这下是真正做到了用一套代码解决了所有 integration 层接口的远程调用，简化了重复代码开发的劳动力成本，而且也使代码的编写更加简洁美观。
 
-> 这样一看，多写一些下游转发代码其实也没什么
+> 这样一看，多写一些下游转发代码其实也没什么。
 
 # 14｜SPI机制：Dubbo的SPI比JDK的SPI好在哪里？
 
@@ -369,7 +368,7 @@ public class DubboClientProxy<T> implements InvocationHandler, Serializable {
 
 SPI，英文全称是Service Provider Interface，按每个单词翻译就是：服务提供接口。
 
-**SPI是怎么来的**
+**SPI是怎么来的？**
 
 我们结合具体的应用场景来思考：
 
