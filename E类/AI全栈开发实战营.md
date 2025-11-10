@@ -1,0 +1,128 @@
+# ==前置篇AI 通识基础与核心技术==
+
+# 第一章 机器学习与深度学习理论基础
+
+- 机器学习基础
+  - 监督学习：定义、典型算法（线性回归、逻辑回归、SVM、决策树、随机森林）、应用场景（图像分类、文本分类、回归预测）
+  - 非监督学习：定义、典型算法（K-means聚类、层次聚类、PCA、自编码器）、应用场景（用户分群、异常检测、数据降维）
+  - 半监督学习：结合少量标注数据和大量未标注数据，提升模型性能
+- 神经网络与深度学习基础
+  - 神经元与激活函数：输入、权重、偏置、激活函数（ReLU、Sigmoid、Tanh）
+  - 前向传播与反向传播：计算输出、通过梯度下降优化权重
+  - 损失函数与优化器：均方误差（MSE）、交叉熵（Cross-Entropy）、SGD、Adam、RMSprop
+  - 经典网络结构：全连接网络（FCN）、卷积神经网络（CNN）、循环神经网络（RNN）
+  - 深度学习框架：PyTorch、TensorFlow、JAX
+
+# 第二章 大模型发展全景与关键技术
+
+- Transformer架构的诞生与应用
+  - 注意力模型（Attention Model）：捕捉长距离依赖
+  - 自注意力机制（Self-Attention）：语义理解的钥匙
+  - 多头注意力（Multi-Head Attention）：并行计算不同子空间的特征
+  - 位置编码（Positional Encoding）：引入序列位置信息
+- 大模型技术突破与前沿趋势
+  - 大模型的定义与特点
+  - 传统模型与大模型的差异
+  - 稀疏注意力（Sparse Attention）：降低计算复杂度（Longformer、BigBird）
+  - 混合专家模型（MoE）：动态路由机制（GShard、Switch Transformer）
+  - 模型压缩与加速：量化（INT8、FP16）、知识蒸馏（小模型学习大模型的知识）
+
+# ==DeepSeek 篇大模型应用与 Agent 开发入门==
+
+# 三 DeepSeek 现状、应用与技术创新
+
+- DeepSeek 国运级爆火的现象与本质
+  - DeepSeek 为什么火？
+  - DeepSeek 是什么？
+  - DeepSeek 还能火多久？
+- DeepSeek 应用快速入门
+  - DeepSeek 提示工程核心原则与技巧
+  - DeepSeek 文案生成和迭代实践
+  - DeepSeek 代码生成和测试实践
+- DeepSeek 等前沿大模型技术发展现状
+  - 中美在大模型领域的技术与政策对比
+  - 潜在的合作与竞争格局
+- DeepSeek 里程碑模型与关键技术
+  - DeepSeek V1：重新定义 Scaling Laws 与超参数幂律关系公式
+  - DeepSeek V2：提出多头潜在注意力机制（MLA） 与 DeepSeekMoE 架构
+  - DeepSeek-VL2: 首个多模态大模型，多种尺寸适用于不同资源下的应用场景
+  - DeepSeek V3：无辅助损失策略与多 Token 预测实现超低成本训练
+- DeepSeek-R1 开启推理大模型新篇章
+  - 一阶段训练：RL 自进化成果 DeepSeek-R1-Zero
+  - 二阶段训练：RL 与 SFT 共舞诞生 DeepSeek-R1
+  - 三阶段训练：推理能力蒸馏（Distill）迁移至小模型
+  - 成功经验：纯 RL 与冷启动数据 推动性能螺旋上升
+  - 失败尝试：过程奖励模型（RPM）与蒙特卡洛树搜索（MCTS）
+
+# 四 使用 DeepSeek 开发你的第一个 RAG
+
+- DeepSeek API 开发平台
+  - DeepSeek 官方发布 API 服务
+  - 硅基流动（联合华为云）API 服务
+  - 腾讯云 API 服务
+  - 阿里云百炼 API 服务
+  - 字节火山方舟 API 服务
+  - DeepSeek 应用开发环境搭建与实战
+- 向量数据库：原理、架构与选型
+  - 向量数据库基本原理
+  - 向量数据库架构
+  - 向量数据库的选型与对比
+  - 向量数据库存储与检索嵌入实践
+- 检索增强生成（RAG, Retrieval Augmented Generation）介绍
+  - RAG 系统架构与工作流程
+  - RAG 在信息检索与生成任务中的优势
+  - RAG 的实践应用与案例分析
+- 实战：使用 DeepSeek API 开发智能问答系统
+
+# 五 使用 DeepSeek 开发小红书爆款文案生成助手
+
+- Agent 理论基础与开发入门
+  - Agent 基本概念与工作机制
+  - LLM + Agent 的核心能力与优势
+  - Agent 开发流程与关键模块解析
+- DeepSeek Agent 开发入门与案例分析
+  - DeepSeek 工具调用入门
+  - DeepSeek Prompt 设计策略方法
+  - DeepSeek Agent 真实应用案例解析
+- 实战：使用 DeepSeek 开发小红书爆款文案生成助手
+  - 需求拆解与 Agent 任务规划
+  - 爆款文案生成逻辑与 Prompt 设计
+  - 文案生成策略与评估优化
+
+# 六 DeepSeek 私有化部署与最佳实践
+
+- 私有化部署的概念与需求分析
+  - 私有化部署的定义与核心价值
+  - 适用场景：金融、医疗、政府等高隐私要求行业
+  - 私有化部署的优势：数据隔离、定制化服务、性能优化
+- 大模型私有化部署技术选型
+  - 私有化部署技术栈：构建你自己的 AI 工厂
+  - 选型建议：基础设施、容器、推理服务、容器编排、应用接口
+  - 关于行业标准的探讨：从云原生到智能体
+- 实战：基于 Ollama 的 DeepSeek 私有化部署
+  - 大模型私有化部署工具：Ollama
+  - 基于华为云 GPU 服务器部署 DeepSeek
+- 实战：私有化部署的小红书爆款文案生成助手
+
+# ==Dify 篇基于工作流编排的 Agent 设计与开发==
+
+# ==协议篇：MCP & A2A 快速入门与实战==
+
+# ==FastGPT 篇企业级知识库设计与 RAG 进阶开发==
+
+# ==企业篇应用数据安全与行业经验推广==
+
+# ==模型篇知识驱动与推理驱动的大模型竞争格局==
+
+# ==训练篇DeepSeek 模型微调与蒸馏==
+
+
+
+
+
+
+
+
+
+
+
