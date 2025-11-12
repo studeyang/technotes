@@ -1,0 +1,3 @@
+课程 GitHub 链接： https://github.com/DjangoPeng/deepseek-quickstart
+
+访问 GitHub 不方便的同学可使用 Gitee 链接： https://gitee.com/geektime-geekbang_admin/deepseek-quickstart
