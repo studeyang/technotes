@@ -35,17 +35,20 @@
 
 # 第二章 大模型发展全景与关键技术
 
-- Transformer架构的诞生与应用
-  - 注意力模型（Attention Model）：捕捉长距离依赖
-  - 自注意力机制（Self-Attention）：语义理解的钥匙
-  - 多头注意力（Multi-Head Attention）：并行计算不同子空间的特征
-  - 位置编码（Positional Encoding）：引入序列位置信息
-- 大模型技术突破与前沿趋势
-  - 大模型的定义与特点
-  - 传统模型与大模型的差异
-  - 稀疏注意力（Sparse Attention）：降低计算复杂度（Longformer、BigBird）
-  - 混合专家模型（MoE）：动态路由机制（GShard、Switch Transformer）
-  - 模型压缩与加速：量化（INT8、FP16）、知识蒸馏（小模型学习大模型的知识）
+1、Transformer架构的诞生与应用
+
+- 注意力模型（Attention Model）：捕捉长距离依赖
+- 自注意力机制（Self-Attention）：语义理解的钥匙
+- 多头注意力（Multi-Head Attention）：并行计算不同子空间的特征
+- 位置编码（Positional Encoding）：引入序列位置信息
+
+2、大模型技术突破与前沿趋势
+
+- 大模型的定义与特点
+- 传统模型与大模型的差异
+- 稀疏注意力（Sparse Attention）：降低计算复杂度（Longformer、BigBird）
+- 混合专家模型（MoE）：动态路由机制（GShard、Switch Transformer）
+- 模型压缩与加速：量化（INT8、FP16）、知识蒸馏（小模型学习大模型的知识）
 
 # ==DeepSeek 篇大模型应用与 Agent 开发入门==
 
@@ -76,23 +79,22 @@
 
 # 四 使用 DeepSeek 开发你的第一个 RAG
 
-- DeepSeek API 开发平台
-  - DeepSeek 官方发布 API 服务
-  - 硅基流动（联合华为云）API 服务
-  - 腾讯云 API 服务
-  - 阿里云百炼 API 服务
-  - 字节火山方舟 API 服务
-  - DeepSeek 应用开发环境搭建与实战
-- 向量数据库：原理、架构与选型
-  - 向量数据库基本原理
-  - 向量数据库架构
-  - 向量数据库的选型与对比
-  - 向量数据库存储与检索嵌入实践
-- 检索增强生成（RAG, Retrieval Augmented Generation）介绍
-  - RAG 系统架构与工作流程
-  - RAG 在信息检索与生成任务中的优势
-  - RAG 的实践应用与案例分析
-- 实战：使用 DeepSeek API 开发智能问答系统
+1、DeepSeek应用开发入门
+
+- DeepSeek API官方与第三方平台介绍
+- DeepSeek应用开发环境搭建与实战
+
+2、向量数据库快速入门与实践向量数据库基本原理与架构
+
+- 向量数据库的选型与对比
+- 向量数据库存储与检索嵌入实践
+- 检索增强生成（RAG）快速入门与实践
+- RAG 系统架构与工作流程
+
+3、RAG 在信息检索与生成任务中的优势
+
+- RAG 的实践应用与案例分析
+- 实战：使用DeepSeekAPI 开发智能问答系统
 
 # 五 使用 DeepSeek 开发小红书爆款文案生成助手
 
