@@ -89,12 +89,21 @@
 - [v] 向量数据库的选型与对比
 - [v] 向量数据库存储与检索嵌入实践
 - [v] 检索增强生成（RAG）快速入门与实践
+
+RAG是什么？（Retrieval Augmented Generation）
+
 - [v] RAG 系统架构与工作流程
 
 3、RAG 在信息检索与生成任务中的优势
 
 - [v] RAG 的实践应用与案例分析
-- [v] 实战：使用DeepSeekAPI 开发智能问答系统
+- [v] 实战：使用 DeepSeekAPI 开发智能问答系统
+
+```
+1、将数据加载到 Milvus；
+2、提问：How is data stored in milvus?
+3、查询 Milvus，并向 LLM 提问；
+```
 
 # 五 使用 DeepSeek 开发小红书爆款文案生成助手
 
