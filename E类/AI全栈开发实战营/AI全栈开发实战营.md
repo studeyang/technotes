@@ -111,52 +111,62 @@
 
 # 五 使用 DeepSeek 开发小红书爆款文案生成助手
 
-- Agent 理论基础与开发入门
+**Agent 理论基础与开发入门**
 
-  - Agent 基本概念与工作机制
+- Agent 基本概念与工作机制
 
-    ```
-    Agent特点：
-    - 自主性：根据设定的目标和当前环境，自主做出决策；
-    - 感知：感知其所处的环境；
-    - 行动：
-    - 目标导向：
-    ```
+  ```
+  Agent特点：
+  - 自主性：根据设定的目标和当前环境，自主做出决策；
+  - 感知：感知其所处的环境；
+  - 行动：
+  - 目标导向：
+  ```
 
-  - LLM + Agent 的核心能力与优势
+- LLM + Agent 的核心能力与优势
 
-    ```
-    Agent核心能力：
-    - 规划
-    - 记忆
-    - 工具
-    - 执行
-    ```
+  ```
+  Agent核心能力：
+  - 规划
+  - 记忆
+  - 工具
+  - 执行
+  ```
 
-  - Agent 开发流程与关键模块解析
+- Agent 开发流程与关键模块解析
 
-    ```
-    Agent开发流程：
-    - 定义目标
-    - 选择核心LLM
-    - 设计Agent架构
-    - 工具开发与集成
-    - 提示工程
-    - 记忆机制
-    - 测试、评估与迭代
-    ```
+  ```
+  Agent开发流程：
+  - 定义目标
+  - 选择核心LLM
+  - 设计Agent架构
+  - 工具开发与集成
+  - 提示工程
+  - 记忆机制
+  - 测试、评估与迭代
+  ```
 
-- DeepSeek Agent 开发入门与案例分析
+**DeepSeek Agent 开发入门与案例分析**
 
-  - DeepSeek 工具调用入门
-  - DeepSeek Prompt 设计策略方法
-  - DeepSeek Agent 真实应用案例解析
+- DeepSeek 工具调用入门
 
-- 实战：使用 DeepSeek 开发小红书爆款文案生成助手
+- DeepSeek Prompt 设计策略方法
 
-  - 需求拆解与 Agent 任务规划
-  - 爆款文案生成逻辑与 Prompt 设计
-  - 文案生成策略与评估优化
+  ```
+  DeepSeek Prompt 的核⼼构成：
+  - System Prompt (⻆⾊与全局设定)
+  - User Prompt (任务指令)
+  - Tool Description (⼯具描述)
+  - Few-shot Examples (示例引导)
+  ```
+
+- DeepSeek Agent 真实应用案例解析
+
+**实战：使用 DeepSeek 开发小红书爆款文案生成助手**
+
+- 需求拆解与 Agent 任务规划
+- 爆款文案生成逻辑与 Prompt 设计
+- 文案生成策略与评估优化
 
 # 六 DeepSeek 私有化部署与最佳实践
 
