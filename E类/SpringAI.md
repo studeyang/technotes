@@ -119,15 +119,291 @@ RAG 的下一阶段是处理用户输入。当需要 AI 模型回答用户问题
 5. 应用程序将工具调用的结果返回给模型。
 6. 模型利用工具调用结果作为额外上下文生成最终响应。
 
-
-
-
-
-
-
 # 二、入门
+
+## 1.1 配置组件仓库
+
+将以下 Repository 定义添加到 Maven 或 Gradle 构建文件中：
+
+```xml
+<repositories>
+  <repository>
+    <id>spring-snapshots</id>
+    <name>Spring Snapshots</name>
+    <url>https://repo.spring.io/snapshot</url>
+    <releases>
+      <enabled>false</enabled>
+    </releases>
+  </repository>
+  <repository>
+    <name>Central Portal Snapshots</name>
+    <id>central-portal-snapshots</id>
+    <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+    <releases>
+      <enabled>false</enabled>
+    </releases>
+    <snapshots>
+      <enabled>true</enabled>
+    </snapshots>
+  </repository>
+</repositories>
+```
+
+**NOTE:** 使用 Maven 构建 Spring AI 快照版本时，请特别注意镜像配置。若你的 `settings.xml` 文件中配置了如下镜像：
+
+```xml
+<mirror>
+    <id>my-mirror</id>
+    <mirrorOf>*</mirrorOf>
+    <url>https://my-company-repository.com/maven</url>
+</mirror>
+```
+
+通配符 `*` 会将所有仓库请求重定向至镜像，导致无法访问 Spring 快照仓库。需修改 `mirrorOf` 配置排除 Spring 仓库：
+
+```xml
+<mirror>
+    <id>my-mirror</id>
+    <mirrorOf>*,!spring-snapshots,!central-portal-snapshots</mirrorOf>
+    <url>https://my-company-repository.com/maven</url>
+</mirror>
+```
+
+此配置允许 Maven 直接访问 Spring 快照仓库，同时其他依赖仍通过镜像获取。
+
+## 1.2 依赖管理
+
+Spring AI 物料清单（BOM）声明了指定版本所有依赖的推荐版本。你可使用 Spring Boot Parent POM 或 Spring Boot 的 BOM（spring-boot-dependencies）来管理 Spring Boot 版本。
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-bom</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
 
 # 三、Reference
 
+## 3.1 聊天客户端 API
+
+`ChatClient` 通过 Fluent API 与 AI 模型交互，同时支持同步和流式编程模型。
+
+### 1、创建 ChatClient
+
+**使用自动配置的 ChatClient.Builder**
+
+以下是获取用户简单请求 `String` 响应的基础示例：
+
+```java
+@RestController
+class MyController {
+
+    private final ChatClient chatClient;
+
+    public MyController(ChatClient.Builder chatClientBuilder) {
+        this.chatClient = chatClientBuilder.build();
+    }
+
+    @GetMapping("/ai")
+    String generation(String userInput) {
+        return this.chatClient.prompt()
+            .user(userInput)
+            .call()
+            .content();
+    }
+}
+```
+
+此示例中，`userInput` 为用户消息内容。`call()` 方法向 AI 模型发送请求， `content()` 方法以 `String` 形式返回模型响应。
+
+**多聊天模型协作**
+
+Spring AI 默认自动配置单个 `ChatClient.Builder` Bean，但应用中可能需要使用多个聊天模型。处理方法如下：
+
+所有场景均需通过设置属性 `spring.ai.chat.client.enabled=false` 来禁用 `ChatClient.Builder` 自动配置。该设置允许手动创建多个 `ChatClient` 实例。
+
+- 单一模型类型下的多ChatClient实例
+
+```java
+// 以编程式创建 ChatClient实例
+ChatModel myChatModel = ... // 已由Spring Boot自动配置完成
+ChatClient chatClient = ChatClient.create(myChatModel);
+
+// 或使用 Builder 实现更精细控制
+ChatClient.Builder builder = ChatClient.builder(myChatModel);
+ChatClient customChatClient = builder
+    .defaultSystemPrompt("You are a helpful assistant.")
+    .build();
+```
+
+- 不同模型类型的 ChatClient 配置
+
+```java
+// 使用多 AI 模型时，可为每个模型定义独立的 ChatClient Bean：
+@Configuration
+public class ChatClientConfig {
+
+    @Bean
+    public ChatClient openAiChatClient(OpenAiChatModel chatModel) {
+        return ChatClient.create(chatModel);
+    }
+
+    @Bean
+    public ChatClient anthropicChatClient(AnthropicChatModel chatModel) {
+        return ChatClient.create(chatModel);
+    }
+}
+
+// 随后可通过 @Qualifier 注解将这些 Bean 注入应用组件：
+@Configuration
+public class ChatClientExample {
+
+    @Bean
+    CommandLineRunner cli(
+            @Qualifier("openAiChatClient") ChatClient openAiChatClient,
+            @Qualifier("anthropicChatClient") ChatClient anthropicChatClient) {
+
+        return args -> {
+            var scanner = new Scanner(System.in);
+            ChatClient chat;
+
+            // Model selection
+            System.out.println("\nSelect your AI model:");
+            System.out.println("1. OpenAI");
+            System.out.println("2. Anthropic");
+            System.out.print("Enter your choice (1 or 2): ");
+
+            String choice = scanner.nextLine().trim();
+
+            if (choice.equals("1")) {
+                chat = openAiChatClient;
+                System.out.println("Using OpenAI model");
+            } else {
+                chat = anthropicChatClient;
+                System.out.println("Using Anthropic model");
+            }
+
+            // Use the selected chat client
+            System.out.print("\nEnter your question: ");
+            String input = scanner.nextLine();
+            String response = chat.prompt(input).call().content();
+            System.out.println("ASSISTANT: " + response);
+
+            scanner.close();
+        };
+    }
+}
+```
+
+- 多 OpenAI 兼容 API 端点
+
+```java
+// OpenAiApi 与 OpenAiChatModel 类提供的 mutate() 方法，支持基于现有实例创建不同属性的变体，特别适用于需对接多个 OpenAI 兼容 API 的场景。
+@Service
+public class MultiModelService {
+
+    private static final Logger logger = LoggerFactory.getLogger(MultiModelService.class);
+
+    @Autowired
+    private OpenAiChatModel baseChatModel;
+
+    @Autowired
+    private OpenAiApi baseOpenAiApi;
+
+    public void multiClientFlow() {
+        try {
+            // Derive a new OpenAiApi for Groq (Llama3)
+            OpenAiApi groqApi = baseOpenAiApi.mutate()
+                .baseUrl("https://api.groq.com/openai")
+                .apiKey(System.getenv("GROQ_API_KEY"))
+                .build();
+
+            // Derive a new OpenAiApi for OpenAI GPT-4
+            OpenAiApi gpt4Api = baseOpenAiApi.mutate()
+                .baseUrl("https://api.openai.com")
+                .apiKey(System.getenv("OPENAI_API_KEY"))
+                .build();
+
+            // Derive a new OpenAiChatModel for Groq
+            OpenAiChatModel groqModel = baseChatModel.mutate()
+                .openAiApi(groqApi)
+                .defaultOptions(OpenAiChatOptions.builder().model("llama3-70b-8192").temperature(0.5).build())
+                .build();
+
+            // Derive a new OpenAiChatModel for GPT-4
+            OpenAiChatModel gpt4Model = baseChatModel.mutate()
+                .openAiApi(gpt4Api)
+                .defaultOptions(OpenAiChatOptions.builder().model("gpt-4").temperature(0.7).build())
+                .build();
+
+            // Simple prompt for both models
+            String prompt = "What is the capital of France?";
+
+            String groqResponse = ChatClient.builder(groqModel).build().prompt(prompt).call().content();
+            String gpt4Response = ChatClient.builder(gpt4Model).build().prompt(prompt).call().content();
+
+            logger.info("Groq (Llama3) response: {}", groqResponse);
+            logger.info("OpenAI GPT-4 response: {}", gpt4Response);
+        }
+        catch (Exception e) {
+            logger.error("Error in multi-client flow", e);
+        }
+    }
+}
+```
+
+`ChatClient` Fluent 式 API 通过重载 `prompt` 方法提供三种提示词创建方式：
+
+- `prompt()`：无参方法启动 Fluent 式API，支持逐步构建用户消息、系统消息等提示词组件。
+- `prompt(Prompt prompt)`：接收 `Prompt` 参数，支持通过非 Fluent 式 API 构建的 Prompt 实例。
+- `prompt(String content)`：便捷方法，接收用户文本内容，功能类似前项重载。
+
+### 2、ChatClient 响应
+
+
+
+
+
+## 3.2 提示（Prompt）
+
+## 3.3 结构化输出
+
+## 3.4 多模态
+
+## 3.5 模型
+
+## 3.6 聊天记忆
+
+## 3.7 工具调用
+
+## 3.8 模型上下文协议（MCP）
+
+## 3.9 检索增强生成（RAG）
+
+## 3.10 模型评估
+
+## 3.11 向量数据库
+
+## 3.12 可观测性
+
+## 3.13 Development-time Services
+
+## 3.14 Testing
+
+
+
+
+
+
+
 # 四、Guides
+
+
 
