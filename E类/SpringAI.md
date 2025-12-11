@@ -367,11 +367,233 @@ public class MultiModelService {
 
 ### 2、ChatClient 响应
 
+- 返回 ChatResponse
 
+```java
+ChatResponse chatResponse = chatClient.prompt()
+    .user("Tell me a joke")
+    .call()
+    .chatResponse();
+```
 
+- 返回实体
 
+```java
+// 例如，给定一个 Java record
+record ActorFilms(String actor, List<String> movies) {}
+
+// 通过 entity() 方法可轻松将 AI 模型输出映射至该 record 类
+ActorFilms actorFilms = chatClient.prompt()
+    .user("Generate the filmography for a random actor.")
+    .call()
+    .entity(ActorFilms.class);
+
+// 支持泛型集合等复杂类型指定
+List<ActorFilms> actorFilms = chatClient.prompt()
+    .user("Generate the filmography of 5 movies for Tom Hanks and Bill Murray.")
+    .call()
+    .entity(new ParameterizedTypeReference<List<ActorFilms>>() {});
+```
+
+- 流式响应
+
+```java
+// stream() 方法支持异步获取响应
+Flux<String> output = chatClient.prompt()
+    .user("Tell me a joke")
+    .stream()
+    .content();
+```
+
+### 3、提示模版
+
+`ChatClient` Fuent 式 API 支持提供含变量的用户/系统消息模板，运行时进行替换。
+
+```java
+String answer = ChatClient.create(chatModel).prompt()
+    .user(u -> u
+            .text("Tell me the names of 5 movies whose soundtrack was composed by {composer}")
+            .param("composer", "John Williams"))
+    .call()
+    .content();
+```
+
+默认模板变量采用 `{}` 语法。若提示词中包含 JSON，建议改用 `<>` 等分隔符避免冲突。
+
+```java
+String answer = ChatClient.create(chatModel).prompt()
+    .user(u -> u
+            .text("Tell me the names of 5 movies whose soundtrack was composed by <composer>")
+            .param("composer", "John Williams"))
+    .templateRenderer(StTemplateRenderer.builder().startDelimiterToken('<').endDelimiterToken('>').build())
+    .call()
+    .content();
+```
+
+如需改用其他模板引擎，可直接向 `ChatClient` 提供 `TemplateRenderer` 接口的自定义实现。
+
+### 4、使用默认值
+
+- 默认的系统消息
+
+在 `@Configuration` 类中为 `ChatClient` 配置默认 `system`（系统）消息可简化运行时代码。预设默认值后，调用时仅需指定 `user` 消息，无需每次请求重复设置系统消息。
+
+```java
+// 将系统消息配置为始终以海盗口吻回复
+@Configuration
+class Config {
+
+    @Bean
+    ChatClient chatClient(ChatClient.Builder builder) {
+        return builder.defaultSystem("You are a friendly chat bot that answers question in the voice of a Pirate")
+                .build();
+    }
+
+}
+
+// 通过 @RestController 调用
+@RestController
+class AIController {
+
+	private final ChatClient chatClient;
+
+	AIController(ChatClient chatClient) {
+		this.chatClient = chatClient;
+	}
+
+	@GetMapping("/ai/simple")
+	public Map<String, String> completion(@RequestParam(value = "message", defaultValue = "Tell me a joke") String message) {
+		return Map.of("completion", this.chatClient.prompt().user(message).call().content());
+	}
+}
+```
+
+- 带参数的默认系统消息
+
+```java
+// 以下示例将在系统消息中使用占位符，以便在运行时（而非设计时）指定回复语气。
+@Configuration
+class Config {
+
+    @Bean
+    ChatClient chatClient(ChatClient.Builder builder) {
+        return builder.defaultSystem("You are a friendly chat bot that answers question in the voice of a {voice}")
+                .build();
+    }
+
+}
+
+@RestController
+class AIController {
+	private final ChatClient chatClient;
+
+	AIController(ChatClient chatClient) {
+		this.chatClient = chatClient;
+	}
+
+	@GetMapping("/ai")
+	Map<String, String> completion(@RequestParam(value = "message", defaultValue = "Tell me a joke") String message, String voice) {
+		return Map.of("completion",
+				this.chatClient.prompt()
+						.system(sp -> sp.param("voice", voice))
+						.user(message)
+						.call()
+						.content());
+	}
+
+}
+```
+
+### 5、Advisor
+
+[Advisor API](https://springdoc.cn/spring-ai/api/advisors.html) 为 Spring 应用中的 AI 驱动交互提供灵活强大的拦截、修改和增强能力。
+
+- ChatClient 中的 Advisor 配置
+
+```java
+// ChatClient Fluent 式 API 提供 AdvisorSpec 接口用于配置 Advisor
+interface AdvisorSpec {
+    AdvisorSpec param(String k, Object v);
+    AdvisorSpec params(Map<String, Object> p);
+    AdvisorSpec advisors(Advisor... advisors);
+    AdvisorSpec advisors(List<Advisor> advisors);
+}
+
+// Advisor 加入链的顺序至关重要，每个 Advisor 都会以某种方式修改提示词或上下文，更改后会传递给链中的下一个 Advisor
+ChatClient.builder(chatModel)
+    .build()
+    .prompt()
+    .advisors(
+        MessageChatMemoryAdvisor.builder(chatMemory).build(),
+        QuestionAnswerAdvisor.builder(vectorStore).build()
+    )
+    .user(userText)
+    .call()
+    .content();
+```
+
+在此配置中，`MessageChatMemoryAdvisor` 将首先执行，将对话历史添加到提示词中。随后，`QuestionAnswerAdvisor` 将基于用户问题和添加的对话历史执行搜索，可能提供更相关的结果。
+
+- 检索增强生成
+
+请参阅 [R检索增强生成指南](https://springdoc.cn/spring-ai/api/retrieval-augmented-generation.html)。
+
+- 日志
+
+`SimpleLoggerAdvisor` 是一个记录 `ChatClient` 请求和响应数据的 Advisor，可用于调试和监控 AI 交互。
+
+```java
+// 启用日志记录需在创建 ChatClient 时向 Advisor 链添加 SimpleLoggerAdvisor，建议将其添加至链的末端
+ChatResponse response = ChatClient.create(chatModel).prompt()
+        .advisors(new SimpleLoggerAdvisor())
+        .user("Tell me a joke?")
+        .call()
+        .chatResponse();
+```
+
+要查看日志，请将 `advisor` 包的日志级别设为 `DEBUG`，将此配置添加到 `application.properties` 或 `application.yaml` 文件中。
+
+```properties
+logging.level.org.springframework.ai.chat.client.advisor=DEBUG
+```
+
+可通过以下构造函数自定义 `AdvisedRequest` 和 `ChatResponse` 的日志记录内容：
+
+```java
+SimpleLoggerAdvisor(
+    Function<AdvisedRequest, String> requestToString,
+    Function<ChatResponse, String> responseToString
+)
+
+// 示例用法：
+SimpleLoggerAdvisor customLogger = new SimpleLoggerAdvisor(
+    request -> "Custom request: " + request.userText,
+    response -> "Custom response: " + response.getResult()
+);
+```
+
+### 6、聊天记忆
+
+`ChatMemory` 接口定义了聊天对话记忆的存储机制，提供添加消息、检索消息及清空对话历史的方法。
+
+当前内置实现为：`MessageWindowChatMemory`。
+
+`MessageWindowChatMemory` 是聊天记忆实现，维护最多指定数量（默认 20 条）的消息窗口。当消息超出限制时，旧消息会被移除（系统消息除外）。若添加新系统消息，则清除所有旧系统消息，确保始终保留最新上下文的同时控制内存占用。
+
+`MessageWindowChatMemory` 基于 `ChatMemoryRepository` 抽象层实现，该抽象层提供多种聊天记忆存储方案，包括：
+
+- `InMemoryChatMemoryRepository`（内存存储）
+- `JdbcChatMemoryRepository`（JDBC 关系型数据库存储）
+- `CassandraChatMemoryRepository`（Cassandra 存储）
+- `Neo4jChatMemoryRepository`（Neo4j 图数据库存储）
+
+详见 [聊天记忆功能](https://springdoc.cn/spring-ai/api/chat-memory.html) 文档获取详细说明和使用示例。
 
 ## 3.2 提示（Prompt）
+
+
+
+
 
 ## 3.3 结构化输出
 
