@@ -36,20 +36,6 @@ Spring AI 提供了以下功能：
 
 Spring AI 目前支持处理语言、图像和音频输入和输出的模型。上表中的最后一行接受文本作为输入并输出数字，通常被称为嵌入文本（**Embedding Text**），代表人工智能模型中使用的内部数据结构。
 
-**Prompt（提示）**
-
-提示（Prompt）是引导人工智能模型产生特定输出的语言输入的基础。
-
-ChatGPT 专为人类对话而设计，由于这种交互方式的重要性，“Prompt Engineering（提示工程）” 一词已成为一门独立的学科。提高提示有效性的技术层出不穷。在制作提示语方面投入时间，可以大大提高结果输出。
-
-例如，一个简单的提示词模板如下：
-
-```
-Tell me a {adjective} joke about {content}.
-```
-
-在 Spring AI 中，提示词模板可类比 Spring MVC 架构中的 “View” 层。系统会提供一个模型对象（通常是 `java.util.Map`）来填充模板中的占位符，最终 “渲染” 生成的字符串将作为传递给 AI 模型的提示内容。
-
 **Embedding（嵌入）**
 
 嵌入是将文本、图像或视频转化为数值表示的技术，能够捕捉输入数据之间的关联性。
@@ -57,14 +43,6 @@ Tell me a {adjective} joke about {content}.
 通过计算两段文本向量表示之间的数值距离，应用程序即可判定原始对象在嵌入向量空间中的相似程度。
 
 ![Embedding（嵌入）](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082308459.jpg)
-
-**Token**
-
-令牌（Token）是 AI 模型运作的基础单元。输入时，模型将词语转换为令牌；输出时，再将令牌转换回词语。
-
-在英语中，1 个 Token 大约对应 0.75 个单词。作为参考，莎士比亚全集约 90 万单词，对应约 120 万 Token。
-
-![Token](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082311539.png)
 
 **结构化输出**
 
@@ -591,9 +569,154 @@ SimpleLoggerAdvisor customLogger = new SimpleLoggerAdvisor(
 
 ## 3.2 提示（Prompt）
 
+### 1、提示词工程
 
+在生成式 AI 中，提示（Prompt）能引导人工智能模型产生特定的输出。
 
+该领域研究常涉及分析和比较不同提示词在各种情境下的有效性。例如，一项重要研究表明，以 “深呼吸后逐步解决这个问题” 开头的提示词能显著提升解题效率，这凸显了精心设计的语言对生成式AI系统性能的影响。
 
+例如，一个简单的提示词模板如下：
+
+```
+Tell me a {adjective} joke about {content}.
+```
+
+在 Spring AI 中，提示词模板可类比 Spring MVC 架构中的 “View” 层。系统会提供一个模型对象（通常是 `java.util.Map`）来填充模板中的占位符，最终 “渲染” 生成的字符串将作为传递给 AI 模型的提示内容。
+
+### 2、API 概览
+
+**Message**
+
+`Message` 接口封装了文本内容、元数据属性集合以及称为 `MessageType` 的分类标识。
+
+接口定义如下：
+
+```java
+public interface Content {
+
+	String getContent();
+
+	Map<String, Object> getMetadata();
+}
+
+public interface Message extends Content {
+
+    /**
+    主要角色包括：
+    - System：指导 AI 的行为和响应风格，类似于在开始对话前向 AI 提供指令。
+    - User：代表用户的输入 — 包括问题、命令或对 AI 的陈述。
+    - Assistant：AI 对用户输入的响应，不仅是答案或反应，更对维持对话流至关重要。
+    - Tool：专注于响应工具调用类助手消息，返回附加信息。
+    */
+	MessageType getMessageType();
+}
+```
+
+`Message` 接口的多种实现对应 AI 模型可处理的不同消息类别，模型根据对话角色区分消息类型。
+
+![Spring AI Message API](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512152302234.jpg)
+
+**Prompt**
+
+`Prompt` 类作为有序 `Message` 对象和请求 `ChatOptions` 的容器。每个 `Message` 在提示中扮演独特角色，其内容和意图各异。
+
+以下是 `Prompt` 类的简化版本（省略构造函数和工具方法）：
+
+```java
+public class Prompt implements ModelRequest<List<Message>> {
+
+    private final List<Message> messages;
+
+    private ChatOptions chatOptions;
+}
+```
+
+**PromptTemplate**
+
+Spring AI 中提示词模板化的核心组件是 `PromptTemplate` 类，专为简化结构化提示词的创建而设计，这些提示词随后会发送给 AI 模型处理。
+
+```java
+public class PromptTemplate implements PromptTemplateActions, PromptTemplateMessageActions {
+
+    // Other methods to be discussed later
+}
+```
+
+### 3、示例用法
+
+以下是 AI Workshop 中关于 [PromptTemplates](https://github.com/Azure-Samples/spring-ai-azure-workshop/blob/main/2-README-prompt-templating.md) 的简单示例：
+
+```java
+PromptTemplate promptTemplate = new PromptTemplate("Tell me a {adjective} joke about {topic}");
+
+Prompt prompt = promptTemplate.create(Map.of("adjective", adjective, "topic", topic));
+
+return chatModel.call(prompt).getResult();
+```
+
+以下是 AI Workshop 中关于 [Role](https://github.com/Azure-Samples/spring-ai-azure-workshop/blob/main/3-README-prompt-roles.md) 的另一个示例：
+
+```java
+String userText = """
+    Tell me about three famous pirates from the Golden Age of Piracy and why they did.
+    Write at least a sentence for each pirate.
+    """;
+
+Message userMessage = new UserMessage(userText);
+
+String systemText = """
+  You are a helpful AI assistant that helps people find information.
+  Your name is {name}
+  You should reply to the user's request with your name and also in the style of a {voice}.
+  """;
+
+SystemPromptTemplate systemPromptTemplate = new SystemPromptTemplate(systemText);
+Message systemMessage = systemPromptTemplate.createMessage(Map.of("name", name, "voice", voice));
+
+Prompt prompt = new Prompt(List.of(userMessage, systemMessage));
+
+List<Generation> response = chatModel.call(prompt).getResults();
+```
+
+该示例展示如何通过 `SystemPromptTemplate` 构建 `Prompt` 实例：使用 `system` 角色创建含占位值的 `Message`，再与 `user` 角色的 `Message` 组合成提示，最终传递给 `ChatModel` 获取生成式响应。
+
+**使用自定义模板渲染器**
+
+若提示中包含 JSON，建议改用 `<` 和 `>` 等分隔符以避免与JSON语法冲突。
+
+```java
+PromptTemplate promptTemplate = PromptTemplate.builder()
+    .renderer(StTemplateRenderer.builder().startDelimiterToken('<').endDelimiterToken('>').build())
+    .template("""
+            Tell me the names of 5 movies whose soundtrack was composed by <composer>.
+            """)
+    .build();
+
+String prompt = promptTemplate.render(Map.of("composer", "John Williams"));
+```
+
+**使用 Resource 替代原始字符串**
+
+Spring AI 支持 `org.springframework.core.io.Resource` 抽象，因此可将提示数据存入文件并直接用于 `PromptTemplate`。例如：在 Spring 托管组件中定义字段来获取 `Resource`。
+
+```java
+@Value("classpath:/prompts/system-message.st")
+private Resource systemResource;
+```
+
+然后将该资源直接传递给 `SystemPromptTemplate`。
+
+```java
+SystemPromptTemplate systemPromptTemplate = new SystemPromptTemplate(systemResource);
+```
+
+### 4、Token
+
+令牌（Token）是 AI 模型运作的基础单元。输入时，模型将词语转换为令牌；输出时，再将令牌转换回词语。
+
+在英语中，1 个 Token 大约对应 0.75 个单词。作为参考，莎士比亚全集约 90 万单词，对应约 120 万 Token。
+
+![Token](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082311539.png)
 
 ## 3.3 结构化输出
 
