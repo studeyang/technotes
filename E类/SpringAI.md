@@ -44,14 +44,6 @@ Spring AI 目前支持处理语言、图像和音频输入和输出的模型。�
 
 ![Embedding（嵌入）](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082308459.jpg)
 
-**结构化输出**
-
-AI 模型的输出传统上以 `java.lang.String` 形式返回，在提示词中简单要求 “输出 JSON” 并不能百分百保证结果准确性。
-
-这一复杂性催生了一个专门领域：既要设计能生成预期输出的提示词，又需将返回的原始字符串转换为可供应用程序集成的数据结构。
-
-![结构化输出 Converter 架构](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082316399.jpg)
-
 **评估 AI 响应**
 
 有效评估 AI 系统对用户请求的响应输出，对于确保最终应用的准确性和实用性至关重要。目前已有多种新兴技术可利用预训练模型自身实现这一目标。
@@ -585,38 +577,9 @@ Tell me a {adjective} joke about {content}.
 
 ### 2、API 概览
 
-**Message**
-
-`Message` 接口封装了文本内容、元数据属性集合以及称为 `MessageType` 的分类标识。
-
-接口定义如下：
-
-```java
-public interface Content {
-
-	String getContent();
-
-	Map<String, Object> getMetadata();
-}
-
-public interface Message extends Content {
-
-    /**
-    主要角色包括：
-    - System：指导 AI 的行为和响应风格，类似于在开始对话前向 AI 提供指令。
-    - User：代表用户的输入 — 包括问题、命令或对 AI 的陈述。
-    - Assistant：AI 对用户输入的响应，不仅是答案或反应，更对维持对话流至关重要。
-    - Tool：专注于响应工具调用类助手消息，返回附加信息。
-    */
-	MessageType getMessageType();
-}
-```
-
 `Message` 接口的多种实现对应 AI 模型可处理的不同消息类别，模型根据对话角色区分消息类型。
 
 ![Spring AI Message API](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512152302234.jpg)
-
-**Prompt**
 
 `Prompt` 类作为有序 `Message` 对象和请求 `ChatOptions` 的容器。每个 `Message` 在提示中扮演独特角色，其内容和意图各异。
 
@@ -628,17 +591,6 @@ public class Prompt implements ModelRequest<List<Message>> {
     private final List<Message> messages;
 
     private ChatOptions chatOptions;
-}
-```
-
-**PromptTemplate**
-
-Spring AI 中提示词模板化的核心组件是 `PromptTemplate` 类，专为简化结构化提示词的创建而设计，这些提示词随后会发送给 AI 模型处理。
-
-```java
-public class PromptTemplate implements PromptTemplateActions, PromptTemplateMessageActions {
-
-    // Other methods to be discussed later
 }
 ```
 
@@ -720,9 +672,89 @@ SystemPromptTemplate systemPromptTemplate = new SystemPromptTemplate(systemResou
 
 ## 3.3 结构化输出
 
+AI 模型的输出传统上以 `java.lang.String` 形式返回，在提示词中简单要求 “输出 JSON” 并不能百分百保证结果准确性。
+
+这一复杂性催生了一个专门领域：既要设计能生成预期输出的提示词，又需将返回的原始字符串转换为可供应用程序集成的数据结构。
+
+![结构化输出 Converter 架构](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512222258089.jpg)
+
+### 1、结构化输出 API
+
+`StructuredOutputConverter` 接口允许从基于文本的 AI 模型输出中获取结构化结果，例如映射到 Java Class 或值数组。其接口定义为：
+
+```java
+public interface StructuredOutputConverter<T> extends Converter<String, T>, FormatProvider {
+
+}
+```
+
+下图展示了使用结构化输出 API 时的数据流：
+
+![Structured Output API](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512222300339.jpg)
+
+目前 Spring AI 提供以下实现：`AbstractConversionServiceOutputConverter`、`AbstractMessageOutputConverter、BeanOutputConverter`、`MapOutputConverter和ListOutputConverter`。
+
+![结构化输出类体系结构](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512222303156.jpg)
+
+### 2、使用转换器
+
+- BeanOutputConverter
+
+以下示例展示如何使用 `BeanOutputConverter` 生成演员作品表。表示演员作品表的目标 `record` 类型：
+
+```java
+record ActorsFilms(String actor, List<String> movies) {
+}
+```
+
+以下是使用高阶 Fluent 式 `ChatClient` API 应用 `BeanOutputConverter` 的方式：
+
+```java
+ActorsFilms actorsFilms = ChatClient.create(chatModel).prompt()
+        .user(u -> u.text("Generate the filmography of 5 movies for {actor}.")
+                    .param("actor", "Tom Hanks"))
+        .call()
+        .entity(ActorsFilms.class);
+```
+
+使用 `ParameterizedTypeReference` 构造函数指定泛型 Bean 类型。例如，表示演员及其作品表的列表：
+
+```java
+List<ActorsFilms> actorsFilms = ChatClient.create(chatModel).prompt()
+        .user("Generate the filmography of 5 movies for Tom Hanks and Bill Murray.")
+        .call()
+        .entity(new ParameterizedTypeReference<List<ActorsFilms>>() {});
+```
+
 ## 3.4 多模态
 
+多模态性指模型同时理解和处理文本、图像、音频及其他数据格式等多源信息的能力。
+
+Spring AI Message API 提供了支持多模态 LLM 所需的所有抽象。
+
+![Spring AI Message API](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512222320499.jpg)
+
+`UserMessage` 的 `content` 字段主要用于文本输入，而可选的 `media` 字段允许添加图像、音频和视频等多模态内容。`MimeType` 指定模态类型，根据所用 LLM 的不同，`Media` 数据字段可以是原始媒体内容（作为 `Resource` 对象）或内容 `URI`。
+
+例如，我们可以将下图（`multimodal.test.png`）作为输入，要求 LLM 解释它所识别的内容。
+
+![多模态测试图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512222328731.png)
+
+```java
+String response = ChatClient.create(chatModel).prompt()
+		.user(u -> u.text("Explain what do you see on this picture?")
+				    .media(MimeTypeUtils.IMAGE_PNG, new ClassPathResource("/multimodal.test.png")))
+		.call()
+		.content();
+```
+
+并生成类似响应：
+
+> 这是一幅设计简洁的水果碗图像。碗体由金属制成，带有弯曲的金属丝边缘，形成开放式结构，可从各个角度看到水果。碗内两根黄色香蕉置于看似红苹果的果实上方，香蕉皮上的棕色斑点表明其略微过熟。碗口配有金属环，可能用作提手。碗置于中性色调背景的平面上，清晰呈现碗内水果。
+
 ## 3.5 模型
+
+
 
 ## 3.6 聊天记忆
 
