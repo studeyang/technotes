@@ -754,6 +754,56 @@ String response = ChatClient.create(chatModel).prompt()
 
 ## 3.5 模型
 
+### 1、聊天模型
+
+```xml
+<!-- Bedrock Converse -->
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-model-bedrock-converse</artifactId>
+</dependency>
+
+<!-- Anthropic 3 -->
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-model-anthropic</artifactId>
+</dependency>
+
+<!-- Azure OpenAI -->
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-model-azure-openai</artifactId>
+</dependency>
+
+<!-- DeepSeek -->
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-model-deepseek</artifactId>
+</dependency>
+
+<!-- Docker Model Runner -->
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-model-openai</artifactId>
+</dependency>
+```
+
+### 2、嵌入模型
+
+嵌入（Embedding）是将文本、图像或视频转化为数值向量的技术，能够捕捉不同输入之间的语义关联。
+
+
+
+### 3、图像模型
+
+
+
+### 4、音频模型
+
+
+
+### 5、内容审核模型
+
 
 
 ## 3.6 聊天记忆
@@ -762,7 +812,33 @@ String response = ChatClient.create(chatModel).prompt()
 
 ## 3.8 模型上下文协议（MCP）
 
+[模型上下文协议（Model Context Protocol，MCP）](https://modelcontextprotocol.org/docs/concepts/architecture) 是一种标准化协议，使 AI 模型能以结构化方式与外部工具及资源交互。它支持多种传输机制，以适应不同环境的灵活性需求。
+
+Java MCP 实现采用三层架构：
+
+![MCP Stack Architecture](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512272316341.svg)
+
+- **Client/Server 层**：McpClient 处理客户端操作，McpServer 管理服务端协议操作，二者均通过 McpSession 进行通信管理。
+- **Session 层（McpSession）**：通过 DefaultMcpSession 实现管理通信模式及状态。
+- **Transport 层（McpTransport）**：处理 JSON-RPC 消息的序列化与反序列化，支持多种传输协议实现。
+
+### 1、[MCP 客户端](https://modelcontextprotocol.io/sdk/java/mcp-client)
+
+![Java MCP 客户端架构](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512272320239.jpg)
+
+### 2、[MCP 服务器](https://modelcontextprotocol.io/sdk/java/mcp-server)
+
+![Java MCP 服务器价格](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512272323812.jpg)
+
+
+
+
+
+
+
 ## 3.9 检索增强生成（RAG）
+
+
 
 ## 3.10 模型评估
 
