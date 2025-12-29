@@ -826,11 +826,201 @@ Java MCP 实现采用三层架构：
 
 ![Java MCP 客户端架构](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512272320239.jpg)
 
+**Starter**
+
+```xml
+<!-- 标准 MCP Client -->
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-mcp-client</artifactId>
+</dependency>
+
+<!-- WebFlux 客户端 -->
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-mcp-client-webflux</artifactId>
+</dependency>
+```
+
+**配置属性**
+
+```yaml
+spring:
+  ai:
+    mcp:
+      client:
+        ### 公共属性 ###
+        enabled: true #启用/禁用 MCP 客户端
+        name: my-mcp-client #MCP 客户端实例版本
+        version: 1.0.0
+        request-timeout: 30s #MCP 客户端请求的超时时长
+        type: SYNC  #客户端类型（SYNC 或 ASYNC）
+        sse: #SSE 传输配置
+          connections:
+            server1:
+              url: http://localhost:8080
+            server2:
+              url: http://otherserver:8081
+        
+        ### Stdio 传输属性 ###
+        stdio:
+          root-change-notification: false
+          connections:
+            server1:
+              command: /path/to/server #MCP 服务器的执行命令
+              args: #命令参数列表
+                - --port=8080
+                - --mode=production
+              env: #服务器进程的环境变量 Map
+                API_KEY: your-api-key
+                DEBUG: "true"
+```
+
+**MCP 客户端 Bean 注入**
+
+```java
+@Autowired
+private List<McpSyncClient> mcpSyncClients;  // For sync client
+
+// OR
+
+@Autowired
+private List<McpAsyncClient> mcpAsyncClients;  // For async client
+```
+
+当工具回调启用时（默认行为），所有 MCP 客户端注册的 MCP 工具将通过 `ToolCallbackProvider` 实例提供：
+
+```java
+@Autowired
+private SyncMcpToolCallbackProvider toolCallbackProvider;
+ToolCallback[] toolCallbacks = toolCallbackProvider.getToolCallbacks();
+```
+
 ### 2、[MCP 服务器](https://modelcontextprotocol.io/sdk/java/mcp-server)
 
 ![Java MCP 服务器价格](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512272323812.jpg)
 
+**Starter**
 
+标准 MCP Server：通过 `STDIO` 服务器传输，支持完整的 MCP 服务器功能。
+
+```xml
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-mcp-server-spring-boot-starter</artifactId>
+</dependency>
+```
+
+WebMVC Server Transport：完整的 MCP 服务器功能支持基于 Spring MVC 的 `SSE`（服务器发送事件）服务器传输和可选的 STDIO 传输。
+
+```xml
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
+</dependency>
+```
+
+WebFlux Server Transport：基于 Spring WebFlux 并可选 `STDIO` 传输，提供对完整 MCP 服务器功能的支持（使用 `SSE` 服务器传输）。
+
+```xml
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-mcp-server-webflux</artifactId>
+</dependency>
+```
+
+**配置属性**
+
+标准 STDIO 服务器配置：
+
+```yaml
+# Using spring-ai-starter-mcp-server
+spring:
+  ai:
+    mcp:
+      server:
+        name: stdio-mcp-server #用于标识的服务器名称
+        version: 1.0.0 #服务器版本
+        type: SYNC #服务器类型（同步/异步）
+```
+
+WebMVC Server 配置：
+
+```yaml
+# Using spring-ai-starter-mcp-server-webmvc
+spring:
+  ai:
+    mcp:
+      server:
+        name: webmvc-mcp-server
+        version: 1.0.0
+        type: SYNC
+        #可选的说明，用于指导客户端如何与此服务器交互
+        instructions: "This server provides weather information tools and resources"
+        #客户端用于发送消息的自定义 SSE 消息端点路径（用于 Web 传输）
+        sse-message-endpoint: /mcp/messages
+        capabilities:
+          tool: true #启用/禁用工具功能
+          resource: true #启用/禁用资源功能
+          prompt: true #启用/禁用提示功能
+          completion: true #启用/禁用补全功能
+```
+
+WebFlux Server 配置：
+
+```yaml
+# Using spring-ai-starter-mcp-server-webflux
+spring:
+  ai:
+    mcp:
+      server:
+        name: webflux-mcp-server
+        version: 1.0.0
+        type: ASYNC  # Recommended for reactive applications
+        instructions: "This reactive server provides weather information tools and resources"
+        sse-message-endpoint: /mcp/messages
+        capabilities:
+          tool: true
+          resource: true
+          prompt: true
+          completion: true
+```
+
+**使用 MCP 服务器创建 Spring Boot 应用**
+
+```java
+@Service
+public class WeatherService {
+
+    @Tool(description = "Get weather information by city name")
+    public String getWeather(String cityName) {
+        // Implementation
+    }
+}
+
+@SpringBootApplication
+public class McpServerApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(McpServerApplication.class, args);
+    }
+
+	@Bean
+	public ToolCallbackProvider weatherTools(WeatherService weatherService) {
+		return MethodToolCallbackProvider.builder().toolObjects(weatherService).build();
+	}
+}
+```
+
+自动配置会将工具回调注册为 MCP 工具。支持通过多个 Bean 生成 `ToolCallback`，自动配置将合并这些实例。
+
+### 3、MCP 工具
+
+**ToolCallback**
+
+
+
+**McpToolUtil**
 
 
 
