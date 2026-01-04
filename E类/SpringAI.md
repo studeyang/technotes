@@ -74,20 +74,7 @@ RAG 的下一阶段是处理用户输入。当需要 AI 模型回答用户问题
 
 ![Spring AI RAG](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082327127.jpg)
 
-**工具调用**
 
-大语言模型（LLM）在训练完成后即固化，导致知识陈旧，且无法直接访问或修改外部数据。
-
-[工具调用机制（Tool Calling）](https://springdoc.cn/spring-ai/api/tools.html) 有效解决了这些局限。该功能允许你将自定义服务注册为工具，将大语言模型与外部系统 API 连接，使 LLM 能获取实时数据并委托这些系统执行数据处理操作。
-
-![工具调用的主要操作顺序](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082333097.jpg)
-
-1. 要让模型能够调用某个工具，需要在聊天请求中包含该工具的定义。每个工具定义包含名称、描述以及输入参数的 Schema。
-2. 当模型决定调用工具时，它会返回一个响应，其中包含工具名称和按照定义 Schema 建模的输入参数。
-3. 应用程序负责根据工具名称识别并执行对应工具，同时使用提供的输入参数进行操作。
-4. 工具调用的结果由应用程序负责处理。
-5. 应用程序将工具调用的结果返回给模型。
-6. 模型利用工具调用结果作为额外上下文生成最终响应。
 
 # 二、入门
 
@@ -809,6 +796,198 @@ String response = ChatClient.create(chatModel).prompt()
 ## 3.6 聊天记忆
 
 ## 3.7 工具调用
+
+大语言模型（LLM）在训练完成后即固化，导致知识陈旧，且无法直接访问或修改外部数据。
+
+工具调用（亦称函数调用）是 AI 应用的常见模式，允许模型通过与一组 API（即工具）交互来扩展其能力。
+
+[工具调用机制（Tool Calling）](https://springdoc.cn/spring-ai/api/tools.html) 有效解决了这些局限。该功能允许你将自定义服务注册为工具，将大语言模型与外部系统 API 连接，使 LLM 能获取实时数据并委托这些系统执行数据处理操作。
+
+![工具调用的主要操作顺序](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082333097.jpg)
+
+1. 要让模型能够调用某个工具，需要在聊天请求中包含该工具的定义。每个工具定义包含名称、描述以及输入参数的 Schema。
+2. 当模型决定调用工具时，它会返回一个响应，其中包含工具名称和按照定义 Schema 建模的输入参数。
+3. 应用程序负责根据工具名称识别并执行对应工具，同时使用提供的输入参数进行操作。
+4. 工具调用的结果由应用程序负责处理。
+5. 应用程序将工具调用的结果返回给模型。
+6. 模型利用工具调用结果作为额外上下文生成最终响应。
+
+### 1、快速入门
+
+- 信息检索
+
+下面我们在 `DateTimeTools` 类中实现一个获取用户所在时区当前日期时间的工具。
+
+```java
+import java.time.LocalDateTime;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.context.i18n.LocaleContextHolder;
+
+class DateTimeTools {
+
+    @Tool(description = "Get the current date and time in the user's timezone")
+    String getCurrentDateTime() {
+        return LocalDateTime.now().atZone(LocaleContextHolder.getTimeZone().toZoneId()).toString();
+    }
+
+}
+```
+
+接下来我们将该工具提供给模型使用。
+
+```java
+ChatModel chatModel = ...
+
+String response = ChatClient.create(chatModel)
+        .prompt("What day is tomorrow?")
+        .tools(new DateTimeTools())
+        .call()
+        .content();
+
+System.out.println(response);
+```
+
+输出结果如下：
+
+```none
+Tomorrow is 2015-10-21.
+```
+
+你可以再次提出同样的问题。这一次，不要向模型提供工具。输出结果如下
+
+```none
+I am an AI and do not have access to real-time information. Please provide the current date so I can accurately determine what day tomorrow will be.
+```
+
+如果没有这个工具，模型就不知道如何回答问题，因为它没有能力确定当前的日期和时间。
+
+- 执行操作
+
+在本例中，我们将定义第二个[ 工具，用](https://springdoc.cn/spring-ai/api/tools.html#)于在特定时间设置闹钟。我们的目标是设置一个从现在开始 10 分钟的闹钟，因此需要向模型同时提供这两个工具来完成此任务。
+
+```java
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.context.i18n.LocaleContextHolder;
+
+class DateTimeTools {
+
+    @Tool(description = "Get the current date and time in the user's timezone")
+    String getCurrentDateTime() {
+        return LocalDateTime.now().atZone(LocaleContextHolder.getTimeZone().toZoneId()).toString();
+    }
+
+    @Tool(description = "Set a user alarm for the given time, provided in ISO-8601 format")
+    void setAlarm(String time) {
+        LocalDateTime alarmTime = LocalDateTime.parse(time, DateTimeFormatter.ISO_DATE_TIME);
+        System.out.println("Alarm set for " + alarmTime);
+    }
+}
+```
+
+接下来我们将这两个工具都提供给模型使用。
+
+```java
+ChatModel chatModel = ...
+
+String response = ChatClient.create(chatModel)
+        .prompt("Can you set an alarm 10 minutes from now?")
+        .tools(new DateTimeTools())
+        .call()
+        .content();
+
+System.out.println(response);
+```
+
+在应用程序日志中，你可以检查闹钟是否已在正确时间设置完成。
+
+### 2、方法即工具
+
+Spring AI 为方法转工具（即 `ToolCallback`）提供两种内置支持方式：
+
+- 声明式：通过 `@Tool` 注解实现。
+- 编程式：通过底层的 `MethodToolCallback` 实现。
+
+```java
+class DateTimeTools {
+
+    String getCurrentDateTime() {
+        return LocalDateTime.now().atZone(LocaleContextHolder.getTimeZone().toZoneId()).toString();
+    }
+
+}
+
+Method method = ReflectionUtils.findMethod(DateTimeTools.class, "getCurrentDateTime");
+ToolCallback toolCallback = MethodToolCallback.builder()
+    .toolDefinition(ToolDefinition.builder(method)
+            .description("Get the current date and time in the user's timezone")
+            .build())
+    .toolMethod(method)
+    .toolObject(new DateTimeTools())
+    .build();
+```
+
+### 3、函数即工具
+
+你可以通过编程方式构建 `FunctionToolCallback`，将函数式类型（`Function`、`Supplier`、`Consumer` 或 `BiFunction`）转换为工具。
+
+```java
+public class WeatherService implements Function<WeatherRequest, WeatherResponse> {
+    public WeatherResponse apply(WeatherRequest request) {
+        return new WeatherResponse(30.0, Unit.C);
+    }
+}
+
+public enum Unit { C, F }
+public record WeatherRequest(String location, Unit unit) {}
+public record WeatherResponse(double temp, Unit unit) {}
+
+ToolCallback toolCallback = FunctionToolCallback
+    .builder("currentWeather", new WeatherService())
+    .description("Get the weather in location")
+    .inputType(WeatherRequest.class)
+    .build();
+
+ToolCallback toolCallback = ...
+ChatClient.create(chatModel)
+    .prompt("What's the weather like in Copenhagen?")
+    .tools(toolCallback)
+    .call()
+    .content();
+```
+
+无需编程式配置工具，你可将工具定义为 Spring Bean。
+
+```java
+@Configuration(proxyBeanMethods = false)
+class WeatherTools {
+
+    WeatherService weatherService = new WeatherService();
+
+	@Bean("currentWeather")
+	@Description("Get the weather in location")
+	Function<WeatherRequest, WeatherResponse> currentWeather() {
+		return weatherService;
+	}
+}
+
+ChatClient.create(chatModel)
+    .prompt("What's the weather like in Copenhagen?")
+    .tools("currentWeather")
+    .call()
+    .content();
+```
+
+### 4、工具规范
+
+6、工具执行
+
+7、工具解析
+
+8、可观测性
+
+
 
 ## 3.8 模型上下文协议（MCP）
 
