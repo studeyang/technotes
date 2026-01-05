@@ -979,14 +979,6 @@ ChatClient.create(chatModel)
     .content();
 ```
 
-### 4、工具规范
-
-6、工具执行
-
-7、工具解析
-
-8、可观测性
-
 
 
 ## 3.8 模型上下文协议（MCP）
@@ -1192,18 +1184,6 @@ public class McpServerApplication {
 ```
 
 自动配置会将工具回调注册为 MCP 工具。支持通过多个 Bean 生成 `ToolCallback`，自动配置将合并这些实例。
-
-### 3、MCP 工具
-
-**ToolCallback**
-
-
-
-**McpToolUtil**
-
-
-
-
 
 ## 3.9 检索增强生成（RAG）
 
