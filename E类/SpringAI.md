@@ -66,16 +66,6 @@ Spring AI 目前支持处理语言、图像和音频输入和输出的模型。�
 
 - **[工具调用（Tool Calling）](https://springdoc.cn/spring-ai/concepts.html#concept-fc)**：该技术支持注册工具（用户自定义服务），将大语言模型与外部系统 API 连接。Spring AI 大幅简化了实现 [工具调用](https://springdoc.cn/spring-ai/api/tools.html) 所需的代码量。
 
-**检索增强生成（RAG）**
-
-该技术采用批处理编程模型：首先从文档中读取非结构化数据，经转换后写入向量数据库。本质上这是一个 ETL（抽取-转换-加载）流程，而向量数据库正是 RAG 技术中检索环节的核心组件。
-
-RAG 的下一阶段是处理用户输入。当需要 AI 模型回答用户问题时，系统会将问题与所有 “相似” 的文档片段一起放入提示词中发送给模型。这正是使用向量数据库的原因 — 它极其擅长快速定位语义相似的内容。
-
-![Spring AI RAG](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082327127.jpg)
-
-
-
 # 二、入门
 
 ## 1.1 配置组件仓库
@@ -1186,6 +1176,45 @@ public class McpServerApplication {
 自动配置会将工具回调注册为 MCP 工具。支持通过多个 Bean 生成 `ToolCallback`，自动配置将合并这些实例。
 
 ## 3.9 检索增强生成（RAG）
+
+该技术采用批处理编程模型：首先从文档中读取非结构化数据，经转换后写入向量数据库。本质上这是一个 ETL（抽取-转换-加载）流程，而向量数据库正是 RAG 技术中检索环节的核心组件。
+
+RAG 的下一阶段是处理用户输入。当需要 AI 模型回答用户问题时，系统会将问题与所有 “相似” 的文档片段一起放入提示词中发送给模型。这正是使用向量数据库的原因 — 它极其擅长快速定位语义相似的内容。
+
+![Spring AI RAG](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082327127.jpg)
+
+### 1、Advisor
+
+Spring AI 通过 `Advisor` API 为常见 RAG 流程提供开箱即用的支持。
+
+- QuestionAnswerAdvisor
+
+当用户问题发送至 AI 模型时， `QuestionAnswerAdvisor` 会查询向量数据库获取与用户问题相关的文档。向量数据库的响应会附加到用户文本后，为 AI 模型生成响应提供上下文。
+
+```java
+//假设已向 VectorStore 加载数据，通过向 ChatClient 提供 QuestionAnswerAdvisor 实例即可执行检索增强生成（RAG）
+ChatResponse response = ChatClient.builder(chatModel)
+        .build().prompt()
+        .advisors(new QuestionAnswerAdvisor(vectorStore))
+        .user(userText)
+        .call()
+        .chatResponse();
+
+//以下是创建 QuestionAnswerAdvisor 实例的示例（相似度阈值设为 0.8，返回顶部 6 条结果）
+var qaAdvisor = QuestionAnswerAdvisor.builder(vectorStore)
+        .searchRequest(SearchRequest.builder().similarityThreshold(0.8d).topK(6).build())
+        .build();
+```
+
+### 2、模块
+
+
+
+
+
+
+
+
 
 
 
