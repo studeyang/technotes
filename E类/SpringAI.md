@@ -1183,7 +1183,7 @@ RAG 的下一阶段是处理用户输入。当需要 AI 模型回答用户问题
 
 ![Spring AI RAG](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202512082327127.jpg)
 
-### 1、Advisor
+**Advisor**
 
 Spring AI 通过 `Advisor` API 为常见 RAG 流程提供开箱即用的支持。
 
@@ -1206,17 +1206,271 @@ var qaAdvisor = QuestionAnswerAdvisor.builder(vectorStore)
         .build();
 ```
 
-### 2、模块
+**模块**
 
+- 检索前处理
 
+`CompressionQueryTransformer` 利用大语言模型将对话历史和后续查询压缩为捕获对话本质的独立查询。
 
+当对话历史较长且后续查询与对话上下文相关时，该转换器尤为有用。
 
+```java
+Query query = Query.builder()
+        .text("And what is its second largest city?")
+        .history(new UserMessage("What is the capital of Denmark?"),
+                new AssistantMessage("Copenhagen is the capital of Denmark."))
+        .build();
 
+QueryTransformer queryTransformer = CompressionQueryTransformer.builder()
+        .chatClientBuilder(chatClientBuilder)
+        .build();
 
+Query transformedQuery = queryTransformer.transform(query);
+```
 
+`RewriteQueryTransformer` 利用大语言模型重写用户查询，从而在查询向量数据库时获得更好结果。当用户查询冗长、含歧义或包含可能影响搜索结果质量的无关信息时，该转换器（Transformer）特别有效。
 
+`TranslationQueryTransformer` 利用大语言模型将查询翻译为目标语言。当嵌入模型针对特定语言训练而用户查询使用不同语言时，该转换器尤为有用。
 
+- 检索
 
+`VectorStoreDocumentRetriever` 从向量数据库检索与输入查询语义相似的文档，支持基于元数据过滤、相似度阈值和 top-k 结果数量控制。
+
+```java
+DocumentRetriever retriever = VectorStoreDocumentRetriever.builder()
+    .vectorStore(vectorStore)
+    .similarityThreshold(0.73)
+    .topK(5)
+    .filterExpression(new FilterExpressionBuilder()
+        .eq("genre", "fairytale")
+        .build())
+    .build();
+List<Document> documents = retriever.retrieve(new Query("What is the main character of the story?"));
+```
+
+### 1、ETL 管道（Pipeline）
+
+ETL（提取、转换、加载）流水线协调将数据从原始数据源到结构化向量存储转换，确保数据最终转换为 AI 模型检索所需的最优格式。
+
+构建简易 ETL 流水线时，可将各类组件的实例按流程链式组合。
+
+![etl pipeline](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202601132253118.jpg)
+
+- ETL 类关系图
+
+以下类图展示了 ETL 核心接口与实现类的关系架构。
+
+![etl class diagram](https://technotes.oss-cn-shenzhen.aliyuncs.com/2024/202601132257942.jpg)
+
+- DocumentReader
+
+`JsonReader` 负责解析 JSON 文档，将其转换为 `Document` 对象列表。
+
+```java
+@Component
+class MyJsonReader {
+
+	private final Resource resource;
+
+    MyJsonReader(@Value("classpath:bikes.json") Resource resource) {
+        this.resource = resource;
+    }
+
+	List<Document> loadJsonAsDocuments() {
+        //指定 JSON 文档中哪些 Key 对应的值应转换为 Document 对象的文本内容
+        JsonReader jsonReader = new JsonReader(this.resource, "description", "content");
+        return jsonReader.get();
+	}
+}
+```
+
+`TextReader` 负责解析纯文本文档，将其转换为 `Document` 对象列表。
+
+```java
+@Component
+class MyTextReader {
+
+    private final Resource resource;
+
+    MyTextReader(@Value("classpath:text-source.txt") Resource resource) {
+        this.resource = resource;
+    }
+
+	List<Document> loadText() {
+		TextReader textReader = new TextReader(this.resource);
+		textReader.getCustomMetadata().put("filename", "text-source.txt");
+
+		return textReader.read();
+    }
+}
+```
+
+`JsoupDocumentReader` 利用 JSoup 库处理 HTML 文档，将其转换为 `Document` 对象列表。
+
+```java
+@Component
+class MyHtmlReader {
+
+    private final Resource resource;
+
+    MyHtmlReader(@Value("classpath:/my-page.html") Resource resource) {
+        this.resource = resource;
+    }
+
+    List<Document> loadHtml() {
+        JsoupDocumentReaderConfig config = JsoupDocumentReaderConfig.builder()
+            .selector("article p") // Extract paragraphs within <article> tags
+            .charset("ISO-8859-1")  // Use ISO-8859-1 encoding
+            .includeLinkUrls(true) // Include link URLs in metadata
+            .metadataTags(List.of("author", "date")) // Extract author and date meta tags
+            .additionalMetadata("source", "my-page.html") // Add custom metadata
+            .build();
+
+        JsoupDocumentReader reader = new JsoupDocumentReader(this.resource, config);
+        return reader.get();
+    }
+}
+```
+
+`MarkdownDocumentReader` 负责解析 `Markdown` 文档，将其转换为 `Document` 对象列表。
+
+```java
+@Component
+class MyMarkdownReader {
+
+    private final Resource resource;
+
+    MyMarkdownReader(@Value("classpath:code.md") Resource resource) {
+        this.resource = resource;
+    }
+
+    List<Document> loadMarkdown() {
+        MarkdownDocumentReaderConfig config = MarkdownDocumentReaderConfig.builder()
+            .withHorizontalRuleCreateDocument(true)
+            .withIncludeCodeBlock(false)
+            .withIncludeBlockquote(false)
+            .withAdditionalMetadata("filename", "code.md")
+            .build();
+
+        MarkdownDocumentReader reader = new MarkdownDocumentReader(this.resource, config);
+        return reader.get();
+    }
+}
+```
+
+`PagePdfDocumentReader` 采用 Apache PdfBox 库解析 PDF 文档。通过 Maven 或 Gradle 添加项目依赖。
+
+```xml
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-pdf-document-reader</artifactId>
+</dependency>
+```
+
+示例：
+
+```java
+@Component
+public class MyPagePdfDocumentReader {
+
+	List<Document> getDocsFromPdf() {
+
+		PagePdfDocumentReader pdfReader = new PagePdfDocumentReader("classpath:/sample1.pdf",
+				PdfDocumentReaderConfig.builder()
+					.withPageTopMargin(0)
+					.withPageExtractedTextFormatter(ExtractedTextFormatter.builder()
+						.withNumberOfTopTextLinesToDelete(0)
+						.build())
+					.withPagesPerDocument(1)
+					.build());
+
+		return pdfReader.read();
+    }
+
+}
+```
+
+- Transformer（转换器组件）
+
+`TokenTextSplitter` 是 `TextSplitter` 的实现类，采用 CL100K_BASE 编码按 Token 计数分割文本。
+
+```java
+@Component
+class MyTokenTextSplitter {
+
+    public List<Document> splitDocuments(List<Document> documents) {
+        TokenTextSplitter splitter = new TokenTextSplitter();
+        return splitter.apply(documents);
+    }
+
+    public List<Document> splitCustomized(List<Document> documents) {
+        TokenTextSplitter splitter = new TokenTextSplitter(1000, 400, 10, 5000, true);
+        return splitter.apply(documents);
+    }
+}
+```
+
+`KeywordMetadataEnricher` 作为 `DocumentTransformer` 的实现，利用生成式 AI 模型从文档内容提取关键词并添加为元数据。
+
+```java
+@Component
+class MyKeywordEnricher {
+
+    private final ChatModel chatModel;
+
+    MyKeywordEnricher(ChatModel chatModel) {
+        this.chatModel = chatModel;
+    }
+
+    List<Document> enrichDocuments(List<Document> documents) {
+        KeywordMetadataEnricher enricher = new KeywordMetadataEnricher(this.chatModel, 5);
+        return enricher.apply(documents);
+    }
+}
+```
+
+`SummaryMetadataEnricher` 是 `DocumentTransformer` 的实现，利用生成式 AI 模型创建文档摘要并添加为元数据，可为当前文档及相邻文档（前序与后续）生成摘要。
+
+```java
+@Configuration
+class EnricherConfig {
+
+    @Bean
+    public SummaryMetadataEnricher summaryMetadata(OpenAiChatModel aiClient) {
+        return new SummaryMetadataEnricher(aiClient,
+            List.of(SummaryType.PREVIOUS, SummaryType.CURRENT, SummaryType.NEXT));
+    }
+}
+
+@Component
+class MySummaryEnricher {
+
+    private final SummaryMetadataEnricher enricher;
+
+    MySummaryEnricher(SummaryMetadataEnricher enricher) {
+        this.enricher = enricher;
+    }
+
+    List<Document> enrichDocuments(List<Document> documents) {
+        return this.enricher.apply(documents);
+    }
+}
+```
+
+- Writer
+
+The `FileDocumentWriter` is a `DocumentWriter` implementation that writes the content of a list of `Document` objects into a file.
+
+```java
+@Component
+class MyDocumentWriter {
+
+    public void writeDocuments(List<Document> documents) {
+        FileDocumentWriter writer = new FileDocumentWriter("output.txt", true, MetadataMode.ALL, false);
+        writer.accept(documents);
+    }
+}
+```
 
 ## 3.10 模型评估
 
