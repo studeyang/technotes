@@ -54,11 +54,12 @@ Map<String, List<Message>> map = messages.stream()
     .collect(Collectors.groupingBy(Message::getId));
 ```
 
-## 二、使用 CompletableFuture 分批并发执行
+## 二、CompletableFuture 用法
 
-### Usage
+### 使用 CompletableFuture 分批并发执行
 
 ```java
+// Usage
 public static void main(String[] args) {
 
     Function<String, Runnable> function = billGroupId -> () -> {
@@ -68,9 +69,8 @@ public static void main(String[] args) {
 }
 ```
 
-### processor
-
 ```java
+// processor
 package com.casstime.ec.cloud.service.biz;
 
 import com.google.common.collect.Lists;
@@ -133,6 +133,50 @@ public class HandleAfterRepayProcessor {
 
 }
 ```
+
+### 使用 CompletableFuture 并发执行并整合结果
+
+```java
+@Service
+@Slf4j
+public class SavingCardNoLoginServiceImpl {
+
+    private final ExecutorService routeDiscountExecutorService = new ThreadPoolExecutor(5, 5, 0,
+            TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(1000),
+            new CustomizableThreadFactory("query-routeDiscount-"),
+            new ThreadPoolExecutor.CallerRunsPolicy());
+    
+    public List<RouteDiscountResponse> getRoutePrice(List<SendRouteBO> routeList) {
+        return routeList.stream()
+                .map(sendRouteBO -> {
+        List<CompletableFuture<RouteDiscountResponse>> futureList = routeList.stream()
+                .map(sendRouteBO -> CompletableFuture.supplyAsync(() -> {
+                    ExpressSavingFeeBO lowestSmallSavingFee = getLowestSmallSavingFee(sendRouteBO);
+
+                    RouteDiscountResponse response = new RouteDiscountResponse();
+                    response.setFromCityName(sendRouteBO.getFromCityName());
+                    response.setToCityName(sendRouteBO.getToCityName());
+                    response.setExpressCompanyId(lowestSmallSavingFee.getExpressCompanyId());
+                    response.setExpressCompanyName(lowestSmallSavingFee.getExpressCompanyName());
+                    response.setBoxPrice(lowestSmallSavingFee.getBoxPrice());
+                    response.setSavingFee(lowestSmallSavingFee.getSmallSavingFee());
+                    return response;
+                })
+                }, routeDiscountExecutorService))
+                .collect(Collectors.toList());
+
+        // 等待所有任务完成并聚合结果
+        return futureList.stream()
+                .map(CompletableFuture::join)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+}
+```
+
+
 
 ## 三、Java 8 Map 的优雅写法
 

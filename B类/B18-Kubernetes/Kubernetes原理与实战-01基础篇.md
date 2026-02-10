@@ -51,7 +51,7 @@ Kubernetes 的前世今生要从“云计算”的兴起开始讲起。
 - PaaS 层提供软件部署平台（runtime），抽象掉了硬件和操作系统，可以无缝地扩展（scaling）。开发者只需要关注自己的业务逻辑，不需要关注底层。
 - SaaS 层直接为开发者提供软件服务，将软件的开发、管理、部署等全部都交给第三方，用户不需要再关心技术问题，可以拿来即用。
 
-![Drawing 0.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211222222908.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211222222908.png" alt="Drawing 0.png" style="zoom: 67%;" />
 
 对应到我们生活中，可以想象自己要去一个地方旅行，那么首先就需要解决住的问题。
 
@@ -69,7 +69,7 @@ Docker 镜像解决了环境打包的问题，它直接打包了应用运行所�
 
 有了 Docker，开发人员可以轻松地将其生产环境复制为可立即运行的容器应用程序，让工作更有效率。我们来看看CNCF （Cloud Native Computing Foundation，云计算基金会）在2019年做的调研报告。
 
-![Drawing 6.png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211222225533.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211222225533.png" alt="Drawing 6.png" style="zoom:67%;" />
 
 可以预见的是，未来企业应用容器化会越来越常见，使用容器进行交付、生产、部署是大势所趋，也是企业进行技术改造，业务快速升级的利器。
 
@@ -105,7 +105,7 @@ Kubernetes 的架构设计参考了 Borg 的架构设计，我们先来看看 Bo
 
 我们先来看看 Borg 定义的两个概念，Cell 和 Cluster。
 
-Borg 用Cell 来定义一组机器资源。Cluster 即集群，一个数据中心可以同时运行一个或者多个集群，每个集群又可以有多个 Cell。
+Borg 用 Cell 来定义一组机器资源。Cluster 即集群，一个数据中心可以同时运行一个或者多个集群，每个集群又可以有多个 Cell。
 
 ![image (3).png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211224225320.png)
 
