@@ -7,9 +7,9 @@
 目录
 
 - 机器学习基础
-  - 监督学习算法与应用场景
-  - 非监督学习原理与典型应用
-  - 半监督学习与混合数据利用
+  - [v] 监督学习算法与应用场景
+  - [v] 非监督学习原理与典型应用
+  - [v] 半监督学习与混合数据利用
 - 神经网络与深度学习基础
   - 神经网络的核心优势
   - 神经元与激活函数
@@ -87,29 +87,86 @@
 2、向量数据库快速入门与实践向量数据库基本原理与架构
 
 - 向量数据库的选型与对比
+
 - 向量数据库存储与检索嵌入实践
+
 - 检索增强生成（RAG）快速入门与实践
+
+  ```
+  RAG是什么？（Retrieval Augmented Generation）
+  ```
+
 - RAG 系统架构与工作流程
 
 3、RAG 在信息检索与生成任务中的优势
 
 - RAG 的实践应用与案例分析
-- 实战：使用DeepSeekAPI 开发智能问答系统
+- 实战：使用 DeepSeekAPI 开发智能问答系统
+
+    ```
+    1、将数据加载到 Milvus；
+    2、提问：How is data stored in milvus?
+    3、查询 Milvus，并向 LLM 提问；
+    ```
 
 # 五 使用 DeepSeek 开发小红书爆款文案生成助手
 
-- Agent 理论基础与开发入门
-  - Agent 基本概念与工作机制
-  - LLM + Agent 的核心能力与优势
-  - Agent 开发流程与关键模块解析
-- DeepSeek Agent 开发入门与案例分析
-  - DeepSeek 工具调用入门
-  - DeepSeek Prompt 设计策略方法
-  - DeepSeek Agent 真实应用案例解析
-- 实战：使用 DeepSeek 开发小红书爆款文案生成助手
-  - 需求拆解与 Agent 任务规划
-  - 爆款文案生成逻辑与 Prompt 设计
-  - 文案生成策略与评估优化
+**Agent 理论基础与开发入门**
+
+- Agent 基本概念与工作机制
+
+  ```
+  Agent特点：
+  - 自主性：根据设定的目标和当前环境，自主做出决策；
+  - 感知：感知其所处的环境；
+  - 行动：
+  - 目标导向：
+  ```
+
+- LLM + Agent 的核心能力与优势
+
+  ```
+  Agent核心能力：
+  - 规划
+  - 记忆
+  - 工具
+  - 执行
+  ```
+
+- Agent 开发流程与关键模块解析
+
+  ```
+  Agent开发流程：
+  - 定义目标
+  - 选择核心LLM
+  - 设计Agent架构
+  - 工具开发与集成
+  - 提示工程
+  - 记忆机制
+  - 测试、评估与迭代
+  ```
+
+**DeepSeek Agent 开发入门与案例分析**
+
+- DeepSeek 工具调用入门
+
+- DeepSeek Prompt 设计策略方法
+
+  ```
+  DeepSeek Prompt 的核⼼构成：
+  - System Prompt (⻆⾊与全局设定)
+  - User Prompt (任务指令)
+  - Tool Description (⼯具描述)
+  - Few-shot Examples (示例引导)
+  ```
+
+- DeepSeek Agent 真实应用案例解析
+
+**实战：使用 DeepSeek 开发小红书爆款文案生成助手**
+
+- 需求拆解与 Agent 任务规划
+- 爆款文案生成逻辑与 Prompt 设计
+- 文案生成策略与评估优化
 
 # 六 DeepSeek 私有化部署与最佳实践
 
