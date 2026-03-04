@@ -67,7 +67,71 @@ Github: https://github.com/huangjia2019/claude-code-engineering
 - 让 AI Agent 真正进入 CI/CD，而不是停留在 IDE 里。
 - 从“写代码的人”，转变为组织管理智能体的人，从执行者蜕变为技术指挥者。
 
+# 01｜登台远望：Claude Code 底层技术全景导览
+
+Claude Code 的真正身份是：一个可编程、可扩展、可组合的 AI Agent 框架。
+
+![img](https://static001.geekbang.org/resource/image/23/fa/236e47af6e9df067a36b65ff7d5b9ffa.jpg?wh=2898x1907)
+
+**从使用者到驾驭者**
+
+使用者：用户 → 输入问题 → Claude 回答 → 完成
+
+驾驭者：用户 → 配置 Agent → Agent 自主工作 → 自动完成任务
+
+举个例子：
+
+![img](https://static001.geekbang.org/resource/image/4b/9c/4b2f74d224498bfc75faea1c22c32b9c.jpg?wh=3926x1802)
+
+用学开车打个比方：
+
+- 使用者：知道方向盘转哪边车往哪走，油门让车动，刹车让车停。
+- 驾驭者：理解发动机、变速箱、刹车系统的工作原理，能改装车辆。
+
+对于 Claude Code：
+
+- 使用者：知道怎么提问，怎么让 Claude 帮你写代码。
+- 驾驭者：理解记忆系统、子代理、技能包、钩子的工作原理，能构建自定义工作流。
 
 
 
+**Claude Code 底层技术全景图**
+
+![img](https://static001.geekbang.org/resource/image/97/91/97f666c51958b16be8910a4139ff0891.jpg?wh=4280x2214)
+
+1、基础层：Memory（记忆系统）
+
+基础层也可以称为是 Claude Code 的长期记忆系统，它的核心文件是 CLAUDE.md。
+
+2、扩展层：四大核心组件
+
+- Commands（斜杠命令）
+- Skills（技能）
+- SubAgents（子代理）
+- Hooks（钩子）
+
+3、集成层：连接外部世界
+
+- Headless（无头模式）
+- MCP（Model Context Protocol）
+
+
+
+4、编程接口层：Agent SDK
+
+
+
+**组件关系和技术选型指南**
+
+1、触发方式
+
+2、数据流向
+
+3、Plugins：打包容器
+
+4、技术选型指南
+
+5、组合使用
+
+**总结一下**
 
