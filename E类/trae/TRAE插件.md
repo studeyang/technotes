@@ -203,7 +203,7 @@ TRAE 插件支持的功能如下表所示。
 
 场景二：在对应位置添加注释，然后敲击回车键换行。
 
-![img](images/bda5627f9915418791725ffbc40f5bce)
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202603092121083.png)
 
 **代码生成**
 
