@@ -126,3 +126,64 @@ model: sonnet
 [Claude 恢复之前的子代理，保留完整上下文]
 ```
 
+# 04｜量体裁衣：从Sub-Agents到Multi-Agent的工程指南
+
+这节课的目标是帮你建立一种可以立刻用于拆解当下热门产品，也能长期指导工程设计的通用方法论。学完今天的内容，你不仅能更好地理解 Sub-Agent、Skills 这些概念， 也会更清楚：什么时候该用，什么时候不该用。
+
+**何时该升级到多 Agent？**
+
+LangChain 在其架构选型指南中给出了明确建议：“Start with a single agent. Add tools before adding agents. Graduate to multi-agent patterns only when encountering clear architectural limits.” （先从单 Agent 起步，优先通过引入工具扩展能力； 只有当系统确实触及单 Agent 的架构边界时， 才考虑采用多 Agent 的设计模式。）
+
+架构边界是什么？两个核心触发条件：
+
+- 信号一：上下文管理挑战
+
+  当多个能力领域的专业知识无法舒适地塞进单一 prompt 中时——你需要策略性地分发上下文，而不是把所有东西堆在一起。
+
+- 信号二：分布式开发需求
+
+  当多个团队需要独立拥有和维护各自的 Agent 能力时，各团队可以独立迭代而不互相干扰。
+
+下面我们从工程视角出发，系统梳理 Sub-Agent 到 Multi-Agent 的四种核心设计模式，并给出性能、成本、可控性三个维度的决策框架。
+
+**四种核心设计模式**
+
+- 模式一：Sub-Agents（子代理委派 / 集中式编排）
+
+![img](https://static001.geekbang.org/resource/image/1b/45/1ba621fb0243476599a3eb0a82d99145.jpg?wh=2079x1032)
+
+工程评测显示，并行化的 Sub-Agent 执行方式可将复杂查询的整体研究时间最多缩短约 90%，但其代价是相较普通对话约 15 倍的 token 消耗；
+
+- 模式二：Skills（技能 / 渐进式能力加载）
+
+通过 SKILL.md 文件（或类似配置）实现能力的渐进式加载。Agent 一开始只知道技能的名称和描述，当判断需要某个技能时，才加载完整的指令。
+
+![img](https://static001.geekbang.org/resource/image/c6/4d/c6651d3f9a7d2522005054f5375a2b4d.jpg?wh=2108x1187)
+
+我想这样概括 Skills 模式与 Sub-Agent 模式的关键区别。
+
+```
+Sub-Agent：独立的上下文 → 适合大量信息过滤
+Skill：共享的上下文 → 适合需要连贯对话的场景
+```
+
+- 模式三：Handoffs（交接 / 状态驱动的 Agent 切换）
+
+
+
+- 模式四：Router（路由器 / 并行分发与合成）
+
+
+
+性能、成本、可控性的量化对比
+
+
+
+**从 Sub-Agent 到 Multi-Agent 的架构演进路径**
+
+
+
+
+
+
+
