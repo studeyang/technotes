@@ -148,38 +148,137 @@ LangChain 在其架构选型指南中给出了明确建议：“Start with a sin
 
 **四种核心设计模式**
 
-- 模式一：Sub-Agents（子代理委派 / 集中式编排）
+- 模式一：Sub-Agents（子代理委派）
+
+Sub-Agents 的核心设计思想是一个 Supervisor Agent 充当老板，将任务分解后委派给专门的 Sub-Agent。每个 Sub-Agent 解决一个特定的任务。
 
 ![img](https://static001.geekbang.org/resource/image/1b/45/1ba621fb0243476599a3eb0a82d99145.jpg?wh=2079x1032)
 
-工程评测显示，并行化的 Sub-Agent 执行方式可将复杂查询的整体研究时间最多缩短约 90%，但其代价是相较普通对话约 15 倍的 token 消耗；
+> Anthropic 的 Research 功能采用了经典的 Sub-Agent 模式：
+>
+> 1. LeadResearcher（Claude Opus 4）分析查询、制定策略
+> 2. 并行派出  3-5 个 SubAgent（Claude Sonnet 4），各自独立搜索
+> 3. 每个 SubAgent 执行 3+ 个并行工具调用
+> 4. CitationAgent 处理引用和来源归属
+> 5. 结果汇聚回 LeadResearcher 综合输出
+>
+> 工程评测显示，并行化的 Sub-Agent 执行方式可将复杂查询的整体研究时间最多缩短约 90%，但其代价是相较普通对话约 15 倍的 token 消耗；
 
-- 模式二：Skills（技能 / 渐进式能力加载）
+- 模式二：Skills（渐进式能力加载）
 
 通过 SKILL.md 文件（或类似配置）实现能力的渐进式加载。Agent 一开始只知道技能的名称和描述，当判断需要某个技能时，才加载完整的指令。
 
 ![img](https://static001.geekbang.org/resource/image/c6/4d/c6651d3f9a7d2522005054f5375a2b4d.jpg?wh=2108x1187)
 
-我想这样概括 Skills 模式与 Sub-Agent 模式的关键区别。
+> 在 Skills 模式下，系统仍然由单一 Agent 负责全部推理与执行，所有技能共享同一个上下文窗口。
+>
+> ```
+> .claude/skills/           
+> ├── deploy/
+> │   └── SKILL.md          # 部署技能的完整指令
+> ├── review-pr/
+> │   └── SKILL.md          # PR 审查技能的指令
+> └── database-migration/
+>     └── SKILL.md          # 数据库迁移技能的指令
+> ```
 
-```
-Sub-Agent：独立的上下文 → 适合大量信息过滤
-Skill：共享的上下文 → 适合需要连贯对话的场景
-```
+- 模式三：Handoffs（交接）
 
-- 模式三：Handoffs（交接 / 状态驱动的 Agent 切换）
+Handoffs 的核心思想是活跃的 Agent 根据对话状态动态切换。Agent A 完成自己的阶段后，通过调用  handoff() 工具将控制权（和上下文）传递给 Agent B。
 
+![img](https://static001.geekbang.org/resource/image/33/13/33ee50500cbf7c36cbb12b85e2371413.jpg?wh=2202x774)
 
+> Handoffs 的典型应用是客服工单流程：
+>
+> ```
+> 前台接待Agent --> 技术支持Agent --> 高级工程师Agent
+> - 收集用户信息    - 排查问题         - 尝试诊断
+> - 识别问题类型    - 尝试解决         - 解决并生成报告
+> - handoff对应    - 解决 ? 结案
+>   专家Agent        : handoff高
+>                    级工程师Agent
+> ```
 
 - 模式四：Router（路由器 / 并行分发与合成）
 
+Router 模式的核心在于对输入进行语义拆分与职责分流。系统首先由 Router 对用户请求进行分类和分解，然后将子查询并行分发给各自负责的专业 Agent，最后再将多个结果统一合成为一个对用户友好的响应。
 
+![img](https://static001.geekbang.org/resource/image/78/26/788f2cefef03a2284db65f3b2eef7626.jpg?wh=2116x1453)
 
-性能、成本、可控性的量化对比
+> 例如在企业知识库场景中，用户一次提问可能同时涉及政策文档、业务数据和实时指标，Router 可以将“退货政策”交由政策文档 Agent 处理，将“销售数据”交由数据分析 Agent 处理，并在上层完成结果整合后统一返回。
+>
+> ```
+> 用户提问：「我们的退货政策是什么？最近的销售数据如何？」
+> 
+> Router 分解：
+> ├── 查询 1：退货政策 → 政策文档 Agent
+> ├── 查询 2：销售数据 → 数据分析 Agent
+> └── 合成结果 → 统一回答
+> ```
 
+- 性能、成本、可控性的量化对比
 
+LangChain 对这四种模式做了实际的性能量化测试，分别从单任务请求的模型调用次数、重复请求的效率，和复杂问题的 Token 消耗三个方面进行了对比，结果非常有参考价值。
+
+| 场景                                                 | 结果                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------ |
+| 场景一：单任务请求（如“帮我修改函数支持分页查询”）   | ![img](https://static001.geekbang.org/resource/image/51/60/51732788764ca6cd668b5ee174759260.jpg?wh=2889x1616) |
+| 场景二：重复请求效率（第二轮相同类型的请求）         | ![img](https://static001.geekbang.org/resource/image/c9/38/c9980a7bd08987bd0e9d593972fdee38.jpg?wh=3024x1604) |
+| 场景三：多领域查询（如“对比 Python/JS/Rust 的性能”） | ![img](https://static001.geekbang.org/resource/image/07/bf/07a47c088e4361f761bbabee7d2330bf.jpg?wh=2933x1609) |
+
+比较上面几个表的结论，可以看出：
+
+- 简单任务中，Sub-Agent 模式有额外开销。
+- 多轮对话中，有状态模式效率优势明显。
+- 多领域查询中，上下文隔离的模式（Sub-Agent、Router）在 token 效率上优势显著——节省 40% 以上的 token 成本。
 
 **从 Sub-Agent 到 Multi-Agent 的架构演进路径**
+
+首先给出一个升级决策树：
+
+```
+你的任务需要多 Agent 吗？
+├─ 单一领域、工具 < 5 个、上下文 < 50K tokens
+│  └─→ 不需要。用单 Agent + 好的 prompt 即可
+│
+├─ 单一领域、但工具 > 10 个
+│  └─→ 考虑 Skills 模式（渐进式能力加载）
+│
+├─ 多领域、各领域需要独立上下文
+│  └─→ 使用 Sub-Agents 模式
+│
+├─ 需要多步骤状态流转（如客服工单流程）
+│  └─→ 使用 Handoffs 模式
+│
+└─ 需要跨多个数据源并行查询
+   └─→ 使用 Router 模式
+```
+
+下面是一个典型的项目架构演进路径。
+
+- 第一阶段：单 Agent + Tools
+
+适合大多数初期场景。不要过早引入多 Agent。
+
+![img](https://static001.geekbang.org/resource/image/1a/8c/1ab61b8ea67869b927e082c41438268c.jpg?wh=2073x940)
+
+- 第二阶段：单 Agent + Skills
+
+当工具数量增多、prompt 变得臃肿时，用 Skills 实现渐进式加载。
+
+![img](https://static001.geekbang.org/resource/image/ff/4c/ffb46a43a3375c076e3bc350c052554c.jpg?wh=2045x918)
+
+- 第三阶段：Supervisor + Sub-Agents
+
+当不同领域需要独立的上下文空间和专业知识时引入。
+
+![img](https://static001.geekbang.org/resource/image/eb/ae/eb52933d9a0d1a8d8b88ae0f62c8efae.jpg?wh=2703x1031)
+
+- 第四阶段：混合架构
+
+成熟系统中，不同类型的任务流可能采用不同的模式。Router 处理分类，Sub-Agent 处理并行研究，Handoff 处理顺序流程。
+
+![img](https://static001.geekbang.org/resource/image/cf/92/cf24fff82f9eb95a690ab108a121d692.jpg?wh=2756x1721)
 
 
 
