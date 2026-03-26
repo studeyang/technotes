@@ -763,14 +763,13 @@ grep "ERROR" *.log | cut -d']' -f2 | sort | uniq -c | sort -rn
 ```
 - 让 log-analyzer 分析 logs/ 目录下的错误，找出主要问题
 - 用 log-analyzer 分析 10:00-11:00 之间发生了什么问题
-
 ```
 
 # 07｜百舸争流：多任务并行探索与流水线编排
 
 
 
-
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202603241656714.jpeg)
 
 
 
