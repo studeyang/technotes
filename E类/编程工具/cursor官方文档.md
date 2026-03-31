@@ -230,11 +230,15 @@ ln -s /path/to/my-plugin ~/.cursor/plugins/local/my-plugin
 | `Apply to Specific Files` | 当文件匹配指定模式时应用                  |
 | `Apply Manually`          | 在聊天中被 @ 提及时应用 (例如 `@my-rule`) |
 
+```markdown
+---
+globs:
+alwaysApply: false
+---
 
+- Use our internal RPC pattern when defining services
+- Always use snake_case for service names.
 
-
-
-
-
-
+@service-template.ts
+```
 
