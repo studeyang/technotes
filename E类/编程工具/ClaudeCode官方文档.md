@@ -331,6 +331,73 @@ claude --resume auth-refactor
 
 ## 3.4 Claude Code 最佳实践
 
+**先探索，再规划，最后编码**
+
+推荐的工作流有四个阶段：
+
+1、探索：进入 Plan Mode。Claude 读取文件并回答问题，不进行任何更改。
+
+```
+claude (Plan Mode)
+
+read /src/auth and understand how we handle sessions and login.
+also look at how we manage environment variables for secrets.
+```
+
+2、规划：要求 Claude 创建详细的实现计划。
+
+```
+claude (Plan Mode)
+
+I want to add Google OAuth. What files need to change?
+What's the session flow? Create a plan.
+```
+
+按 `Ctrl+G` 在文本编辑器中打开计划进行直接编辑，然后 Claude 继续。
+
+3、实现：切换回 Normal Mode 并让 Claude 编码，根据其计划进行验证。
+
+```
+claude (Normal Mode)
+
+implement the OAuth flow from your plan. write tests for the
+callback handler, run the test suite and fix any failures.
+```
+
+4、提交：要求 Claude 使用描述性消息进行提交并创建 PR。
+
+```
+claude (Normal Mode)
+
+commit with a descriptive message and open a PR
+```
+
+**配置你的环境**
+
+
+
+**有效沟通**
+
+
+
+**管理你的会话**
+
+
+
+**自动化和扩展**
+
+
+
+**避免常见失败模式**
+
+
+
+**培养你的直觉**
+
+
+
+
+
 
 
 # 04 | 平台和集成
