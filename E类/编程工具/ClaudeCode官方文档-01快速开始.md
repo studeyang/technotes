@@ -372,35 +372,19 @@ claude (Normal Mode)
 commit with a descriptive message and open a PR
 ```
 
-**配置你的环境**
-
-
-
-**有效沟通**
-
-
-
-**管理你的会话**
-
-
-
-**自动化和扩展**
-
-
-
-**避免常见失败模式**
-
-
-
-**培养你的直觉**
-
-
-
-
-
-
-
 # 04 | 平台和集成
 
+## 4.1 JetBrains IDEs
 
+**功能**
+
+- 差异查看：代码更改可以直接在 IDE 差异查看器中显示，而不是在终端中显示
+- 选择上下文：IDE 中的当前选择/标签页会自动与 Claude Code 共享
+- 文件引用快捷方式：使用 `Cmd+Option+K`（Mac）或 `Alt+Ctrl+K`（Linux/Windows）插入文件引用（例如，@File#L1-99）
+- 诊断共享：IDE 中的诊断错误（lint、语法等）在您工作时会自动与 Claude 共享
+
+**使用**
+
+- 从 IDE 的集成终端运行 `claude`，所有集成功能都将处于活跃状态。
+- 在任何外部终端中使用 `/ide` 命令将 Claude Code 连接到您的 JetBrains IDE 并激活所有功能
 
