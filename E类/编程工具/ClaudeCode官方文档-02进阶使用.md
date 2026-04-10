@@ -258,13 +258,19 @@ Greet the user named "$ARGUMENTS" warmly and ask how you can help them today. Ma
 
 ## 2.1 CLI参考
 
+Claude Code 命令行界面的完整参考，包括命令和标志。
+
 ### CLI命令
+
+您可以使用这些命令启动会话、管道内容、恢复对话和管理更新
 
 | 命令            | 描述           | 示例            |
 | :-------------- | :------------- | :-------------- |
 | `claude update` | 更新到最新版本 | `claude update` |
 
 ### CLI标志
+
+使用这些命令行标志自定义 Claude Code 的行为。
 
 | 标志                                   | 描述                                                         | 示例                                                         |
 | :------------------------------------- | :----------------------------------------------------------- | :----------------------------------------------------------- |
@@ -277,6 +283,10 @@ Greet the user named "$ARGUMENTS" warmly and ask how you can help them today. Ma
 | `--worktree`, `-w`                     | 在隔离的 [git worktree](https://code.claude.com/docs/zh-CN/common-workflows#run-parallel-claude-code-sessions-with-git-worktrees) 中启动 Claude，位于 `<repo>/.claude/worktrees/<name>`。如果未给出名称，则自动生成一个 | `claude -w feature-auth`                                     |
 
 ## 2.2 内置命令
+
+在 Claude Code 中输入 `/` 可以查看所有可用命令，并非所有命令对每个用户都可见。某些命令取决于您的平台、计划或环境。例如，`/desktop` 仅在 macOS 和 Windows 上显示。
+
+Claude Code 还包括[捆绑的 skills](https://code.claude.com/docs/zh-CN/skills#bundled-skills)，如 `/simplify`、`/batch`、`/debug` 和 `/loop`，当您输入 `/` 时会与内置命令一起显示。
 
 | 命令                      | 用途                                                         |
 | :------------------------ | :----------------------------------------------------------- |
@@ -300,5 +310,48 @@ Greet the user named "$ARGUMENTS" warmly and ask how you can help them today. Ma
 | ~~`/vim`~~                | ~~在 Vim 和普通编辑模式之间切换~~                            |
 | ~~`/voice`~~              | ~~切换推送通话[语音听写](https://code.claude.com/docs/zh-CN/voice-dictation)。需要 Claude.ai 账户~~ |
 
+## 2.3 环境变量
+
+Claude Code 支持以下环境变量来控制其行为。在启动 `claude` 之前在 shell 中设置它们，或在 [`settings.json`](https://code.claude.com/docs/zh-CN/settings#available-settings) 中的 `env` 键下配置它们。
+
+| 变量                                           | 目的                                                         |
+| :--------------------------------------------- | :----------------------------------------------------------- |
+| `ANTHROPIC_AUTH_TOKEN`                         | `Authorization` 标头的自定义值（您在此处设置的值将以 `Bearer `为前缀） |
+| `ANTHROPIC_BASE_URL`                           | 覆盖 API 端点以通过代理或网关路由请求。设置为非第一方主机时，[MCP 工具搜索](https://code.claude.com/docs/zh-CN/mcp#scale-with-mcp-tool-search)默认禁用。如果您的代理转发 `tool_reference` 块，请设置 `ENABLE_TOOL_SEARCH=true` |
+| `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD` | 设置为 `1` 以从使用 `--add-dir` 指定的目录加载 CLAUDE.md 文件。默认情况下，其他目录不加载内存文件 |
+| `CLAUDE_CODE_AUTO_CONNECT_IDE`                 | 覆盖自动 [IDE 连接](https://code.claude.com/docs/zh-CN/vs-code)。默认情况下，在支持的 IDE 的集成终端内启动时，Claude Code 会自动连接。设置为 `false` 以防止这种情况。设置为 `true` 以在自动检测失败时强制连接尝试，例如当 tmux 遮挡父终端时 |
+| `CLAUDE_CODE_DISABLE_ATTACHMENTS`              | 设置为 `1` 以禁用附件处理。带有 `@` 语法的文件提及作为纯文本发送，而不是扩展为文件内容 |
+| `CLAUDE_CODE_DISABLE_AUTO_MEMORY`              | 设置为 `1` 以禁用[自动内存](https://code.claude.com/docs/zh-CN/memory#auto-memory)。设置为 `0` 以在逐步推出期间强制启用自动内存。禁用后，Claude 不会创建或加载自动内存文件 |
+| `CLAUDE_CODE_DISABLE_CLAUDE_MDS`               | 设置为 `1` 以防止将任何 CLAUDE.md 内存文件加载到上下文中，包括用户、项目和自动内存文件 |
+| `CLAUDE_CODE_NEW_INIT`                         | 设置为 `1` 以使 `/init` 运行交互式设置流程。该流程会询问要生成哪些文件，包括 CLAUDE.md、skills 和 hooks，然后再探索代码库并编写它们。没有此变量，`/init` 会自动生成 CLAUDE.md 而不提示。 |
+| `CLAUDE_CONFIG_DIR`                            | 覆盖配置目录（默认值：`~/.claude`）。所有设置、凭证、会话历史和插件都存储在此路径下。对于并行运行多个帐户很有用：例如，`alias claude-work='CLAUDE_CONFIG_DIR=~/.claude-work claude'` |
+| `HTTP_PROXY`                                   | 为网络连接指定 HTTP 代理服务器                               |
+| `HTTPS_PROXY`                                  | 为网络连接指定 HTTPS 代理服务器                              |
+
+## 2.4 工具参考
+
+Claude Code 可以访问一组内置工具，帮助它理解和修改您的代码库。
+
+## 2.5 交互模式
+
+键盘快捷键可能因平台和终端而异。按 `?` 查看您的环境中可用的快捷键。
+
+**常规控制**
+
+| 快捷键   | 描述               | 上下文   |
+| :------- | :----------------- | :------- |
+| `Ctrl+C` | 取消当前输入或生成 | 标准中断 |
+| `Ctrl+G` | 在默认文本编辑器中打开 |在默认文本编辑器中编辑您的提示或自定义响应。`Ctrl+X Ctrl+E` 是 readline 原生绑定|
+| `Ctrl+R` | 反向搜索命令历史 |交互式搜索以前的命令|
+| `Alt+V`（Windows） | 从剪贴板粘贴图像 |在光标处插入 `[Image #N]` 芯片，以便您可以在提示中按位置引用它|
+| `Option+P`（macOS）或 `Alt+P`（Windows/Linux） | 切换模型 |在不清除提示的情况下切换模型|
+
+**文本编辑**
+
+| 快捷键   | 描述               | 上下文   |
+| :------- | :----------------- | :------- |
+| `Ctrl+K` | 删除到行尾 |存储已删除的文本以供粘贴|
+| `Ctrl+U` | 从光标删除到行首 |存储已删除的文本以供粘贴。重复以清除多行输入中的多行|
+| `Ctrl+Y` | 粘贴已删除的文本 |粘贴用 `Ctrl+K` 或 `Ctrl+U` 删除的文本|
 
 
