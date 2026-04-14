@@ -794,7 +794,7 @@ grep "ERROR" *.log | cut -d']' -f2 | sort | uniq -c | sort -rn
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604141619366.jpeg)
 
-**项目一：并行探索**
+### 项目一：并行探索
 
 接下来我们直接进入实战演练。
 
@@ -819,7 +819,7 @@ grep "ERROR" *.log | cut -d']' -f2 | sort | uniq -c | sort -rn
     └── api-explorer.md
 ```
 
-第一步：创建并行探索子代理
+**第一步：创建并行探索子代理**
 
 ~~~markdown
 ---
@@ -896,7 +896,7 @@ Focus ONLY on authentication-related concerns:
 - Your Domain 部分的关注点
 - Output Format 中的报告结构
 
-第二步：使用并行探索
+**第二步：使用并行探索**
 
 进入项目目录，在 Claude Code 的命令行中输入：
 
@@ -922,7 +922,7 @@ Focus ONLY on authentication-related concerns:
 >
 > 这种情况下就只能使用串行模式了。
 
-**项目二：流水线编排**
+### 项目二：流水线编排
 
 了解了并行探索的模式，我们再来看看流水线编排如何实现。
 
@@ -1012,7 +1012,11 @@ You are the FIRST step in the bug fix pipeline. Your job is to:
 - [file]: [why related]
 
 ### Handoff to Analyzer
-[What the analyzer should focus on]
+- **Primary suspect**: [file:function:line_range]
+- **Symptoms to reproduce**: [具体步骤]
+- **Hypothesis**: [为什么怀疑这里]
+- **Already excluded**: [搜索过但排除的位置及原因]
+- **Related files to check**: [可能受影响的其他文件]
 <!-- Handoff to Analyzer：为下一阶段准备信息 -->
 
 ## Guidelines
@@ -1194,41 +1198,290 @@ Your job is to:
 
 阶段四：Verifier（验证）
 
+~~~markdown
+---
+name: bug-verifier
+description: Verify bug fixes by running tests. Final step in bug fix pipeline.
 
+tools: Read, Bash, Grep, Glob
+<!-- Bash可以执行测试 -->
+model: haiku
+---
 
-- 使用流水线
-- 流水线的架构约束：子代理不能嵌套
-- 长流水线的保障：Resume 恢复机制
+You are a QA specialist focused on verifying bug fixes.
 
+## Your Role
 
+You are the FINAL step in the bug fix pipeline. You receive:
+- The fix that was implemented
+- Testing notes from the fixer
 
-**流水线的核心工程问题：阶段间的“交接契约”**
+Your job is to:
+1. Run existing tests
+2. Verify the fix works
+3. Check for regressions
 
-- 什么是“交接契约”？
-- 在 prompt 中实现交接契约
+## When Invoked
 
+1. **Run Tests**: Execute the test suite
+2. **Analyze Results**: Check pass/fail status
+3. **Verify Fix**: Confirm the original bug is fixed
+4. **Check Regressions**: Ensure nothing else broke
 
+## Verification Checklist
 
-**主对话的角色：编排者，而非旁观者**
+- [ ] All existing tests pass
+- [ ] The specific bug scenario is fixed
+- [ ] No new errors introduced
+- [ ] Code changes match what was intended
+<!-- 检查是否引入新问题 -->
 
-- 编排者的四种介入形式
-- 编排者的 prompt 设计
-- 
+## Output Format
 
-**当流水线阶段失败时怎么办？**
+```markdown
+## Verification Report
 
+### Test Results
+**Status**: PASS / FAIL
+**Total Tests**: X
+**Passed**: X
+**Failed**: X
 
+### Bug Fix Verification
+**Original Bug**: [description]
+**Status**: FIXED / NOT FIXED / PARTIALLY FIXED
 
-**并行 vs 流水线：什么时候用什么**
+### Regression Check
+**New Issues Found**: Yes / No
+- [If yes, list them]
 
-- 模式一：Fan-out → Fan-in（扇出→聚合）
-- 模式二：Pipeline + Parallel Stage（流水线中嵌套并行）
-- 模式三：Parallel Pipelines（多条流水线并行）
-- 
+### Final Verdict
+- [ ] Safe to merge
+- [ ] Needs more work: [reason]
+- [ ] Needs manual testing: [what to test]
 
+### Notes for Human Review
+[Any observations or concerns]
 
+## Commands to Run
 
+```bash
+# Check for syntax errors
+node --check [file]
 
+# Run tests
+npm test
+# or
+node tests/[test-file].js
+<!-- 运行测试验证修复 -->
+
+## Guidelines
+
+- Run ALL tests, not just related ones
+- Report any warnings, not just errors
+- Be honest about test coverage gaps
+- Suggest manual testing if needed
+- Provide clear pass/fail verdict  
+~~~
+
+**使用流水线**
+
+进入项目目录，描述 bug：
+
+```
+我有一个 bug：用户登录后偶尔会 token 验证失败。
+帮我用流水线方式修复：
+1. 先让 bug-locator 找到相关代码
+2. 让 bug-analyzer 分析原因
+3. 让 bug-fixer 修复
+4. 让 bug-verifier 跑测试验证
+```
+
+你可以在任何阶段介入，修正方向，而不用等整个流程跑完才发现问题。比如：
+
+```
+Locator：找到了 3 个可能的位置
+你：等等，第二个位置不太可能，那是测试代码
+Locator：好的，聚焦到第一和第三个位置...
+```
+
+### “交接契约”
+
+**什么是“交接契约”？**
+
+流水线中，前一个子代理的输出就是后一个子代理的输入（通过主对话转发）。如果前一个阶段输出的信息不完整或格式不对，后一个阶段就会“瞎干”。
+
+```
+如果Locator 输出："bug 可能在 auth 模块里。"
+                    ↓
+Analyzer 收到这句话后："auth 模块？哪个文件？哪个函数？我该分析什么？"
+                    ↓
+结果：Analyzer 自己又做了一遍 Locator 的工作，流水线形同虚设。
+```
+
+交接契约要遵循的经验法则是——交接时信息量要充足，让下一阶段无需重复上一阶段的工作。如果 Analyzer 收到 Locator 的输出后，还需要自己 Grep 一遍才能开始分析，说明交接契约设计不合格。
+
+因此，在每个阶段的输出格式中，应该有一个明确的  Handoff（交接） 部分，告诉下一阶段“你需要关注什么”。
+
+```markdown
+## Locator → Analyzer 的交接契约
+
+### Locator 必须提供：
+1. 具体文件路径（不是"大概在某模块"）
+2. 具体函数/方法名
+3. 嫌疑代码行号范围
+4. 为什么怀疑这里（搜索证据）
+5. 相关联的其他文件列表
+
+### Analyzer 期望收到：
+1. 明确的调查范围（文件+函数）
+2. 症状描述（用户看到什么）
+3. 已排除的可能性（Locator 搜索过但排除的位置）
+## Analyzer → Fixer 的交接契约
+
+### Analyzer 必须提供：
+1. 根因定位（一句话）
+2. 修复方向建议（不超过 3 个方案）
+3. 推荐方案及理由
+4. 修改涉及的文件列表
+5. 需要注意的边界条件
+
+### Fixer 期望收到：
+1. 明确的"改什么"（文件+位置+原因）
+2. 明确的"怎么改"（方向，不需要具体代码）
+3. 明确的"别碰什么"（不应该修改的部分）
+## Fixer → Verifier 的交接契约
+
+### Fixer 必须提供：
+1. 改了哪些文件（diff 格式）
+2. 为什么这么改
+3. 可能的副作用清单
+4. 需要运行的测试命令
+5. 验证通过的标准是什么
+
+### Verifier 期望收到：
+1. 变更清单（知道要验证什么）
+2. 测试命令（知道怎么验证）
+3. 预期结果（知道什么算通过）
+```
+
+### **主对话编排**
+
+在 Claude Code 中，主对话就是编排者——它负责触发每个阶段、审查每个阶段的输出，决定是否继续、重试或中止、同时在阶段之间注入人工判断。
+
+> 编排者的四种介入形式
+
+编排者有全自动、关键阶段审批、逐阶段审批和回退重试四种介入形式。
+
+```
+形式一：全自动（信任度高）
+┌─────────┐  自动 ┌─────────┐  自动  ┌─────────┐ 自动  ┌─────────┐
+│ Locator │ ────→ │ Analyzer│ ────→ │  Fixer  │ ────→ │Verifier │
+└─────────┘       └─────────┘       └─────────┘       └─────────┘
+
+形式二：关键阶段审批（推荐）
+┌─────────┐  自动 ┌─────────┐       ┌─────────┐  自动  ┌─────────┐
+│ Locator │ ────→ │ Analyzer│ ─?──→ │  Fixer  │ ────→ │Verifier │
+└─────────┘       └─────────┘  ↑    └─────────┘       └─────────┘
+                            人工审批
+                        "这个根因分析对吗？
+                         确认后再让它改代码"
+
+形式三：逐阶段审批（谨慎）
+┌─────────┐       ┌─────────┐       ┌─────────┐       ┌─────────┐
+│ Locator │ ─?──→ │ Analyzer│ ─?──→ │  Fixer  │ ─?──→ │Verifier │
+└─────────┘  ↑    └─────────┘  ↑    └─────────┘  ↑    └─────────┘
+          人工审批           人工审批           人工审批
+
+形式四：回退重试（遇到问题时）
+┌─────────┐       ┌─────────┐       ┌─────────┐
+│ Locator │ ────→ │ Analyzer│ ────→ │  Fixer  │
+└─────────┘       └─────────┘       └────┬────┘
+                       ↑                  │
+                       └──────────────────┘
+                      "修复方向不对，
+                       回退到分析阶段"
+```
+
+就 Bug 修复这个具体问题而言，并不是每个阶段都需要人工审批，但有一个关键决策点必须把关：
+
+```
+Analyzer → Fixer
+ ↑
+这个位置最关键！
+```
+
+为什么？因为这是从只读到读写的跨越——一旦 Fixer 开始修改代码，回退成本就高了。在这个位置审查 Analyzer 的根因分析，确认方向正确后再继续，是性价比最高的介入方式。
+
+> 编排者的 prompt 设计
+
+你可以在触发流水线时明确编排方式：
+
+```
+帮我修复这个 bug：用户登录后偶尔 token 验证失败。
+
+执行方式：
+1. 先让 bug-locator 定位 → 自动传给 bug-analyzer
+2. bug-analyzer 分析完后 → 先给我看根因分析，我确认后再继续
+3. 我确认后 → 让 bug-fixer 修复 → 自动传给 bug-verifier
+4. bug-verifier 验证完给我最终报告
+```
+
+这就是形式二：关键阶段审批的实际使用方式。
+
+### 适用场景
+
+![img](https://static001.geekbang.org/resource/image/42/aa/4217eb94383a247c592ca6141d9186aa.jpg?wh=2703x1260)
+
+真实工程任务很少是纯并行或纯流水线。更常见的是混合模式——一部分任务并行，一部分串行。
+
+**模式一：Fan-out → Fan-in（扇出→聚合）**
+
+典型场景：接手新项目时，先并行探索各模块，再综合分析。
+
+```
+                    ┌─── Explorer A ───┐
+                    │                   │
+Input ──→ Split ──→├─── Explorer B ───├──→ Synthesizer ──→ Output
+                    │                   │
+                    └─── Explorer C ───┘
+
+        串行              并行              串行
+```
+
+prompt：
+
+```
+帮我理解这个项目的架构：
+1. 同时让 auth-explorer、db-explorer、api-explorer 各自探索
+2. 收到三份报告后，综合分析模块间的依赖关系和数据流
+```
+
+**模式二：Pipeline + Parallel Stage（流水线中嵌套并行）**
+
+典型场景：定位到问题位置后，需要从多个维度分析（安全性、性能、兼容性），再综合决定修复方案。
+
+```
+┌──────────┐     ┌───────────────────────┐     ┌──────────┐
+│          │     │    ┌─── Check A ───┐  │     │          │
+│ Locator  │ ──→ │    ├─── Check B ───├  │ ──→ │  Fixer   │
+│          │     │    └─── Check C ───┘  │     │          │
+└──────────┘     │     并行检查多维度     │     └──────────┘
+                 └───────────────────────┘
+    串行                  并行                    串行
+```
+
+prompt：
+
+```
+bug-locator 已经定位到 user-service.js 的 validateToken 函数。现在：
+1. 同时从三个角度分析这个函数：
+   - 安全性（有没有漏洞）
+   - 性能（有没有阻塞）
+   - 兼容性（改了会不会影响调用方）
+2. 综合三份分析，决定修复方案
+3. 让 bug-fixer 执行修复
+```
 
 
 
