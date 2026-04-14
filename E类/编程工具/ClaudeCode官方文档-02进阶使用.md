@@ -35,6 +35,14 @@ claude mcp add --transport http secure-api https://api.example.com/mcp \
 
 > SSE (Server-Sent Events) 传输已弃用。请在可用的地方使用 HTTP 服务器。
 
+```shell
+# 基本语法
+claude mcp add --transport sse <name> <url>
+
+# 真实示例：连接到 Asana
+claude mcp add --transport sse asana https://mcp.asana.com/sse
+```
+
 - 选项 3：添加本地 stdio 服务器
 
 ```shell

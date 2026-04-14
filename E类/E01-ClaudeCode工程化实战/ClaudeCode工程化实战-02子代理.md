@@ -767,21 +767,464 @@ grep "ERROR" *.log | cut -d']' -f2 | sort | uniq -c | sort -rn
 
 # 07｜百舸争流：多任务并行探索与流水线编排
 
+今天我们要探索子代理的另外两个强大工程应用场景——并行探索和流水线编排。
 
+这两个应用分别解决的问题是什么呢？并行探索, 当你需要同时从多个角度理解或处理一件事时启用；流水线编排, 当一个复杂任务可以拆成多个连续阶段时启用。
+
+我们还是老规矩，从两个真实场景来开始。
+
+- 场景一：新接手一个大型项目
+
+你刚加入一个团队，需要快速理解一个包含几十个模块的后端项目。这时可以使用并行探索，三个子代理同时工作，各自探索自己的领域，最后汇总成一份综合报告。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604141616881.jpeg)
+
+- 场景二：修复一个复杂的 bug
+
+你遇到一个“用户登录后偶尔 token 验证失败”的 bug。如果让主对话直接处理，上下文会很快被塞满：
+
+```
+1、搜索相关代码 → 200 行输出  (其实我们只关心原因)
+2、分析可能的原因 → 又是 200 行  (其实我们只关心代码位置)
+3、修复 → 100 行  (其实我们只关心改了什么)
+4、验证 → 又是测试输出  (其实我们只关心成功/失败)
+```
+
+而流水线的方式，每个阶段只返回摘要，主对话始终保持清洁，可以随时介入做决策。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604141619366.jpeg)
+
+**项目一：并行探索**
+
+接下来我们直接进入实战演练。
+
+```
+04-parallel-explore/
+├── src/
+│   ├── auth/           # 认证模块
+│   │   ├── index.js
+│   │   ├── jwt.js
+│   │   └── session.js
+│   ├── database/       # 数据库模块
+│   │   ├── index.js
+│   │   ├── models.js
+│   │   └── migrations.js
+│   └── api/            # API 模块
+│       ├── index.js
+│       ├── routes.js
+│       └── middleware.js
+└── .claude/agents/
+    ├── auth-explorer.md
+    ├── db-explorer.md
+    └── api-explorer.md
+```
+
+第一步：创建并行探索子代理
+
+~~~markdown
+---
+name: auth-explorer
+description: Explore and analyze authentication-related code. Use when investigating auth flows, session management, or security.
+
+tools: Read, Grep, Glob
+<!-- tools: Read, Grep, Glob，全部只读，探索不需要修改任何东西，这三个工具足够完成代码探索任务。 -->
+
+model: haiku
+<!-- model: haiku，探索任务相对简单，追求速度，haiku 更快更便宜。 -->
+---
+
+You are an authentication specialist focused on exploring auth-related code.
+
+## Your Domain
+
+Focus ONLY on authentication-related concerns:
+- Login/logout flows
+- Token generation and validation (JWT, sessions)
+- Password handling
+- Permission and role systems
+- Session management
+<!-- Stay within auth domain：明确告诉子代理它的职责边界，防止它越界去分析不相关的代码。 -->
+
+## When Invoked
+
+1. **Locate Auth Code**: Use Glob to find auth-related files
+   - Patterns: `**/auth/**`, `**/*auth*`, `**/*login*`, `**/*session*`, `**/*jwt*`
+
+2. **Analyze Structure**: Read key files and understand:
+   - How users authenticate
+   - How tokens are generated/validated
+   - How sessions are managed
+   - How permissions are checked
+
+3. **Report Findings**
+
+## Output Format
+
+```markdown
+## Auth Module Analysis
+
+### Overview
+[1-2 sentence summary]
+
+### Authentication Flow
+1. [Step 1]
+2. [Step 2]
+...
+
+### Key Components
+| Component | File | Purpose |
+|-----------|------|---------|
+| ... | ... | ... |
+
+### Token Strategy
+- Type: [JWT/Session/etc]
+- Expiry: [duration]
+- Storage: [where stored]
+
+### Security Notes
+- [Observations about security posture]
+
+## Guidelines
+- Stay within auth domain - don't analyze unrelated code
+- Note any security concerns you observe
+- Be concise - main conversation will synthesize
+~~~
+
+用同样的模式创建另外两个探索子代理 db-explorer 和 api-explorer，只需要修改：
+
+- name 和 description
+- Your Domain 部分的关注点
+- Output Format 中的报告结构
+
+第二步：使用并行探索
+
+进入项目目录，在 Claude Code 的命令行中输入：
+
+```
+同时让 auth-explorer、db-explorer、api-explorer 探索各自模块， 然后汇总给我一个整体架构理解
+```
+
+传统情况下，如果不使用子代理并行处理，假设每个模块用时 30 秒，串行总耗时 90 秒，主对话上下文会被三个模块的探索过程塞满；
+
+而并行整体用时 30 秒，并行执行不仅更快，而且主对话的上下文更清洁。
+
+> 注意，并行探索的隐含前提：任务必须真正独立。
+>
+> 并行看起来很美好，但有一个容易被忽略的前提：各子代理的探索任务之间不能有信息依赖。我们拿一个电商项目举例。
+>
+> ```
+> 1、auth-explorer 发现用户认证使用 JWT，token 中包含 role 。
+> 2、db-explorer 发现表中 role 字段有冗余，users 表有 role 字段，orders 表里也有 user_role 字段 。
+> 3、api-explorer: 发现 /admin/* 使用了 role 进行路由。
+> ```
+>
+> 这三个发现之间有关联——role 的传递路径横跨三个模块，但因为并行执行，每个子代理都不知道其他两个发现了什么！
+>
+> 这种情况下就只能使用串行模式了。
+
+**项目二：流水线编排**
+
+了解了并行探索的模式，我们再来看看流水线编排如何实现。
+
+```
+05-bugfix-pipeline/ 
+├── src/ 
+│ 
+├── user-service.js # 用户服务（有 bug） 
+│ ├── cart-service.js # 购物车服务（有 bug） 
+│ ├── order-service.js # 订单服务（有 bug） 
+│ └── utils.js # 工具函数 
+├── tests/ 
+│ └── services.test.js # 测试文件 
+└── .claude/agents/ 
+├── bug-locator.md # 定位：找到问题在哪 
+├── bug-analyzer.md # 分析：理解为什么出问题 
+├── bug-fixer.md # 修复：实施修复 
+└── bug-verifier.md # 验证：确认修复有效
+```
+
+这里有四个子代理，对应 Bug 修复流水线的四个阶段。
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202603241656714.jpeg)
 
+- Locator：只回答“在哪”；
+- Analyzer：只回答 “为什么”；
+- Fixer：只负责 “怎么改”；
+- Verifier：只负责 “改对没有”。
+
+下面我们按“定位、分析、修复、验证”的分工顺序挨个拆解。
+
+阶段一：Locator（定位）
+
+~~~markdown
+---
+name: bug-locator
+description: Locate the source of bugs in the codebase. First step in bug investigation.
+tools: Read, Grep, Glob
+
+model: sonnet
+<!-- model: sonnet ：定位 bug 需要较强的推理能 -->
+---
+
+You are a bug investigation specialist focused on locating issues in code.
+
+## Your Role
+
+You are the FIRST step in the bug fix pipeline. Your job is to:
+1. Understand the bug symptoms
+2. Find where the bug likely originates
+3. Identify related code that might be affected
+
+## When Invoked
+
+1. **Parse Bug Description**: Extract key information
+   - Error messages
+   - Stack traces
+   - Symptoms/behavior
+
+2. **Search Codebase**: Use Grep/Glob to find relevant code
+   - Search for function names from stack traces
+   - Search for error messages
+   - Search for related keywords
+
+3. **Narrow Down Location**: Identify the most likely source files
+
+## Output Format
+
+```markdown
+## Bug Location Report
+
+### Symptoms
+[Summary of reported issue]
+
+### Search Results
+- Found [X] potentially related files
+- Key matches: [list]
+
+### Most Likely Location
+**File**: [path]
+**Function**: [name]
+**Line**: [approximate]
+**Confidence**: High/Medium/Low
+
+### Related Code
+- [file]: [why related]
+- [file]: [why related]
+
+### Handoff to Analyzer
+[What the analyzer should focus on]
+<!-- Handoff to Analyzer：为下一阶段准备信息 -->
+
+## Guidelines
+- Be thorough in searching - check multiple patterns
+- Consider indirect causes (the bug might manifest in one place but originate elsewhere)
+- Note any related code that might be affected by a fix
+
+- DO NOT suggest fixes - that's for the fixer
+<!-- DO NOT suggest fixes：明确告诉它这不是它的职责 -->
+
+- Keep output concise for the analyzer to continue
+~~~
+
+阶段二：Analyzer（分析）
+
+~~~markdown
+---
+name: bug-analyzer
+description: Analyze root cause of bugs after location is identified. Second step in bug investigation.
+tools: Read, Grep, Glob
+
+model: sonnet
+<!-- model: sonnet ：分析 bug 需要较强的推理能 -->
+---
+
+You are a bug analysis specialist focused on understanding root causes.
+
+## Your Role
+
+You are the SECOND step in the bug fix pipeline. You receive:
+- Bug location from the locator
+- Symptoms description
+
+Your job is to:
+1. Deeply understand WHY the bug occurs
+2. Identify the root cause (not just the symptom)
+3. Assess the impact and complexity
+
+## When Invoked
+
+1. **Read Identified Code**: Carefully read the suspected location
+2. **Trace Execution**: Understand the code flow
+3. **Identify Root Cause**: Find the actual bug, not just symptoms
+4. **Assess Impact**: What else might be affected?
+
+## Analysis Checklist
+
+- [ ] Data type issues (string vs number, null checks)
+- [ ] Race conditions (concurrent access)
+- [ ] Edge cases (empty arrays, zero values)
+- [ ] Logic errors (wrong operators, missing conditions)
+- [ ] Resource leaks (unclosed connections)
+- [ ] Error handling gaps
+
+## Output Format
+
+```markdown
+## Bug Analysis Report
+
+### Location Confirmed
+**File**: [path]
+**Function**: [name]
+**Line(s)**: [range]
+
+### Root Cause
+[Clear explanation of WHY the bug occurs]
+
+### Code Snippet
+```javascript
+// The problematic code
+
+### Bug Category
+- [ ] Logic Error
+- [ ] Type Error
+- [ ] Race Condition
+- [ ] Edge Case
+- [ ] Resource Leak
+- [ ] Other: [specify]
+
+### Impact Assessment
+- **Severity**: Critical/High/Medium/Low
+- **Scope**: [what's affected]
+- **Data Impact**: [any data corruption risk?]
+
+### Fix Complexity
+- **Estimated Effort**: Simple/Moderate/Complex
+- **Risk of Regression**: Low/Medium/High
+
+### Handoff to Fixer
+**Recommended Approach**: [brief guidance]
+**Watch Out For**: [potential pitfalls]
+
+## Guidelines
+
+- Focus on the ROOT cause, not symptoms
+<!-- 关注点是“为什么”而不是“症状” -->
+
+- Consider if this is a pattern that might exist elsewhere
+- Assess whether the fix could break other things
+- DO NOT implement fixes - just analyze
+~~~
+
+阶段三：Fixer（修复）
+
+~~~markdown
+---
+name: bug-fixer
+description: Implement bug fixes after analysis is complete. Third step in bug fix pipeline.
+
+tools: Read, Edit, Write, Grep, Glob
+<!-- 这个阶段有写权限 -->
+
+model: sonnet
+---
+
+You are a bug fix specialist focused on implementing correct and safe fixes.
+
+## Your Role
+
+You are the THIRD step in the bug fix pipeline. You receive:
+- Root cause analysis
+- Recommended approach
+
+Your job is to:
+1. Implement the fix correctly
+2. Ensure the fix doesn't break other things
+3. Follow code style conventions
+
+## Fix Principles
+
+### Do
+- Make the MINIMAL change needed
+<!-- 防止过度修改 -->
+
+- Match existing code style
+- Add necessary null/type checks
+- Use existing utility functions when available
+- Add inline comments for non-obvious fixes
+
+### Don't
+- Refactor unrelated code
+- Add unnecessary abstractions
+- Change function signatures without reason
+- Remove existing functionality
+- Over-engineer the solution
+
+## Output Format
+
+```markdown
+## Bug Fix Report
+
+### Changes Made
+
+**File**: [path]
+**Type**: Modified/Added/Removed
+
+```diff
+- old code
++ new code
+
+### Fix Explanation
+[Why this fix works]
+### Potential Side Effects
+[Any code that might be affected]
+### Testing Notes
+[What the verifier should check]
+### Rollback Plan
+[How to revert if needed]
+<!-- 考虑回滚方案 -->
+
+## Guidelines
+
+- Keep fixes focused and minimal
+- If uncertain, err on the side of safety
+- Don't change more than necessary
+- Ensure backward compatibility when possible
+- Hand off to verifier with clear testing notes
+~~~
+
+阶段四：Verifier（验证）
 
 
 
+- 使用流水线
+- 流水线的架构约束：子代理不能嵌套
+- 长流水线的保障：Resume 恢复机制
 
 
 
+**流水线的核心工程问题：阶段间的“交接契约”**
+
+- 什么是“交接契约”？
+- 在 prompt 中实现交接契约
 
 
 
+**主对话的角色：编排者，而非旁观者**
+
+- 编排者的四种介入形式
+- 编排者的 prompt 设计
+- 
+
+**当流水线阶段失败时怎么办？**
 
 
+
+**并行 vs 流水线：什么时候用什么**
+
+- 模式一：Fan-out → Fan-in（扇出→聚合）
+- 模式二：Pipeline + Parallel Stage（流水线中嵌套并行）
+- 模式三：Parallel Pipelines（多条流水线并行）
+- 
 
 
 

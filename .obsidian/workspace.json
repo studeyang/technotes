@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "d9cefa7fd577514b",
+        "id": "e1e81d4b39f64d4b",
         "type": "tabs",
         "children": [
           {
-            "id": "a2e1d37013e68432",
+            "id": "e668d548e408d8eb",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "E类/E01-ClaudeCode工程化实战/ClaudeCode工程化实战-02子代理.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "新标签页"
+              "title": "ClaudeCode工程化实战-02子代理"
             }
           }
         ]
@@ -49,7 +53,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "",
+                "query": "tag:#先添加认证用户",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -109,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "2026-03-19.md",
+                "file": "E类/E01-ClaudeCode工程化实战/ClaudeCode工程化实战-02子代理.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "2026-03-19 的出链列表"
+              "title": "ClaudeCode工程化实战-02子代理 的出链列表"
             }
           },
           {
@@ -124,7 +128,7 @@
               "type": "tag",
               "state": {
                 "sortOrder": "frequency",
-                "useHierarchy": true,
+                "useHierarchy": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
@@ -152,16 +156,17 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "E类/E01-ClaudeCode工程化实战/ClaudeCode工程化实战-02子代理.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "大纲"
+              "title": "ClaudeCode工程化实战-02子代理 的大纲"
             }
           }
         ],
-        "currentTab": 2
+        "currentTab": 4
       }
     ],
     "direction": "horizontal",
@@ -178,18 +183,20 @@
       "bases:新建数据库": false
     }
   },
-  "active": "c7837deb4eedd644",
+  "active": "f480a2f867e6db62",
   "lastOpenFiles": [
-    "img/my_favicon.png",
+    "E类/E01-ClaudeCode工程化实战/ClaudeCode工程化实战-03Skills技能系统.md",
+    "E类/E01-ClaudeCode工程化实战/ClaudeCode工程化实战-04扩展机制.md",
+    "E类/E01-ClaudeCode工程化实战/ClaudeCode工程化实战-02子代理.md",
     "img/cover4.jpg",
-    "img/cover3.jpg",
     "img/cover2.jpeg",
     "img/cover.jpg",
+    "img/my_favicon.png",
+    "img/cover3.jpg",
     "资源/学习资源.md",
     "E类/E01-ClaudeCode工程化实战/ClaudeCode工程化实战-01基础篇.md",
     "2026-03-19.md",
     "2026-03-1000.md",
-    "E类/E01-ClaudeCode工程化实战/ClaudeCode工程化实战-02子代理.md",
     "未命名.canvas",
     "E类/ClaudeCode.md",
     "未命名.md"
