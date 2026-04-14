@@ -1483,7 +1483,9 @@ bug-locator 已经定位到 user-service.js 的 validateToken 函数。现在：
 3. 让 bug-fixer 执行修复
 ```
 
+# 08 | 群策群力：Agent Teams 多会话协作架构
 
+略
 
 
 
