@@ -197,6 +197,386 @@ hooks:                             # 可选：作用域为此 Skill 的 Hooks
 ---
 ```
 
+# 10｜令行禁止：任务型 Skills （斜杠命令 /Command）实战
+
+> 释题：在 Claude Code 里，令行禁止几乎可以直接翻译为：disable-model-invocation: true 。也就是说——没有用户触发，Claude 绝不主动执行。
+
+**Skills vs Commands**
+
+早期，斜杠命令 /Comands 和 Skills 是两个独立组件。但在新版 Claude Code 中，Commands 已合并到 Skills，成为 Skills 的子集。
+
+因此，在 .claude/commands/review.md 和  .claude/skills/review/SKILL.md 两个不同目录的文件，都会创建  /review。。如果同名 Skill 和 Command 共存，Skill 优先。
+
+> Skills 目录的额外优势是支持辅助文件目录（模板、示例、脚本等）。
+
+**通过 ARGUMENTS 给 Skill 传参**
+
+当你通过  /skill-name args 调用 Skill 时，args 会通过  $ARGUMENTS 注入到 Skill 内容中。
+
+举例来说，当运行  /fix-issue 123 时，Claude 收到的内容是“Fix GitHub issue 123 following our coding standards…”。
+
+```markdown
+---
+name: fix-issue
+description: Fix a GitHub issue
+disable-model-invocation: true
+---
+
+Fix GitHub issue $ARGUMENTS following our coding standards.
+
+1. Read the issue description
+2. Understand the requirements
+3. Implement the fix
+4. Write tests
+5. Create a commit
+```
+
+Skill 支持两种参数传递方式。
+
+- 单参数——$ARGUMENTS 接收所有参数。
+
+```markdown
+---
+description: Quick git commit
+argument-hint: [commit message]
+disable-model-invocation: true
+---
+
+Create a git commit with message: $ARGUMENTS
+```
+
+用法：`/commit fix login bug`
+
+- 多参数—— $1，$2 接收位置参数：
+
+```markdown
+---
+description: Create a pull request
+argument-hint: [title] [description]
+disable-model-invocation: true
+---
+
+Title: $1
+Description: $2
+```
+
+用法：`/pr-create "Add auth" "JWT"`
+
+Claude Code 是非常灵活的，如果 Skill 中根本就没有定义 $ARGUMENTS，而你在调用 Skill 的时候又偏偏传递了参数进去。那也不怕，Claude Code 会自动在内容末尾追加  ARGUMENTS: <用户输入>，确保参数不会丢失。
+
+**! `command` 动态上下文注入**
+
+当用户输入  /pr-create "Add auth" 时，模型收到的只是 Prompt 文本。它不知道：当前在哪个分支？有哪些 commit 待合并？改了哪些文件？
+
+如果不预注入上下文，其实模型也会先花多轮工具调用去收集这些信息，任务虽然还是能完成，但浪费 token 和时间。
+
+而 ! `command` 是 Skill 文件的预处理器——在文件内容发送给模型  之前，先在 shell 中执行这些预设的命令，然后把它们的输出结果内联替换到 Prompt 中，再去执行新的命令。
+
+下面的示例中，我们为 pr-create 命令设置 ! `command` ，让它能够动态接收上下文（上下文就是在技能中预设的 ! `command` 的输出）。
+
+```markdown
+## Current Context (Auto-detected)
+
+Current branch:
+!`git branch --show-current`
+
+Recent commits on this branch:
+!`git log origin/main..HEAD --oneline 2>/dev/null || echo "No commits ahead of main"`
+
+Files changed:
+!`git diff --stat origin/main 2>/dev/null || git diff --stat HEAD~3`
+```
+
+LLM 实际收到的 Prompt（替换后）：
+
+```markdown
+## Current Context (Auto-detected)
+
+Current branch:
+feature/auth
+
+Recent commits on this branch:
+a1b2c3d Add JWT middleware
+d4e5f6g Add login endpoint
+g7h8i9j Add user model
+
+Files changed:
+ src/auth/middleware.ts | 45 +++
+ src/auth/login.ts     | 82 +++
+ src/models/user.ts    | 34 +++
+ 3 files changed, 161 insertions(+)
+```
+
+**实战项目：团队标准命令集**
+
+现在让我们来创建一套真正实用的团队命令，目录结构如下：
+
+```
+.claude/skills/                    # 推荐：Skills 目录
+├── committing/SKILL.md            # /committing  快速提交
+├── reviewing/SKILL.md             # /reviewing   代码审查
+├── pr-creating/SKILL.md           # /pr-creating 创建 PR
+└── testing/SKILL.md               # /testing     运行测试
+
+.claude/commands/                   # 兼容：Commands 目录
+└── git/
+    ├── status.md                  # /git:status
+    └── log.md                     # /git:log
+```
+
+- 命令一：智能提交 /commit
+
+```markdown
+---
+description: Quick git commit with auto-generated or specified message
+argument-hint: [optional: commit message]
+disable-model-invocation: true
+
+allowed-tools: Bash(git status:*), Bash(git add:*), Bash(git commit:*), Bash(git diff:*)
+<!-- 只授权 git 相关命令 -->
+
+model: haiku
+<!-- 使用 haiku 模型，响应快 -->
+---
+
+Create a git commit.
+
+If a message is provided: $ARGUMENTS
+- Use that as the commit message
+
+If no message is provided:
+- Analyze the changes with `git diff --staged` (or `git diff` if nothing staged)
+- Generate a concise, meaningful commit message
+
+<!-- 有参数用参数，没参数自动生成 -->
+
+## Steps
+
+1. Check `git status` to see current state
+2. If nothing staged, run `git add .` to stage all changes
+3. Review what will be committed with `git diff --staged`
+4. Create commit:
+   - If `$ARGUMENTS` is provided, use it as the message
+   - Otherwise, generate a message based on the diff
+5. Show the commit result
+
+## Commit Message Format
+
+- Start with type: `feature:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
+- Be concise but descriptive (max 72 chars for first line)
+- Example: `feat: add user authentication with JWT`
+<!-- 强制遵循 conventional commits 格式 -->
+
+## Output
+
+Show a brief confirmation:
+✓ Committed: [commit message] [number] files changed
+```
+
+使用方式：
+
+```bash
+# 自动生成 commit message
+/commit
+
+# 使用指定的 message
+/commit fix: resolve login validation bug
+```
+
+- 命令二：代码审查 /review
+
+~~~markdown
+---
+description: Review code for quality, bugs, and improvements
+argument-hint: [optional: file path]
+disable-model-invocation: true
+
+allowed-tools: Read, Grep, Glob, Bash(git diff:*)
+<!-- 只授权读权限，不能修改代码 -->
+---
+
+Review code and provide feedback.
+
+Target: $ARGUMENTS (or current git diff if not specified)
+<!-- 审查特定文件 或者 审查当前变更 -->
+
+## Review Focus Areas
+
+1. **Bugs & Errors**: Logic errors, null checks, edge cases
+2. **Security**: Input validation, injection risks, sensitive data exposure
+3. **Performance**: Obvious inefficiencies, N+1 queries, memory leaks
+4. **Readability**: Naming, complexity, documentation needs
+
+## Steps
+
+1. If file path provided, read that file
+2. If no path, run `git diff` to see current changes
+3. Analyze the code against the focus areas
+4. Provide structured feedback
+
+## Output Format
+
+```markdown
+## Code Review
+
+### Summary
+[One sentence overall assessment]
+
+### Issues Found
+
+#### Critical (Must Fix)
+- [issue]: [location] - [brief explanation]
+
+#### Warnings (Should Fix)
+- [issue]: [location] - [brief explanation]
+
+#### Suggestions (Nice to Have)
+- [suggestion]: [location] - [brief explanation]
+
+<!-- 优先级分类功能：Critical > Warning > Suggestion -->
+
+### What's Good
+- [positive observation]
+
+<!-- 统一的反馈格式，便于团队理解 -->
+
+## Guidelines
+Be specific about locations (file:line if possible)
+Provide actionable feedback, not just criticism
+Don't nitpick style unless it impacts readability
+Acknowledge good patterns you see
+~~~
+
+使用方式：
+
+```bash
+# 审查当前 git diff
+/review
+
+# 审查特定文件
+/review src/auth/login.ts
+```
+
+- 命令三：创建 PR /pr-create
+
+~~~markdown
+---
+description: Create a pull request with auto-detected context
+argument-hint: [title] [description]
+disable-model-invocation: true
+allowed-tools: Bash(git:*), Bash(gh:*)
+---
+
+Create a pull request.
+
+Title: $1
+Description: $2
+
+## Current Context (Auto-detected)
+
+Current branch:
+!`git branch --show-current`
+<!-- 动态上下文注入 -->
+
+Recent commits on this branch:
+!`git log origin/main..HEAD --oneline 2>/dev/null || echo "No commits ahead of main"`
+<!-- 动态上下文注入 -->
+
+Files changed:
+!`git diff --stat origin/main 2>/dev/null || git diff --stat HEAD~3`
+<!-- 动态上下文注入 -->
+
+## Steps
+
+1. Ensure we're not on main/master branch
+2. Push current branch to remote (if not already)
+3. Create PR using `gh pr create`:
+   - Title: $1 (or auto-generate from branch name)
+   <!-- 用户未指定，则自动生成标题和描述-->
+   - Body: $2 (or auto-generate from commits)
+   <!-- 用户未指定，则自动生成标题和描述-->
+4. Return the PR URL
+
+## PR Body Template
+
+If $2 is not provided, generate:
+
+```markdown
+## Summary
+[Auto-generated from commit messages]
+
+## Changes
+[List of changed files with brief descriptions]
+
+## Testing
+- [ ] Tests pass locally
+- [ ] Manual testing completed
+
+---
+Created with `/pr-create`
+
+## Output
+✓ PR Created: [URL]
+
+Title: [title]
+Branch: [branch] → main
+Changes: [n] files
+~~~
+
+使用方式：
+
+```bash
+# 自动生成标题和描述
+/pr-create
+
+# 指定标题
+/pr-create "Add user authentication"
+
+# 指定标题和描述
+/pr-create "Add user authentication" "Implements JWT-based auth with refresh tokens"
+```
+
+当命令越来越多时，可以用目录结构组织它们：
+
+```
+.claude/commands/
+├── commit.md           →  /commit
+├── review.md           →  /review
+├── git/
+│   ├── status.md       →  /git:status
+│   ├── log.md          →  /git:log
+│   └── sync.md         →  /git:sync
+└── test/
+    ├── unit.md         →  /test:unit
+    └── e2e.md          →  /test:e2e
+```
+
+# ==11｜循序渐进：渐进式披露架构设计==
+
+**渐进式披露的设计哲学**
+
+
+
+**认知经济学：上下文窗口是稀缺资源**
+
+
+
+**渐进式的设计模式与最佳实践**
+
+
+
+**内容拆分的工程方法论**
+
+
+
+
+
+
+
+
+
+
+
 
 
 
