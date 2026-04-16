@@ -1,7 +1,7 @@
 import datetime
 import os
 
-url = 'https://studeyang.tech/technotes/#'
+url = 'https://studeyang.cn/technotes/#'
 exclude_files = [
     'coverpage', 'navbar', 'README', 'sidebar',
     'A类/README', 'A类/Python/README', 'A类/Python/sidebar',

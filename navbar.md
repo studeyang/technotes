@@ -6,6 +6,7 @@
 - [互联网进阶](B进阶类/sidebar.md)
 - [架构视角](C架构类/sidebar.md)
 - [行业观](D扩展类/sidebar.md)
+- [AI的变革](E-AI类/sidebar.md)
   
 
 

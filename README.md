@@ -1,6 +1,6 @@
 # 互联网技术学习笔记
 
-学习过程中的笔记。更好的阅读效果：https://studeyang.tech/technotes
+学习过程中的笔记。更好的阅读效果：https://studeyang.cn/technotes
 
 ## 如何搜索
 
@@ -42,7 +42,7 @@ $ grep -nri redis docs | cat --number
 
 ### AI类
 
-[扩展类](E-AI类/sidebar.md ':include')
+[AI类](E-AI类/sidebar.md ':include')
 
 ## 技术支持
 

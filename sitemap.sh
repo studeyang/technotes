@@ -1,19 +1,19 @@
 #!/bin/bash
 
 sitemap="sitemap.xml"
-website_link="https://studeyang.tech/technotes"
+website_link="https://studeyang.cn/technotes"
 ignore=(
   sidebar.md
-  A类/Python/sidebar.md
-  B类/sidebar.md
-  C类/sidebar.md
-  D类/sidebar.md
+  A基础类/Python/sidebar.md
+  B进阶类/sidebar.md
+  C架构类/sidebar.md
+  D扩展类/sidebar.md
   README.md
-  A类/Python/README.md
-  A类/README.md
-  B类/README.md
-  C类/README.md
-  D类/README.md
+  A基础类/Python/README.md
+  A基础类/README.md
+  B进阶类/README.md
+  C架构类/README.md
+  D扩展类/README.md
   coverpage.md
   navbar.md
 )
