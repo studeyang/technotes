@@ -30,15 +30,19 @@ $ grep -nri redis docs | cat --number
 
 ### 进阶类
 
-[进阶类](B类/sidebar.md ':include')
+[进阶类](B进阶类/sidebar.md ':include')
 
 ### 架构类
 
-[架构类](C类/sidebar.md ':include')
+[架构类](C架构类/sidebar.md ':include')
 
 ### 扩展类
 
-[扩展类](D类/sidebar.md ':include')
+[扩展类](D扩展类/sidebar.md ':include')
+
+### AI类
+
+[扩展类](E-AI类/sidebar.md ':include')
 
 ## 技术支持
 

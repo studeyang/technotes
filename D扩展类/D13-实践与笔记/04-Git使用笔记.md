@@ -119,5 +119,11 @@ $ git tag -a v0.0.1 9fceb02
 $ git push origin v0.0.1
 ```
 
+## 四、文件操作
 
+git status命令执行后，出现了一些Untracked files，如何移除这些Untracked files？
+
+```bash
+git clean -fd -- fcbox-router-parent/backups fcbox-router-parent/telemetry
+```
 

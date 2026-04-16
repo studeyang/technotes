@@ -280,15 +280,15 @@ Claude Code 命令行界面的完整参考，包括命令和标志。
 
 使用这些命令行标志自定义 Claude Code 的行为。
 
-| 标志                                   | 描述                                                         | 示例                                                         |
-| :------------------------------------- | :----------------------------------------------------------- | :----------------------------------------------------------- |
+| 标志                                     | 描述                                                                                                                                                                                                           | 示例                                                                   |
+| :------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------- |
 | `--allow-dangerously-skip-permissions` | 将 `bypassPermissions` 添加到 `Shift+Tab` 模式循环中而不启动它。允许您以不同的模式（如 `plan`）开始，稍后切换到 `bypassPermissions`。请参阅 [权限模式](https://code.claude.com/docs/zh-CN/permission-modes#skip-all-checks-with-bypasspermissions-mode) | `claude --permission-mode plan --allow-dangerously-skip-permissions` |
-| `--effort`                             | 为当前会话设置 [工作量级别](https://code.claude.com/docs/zh-CN/model-config#adjust-effort-level)。选项：`low`、`medium`、`high`、`max`（仅限 Opus 4.6）。会话范围内，不会持久化到设置 | `claude --effort high`                                       |
-| `--fork-session`                       | 恢复时，创建新的会话 ID 而不是重用原始 ID（与 `--resume` 或 `--continue` 一起使用） | `claude --resume abc123 --fork-session`                      |
-| `--ide`                                | 如果恰好有一个有效的 IDE 可用，则在启动时自动连接到 IDE      | `claude --ide`                                               |
-| `--name`, `-n`                         | 为会话设置显示名称，显示在 `/resume` 和终端标题中。您可以使用 `claude --resume <name>` 恢复命名会话。 | `claude -n "my-feature-work"`                                |
-| `--settings`                           | 设置 JSON 文件的路径或 JSON 字符串以加载其他设置             | `claude --settings ./settings.json`                          |
-| `--worktree`, `-w`                     | 在隔离的 [git worktree](https://code.claude.com/docs/zh-CN/common-workflows#run-parallel-claude-code-sessions-with-git-worktrees) 中启动 Claude，位于 `<repo>/.claude/worktrees/<name>`。如果未给出名称，则自动生成一个 | `claude -w feature-auth`                                     |
+| `--effort`                             | 为当前会话设置 [工作量级别](https://code.claude.com/docs/zh-CN/model-config#adjust-effort-level)。选项：`low`、`medium`、`high`、`max`（仅限 Opus 4.6）。会话范围内，不会持久化到设置                                                              | `claude --effort high`                                               |
+| `--fork-session`                       | 恢复时，创建新的会话 ID 而不是重用原始 ID（与 `--resume` 或 `--continue` 一起使用）                                                                                                                                                   | `claude --resume abc123 --fork-session`                              |
+| `--ide`                                | 如果恰好有一个有效的 IDE 可用，则在启动时自动连接到 IDE                                                                                                                                                                             | `claude --ide`                                                       |
+| `--name`, `-n`                         | 为会话设置显示名称，显示在 `/resume` 和终端标题中。您可以使用 `claude --resume <name>` 恢复命名会话。                                                                                                                                        | `claude -n "my-feature-work"`                                        |
+| `--settings`                           | 设置 JSON 文件的路径或 JSON 字符串以加载其他设置                                                                                                                                                                               | `claude --settings ./settings.json`                                  |
+| `--worktree`, `-w`                     | 在隔离的 [git worktree](https://code.claude.com/docs/zh-CN/common-workflows#run-parallel-claude-code-sessions-with-git-worktrees) 中启动 Claude，位于 `<repo>/.claude/worktrees/<name>`。如果未给出名称，则自动生成一个                | `claude -w feature-auth`                                             |
 
 ## 2.2 内置命令
 
@@ -300,14 +300,14 @@ Claude Code 还包括[捆绑的 skills](https://code.claude.com/docs/zh-CN/skill
 | :------------------------ | :----------------------------------------------------------- |
 | `/btw <question>`         | 提出快速[附加问题](https://code.claude.com/docs/zh-CN/interactive-mode#side-questions-with-btw)，无需添加到对话中 |
 | `/clear`                  | 清除对话历史记录并释放上下文。别名：`/reset`、`/new`         |
-| `/color [color|default]`  | 为当前会话设置提示栏颜色。可用颜色：`red`、`blue`、`green`、`yellow`、`purple`、`orange`、`pink`、`cyan`。使用 `default` 重置 |
+| `/color [color\default]`  | 为当前会话设置提示栏颜色。可用颜色：`red`、`blue`、`green`、`yellow`、`purple`、`orange`、`pink`、`cyan`。使用 `default` 重置 |
 | `/compact [instructions]` | 压缩对话，可选择性地提供焦点说明                             |
 | `/config`                 | 打开[设置](https://code.claude.com/docs/zh-CN/settings)界面以调整主题、模型、[输出样式](https://code.claude.com/docs/zh-CN/output-styles)和其他偏好设置。别名：`/settings` |
 | `/copy [N]`               | 将最后一个助手响应复制到剪贴板。传递数字 `N` 以复制第 N 个最新响应：`/copy 2` 复制倒数第二个。当存在代码块时，显示交互式选择器以选择单个块或完整响应。在选择器中按 `w` 将选择内容写入文件而不是剪贴板，这在 SSH 上很有用 |
 | `/desktop`                | 在 Claude Code Desktop 应用中继续当前会话。仅限 macOS 和 Windows。别名：`/app` |
 | `/doctor`                 | 诊断并验证您的 Claude Code 安装和设置                        |
 | `/export [filename]`      | 将当前对话导出为纯文本。使用文件名时，直接写入该文件。不使用文件名时，打开对话框以复制到剪贴板或保存到文件 |
-| `/fast [on|off]`          | 切换[快速模式](https://code.claude.com/docs/zh-CN/fast-mode)开启或关闭 |
+| `/fast [on\off]`          | 切换[快速模式](https://code.claude.com/docs/zh-CN/fast-mode)开启或关闭 |
 | `/ide`                    | 管理 IDE 集成并显示状态                                      |
 | `/init`                   | 使用 `CLAUDE.md` 指南初始化项目。设置 `CLAUDE_CODE_NEW_INIT=1` 以获得交互式流程，该流程还会引导您完成 skills、hooks 和个人内存文件 |
 | `/memory`                 | 编辑 `CLAUDE.md` 内存文件，启用或禁用 [auto-memory](https://code.claude.com/docs/zh-CN/memory#auto-memory)，并查看自动内存条目 |
