@@ -553,25 +553,561 @@ Changes: [n] files
 
 # ==11｜循序渐进：渐进式披露架构设计==
 
-**渐进式披露的设计哲学**
+### 渐进式披露的设计哲学
 
+让我们用图书馆来类比渐进式披露的设计哲学。走进一个图书馆找资料时，你不会一次把所有书都读一遍。你是先看目录找到相关分类，再选一本具体的书，最后翻到需要的章节深入阅读。信息是逐层展开的，而不是一次性全部载入大脑。
 
+Skill 的渐进式披露设计也是一样：第一层只扫描 description 作为“目录”，第二层在触发时加载 SKILL.md 主文件作为“章节”，第三层再按需加载被引用的具体文件作为“附录”。结构化分层替代信息堆叠，让系统在规模变大时依然高效、可控。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161515754.jpg)
 
 **认知经济学：上下文窗口是稀缺资源**
 
+Token 节省效果方面。让我们用数字说话。假设一个复杂的 Skill 是这样的：
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161517324.jpeg)
+
+不同场景下的 Token 消耗（大概估算）：
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161518860.jpeg)
+
+不难发现，大多数请求只需要部分资源，渐进式披露在这些场景下大幅节省 tokens。
+
+### 财务分析 Skill
+
+**三层架构详解**
+
+我们今天要设计的这个财务分析 Skill，本质上是一个结构化的财务能力包：当用户提出与收入、成本、利润、增长率、毛利率、ROE/ROA 或整体财务表现相关的问题时，它会被激活。
+
+它的目标是在明确数据前提下，提供可复现、可解释、可结构化的财务分析支持，用最少的上下文投入完成高质量的专业判断。
+
+下面来看看这个 Skill 的三层渐进式的架构设计，我们用看书时经常采用的目录、章节、附录来对渐进式架构做类比。
+
+- 层级 1：目录页（Entry Point）
+
+这是 Skills 系统扫描阶段读取的内容——只有 description。
+
+```
+---
+name: financial-analyzing
+description: Analyze financial data, calculate ratios, and generate reports. Use when the user asks about revenue, costs, profits, margins, financial metrics, or needs financial analysis.
+---
+```
+
+目录页的设计原则是，description 足够丰富，让 Claude 能准确判断相关性。但不要太长，因为所有  Skill 的 description 共享 15,000 字符的总预算。如果 Skill 数量多导致 description 被截断，可以通过  SLASH_COMMAND_TOOL_CHAR_BUDGET 环境变量调整。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161526174.jpeg)
+
+- 层级 2：章节（Main Content）
+
+章节指的是 SKILL.md 的正文部分——激活后才加载。
+
+```markdown
+# Financial Analysis Skill
+
+## Quick Start
+基础的财务分析流程...
+
+## Available Analyses
+
+### Revenue Analysis
+For detailed formulas, see `reference/revenue.md`
+
+### Cost Analysis
+For detailed formulas, see `reference/costs.md`
+
+### Profitability Analysis
+For detailed formulas, see `reference/profitability.md`
+
+## When to Load Additional Resources
+- 需要具体公式 → 加载对应的 reference/\*.md
+- 需要行业基准 → 加载 data/benchmarks.json
+- 需要报告模板 → 加载 templates/\*.md
+```
+
+这一部分的设计原则是主文件提供“路线图”，通过文件引用指向详细内容，然后 Claude 根据用户请求决定加载哪些具体内容。
+
+- 层级 3：附录（On-Demand Resources）
+
+只有当 SKILL.md 中引用了这些文件，Claude 才会去读取这一类文件。
+
+```
+.claude/skills/financial-analyzing/    # 标准 Skill 目录
+├── SKILL.md                           # 主文件（总是加载）
+├── reference/                         # 参考资料
+│   ├── revenue.md                    # 收入分析公式
+│   ├── costs.md                      # 成本分析公式
+│   └── profitability.md              # 盈利分析公式
+├── templates/                         # 报告模板
+│   ├── quarterly_report.md
+│   └── annual_report.md
+├── data/                              # 数据文件
+│   └── industry_benchmarks.json
+└── scripts/                           # 分析脚本
+    ├── calculate_ratios.py
+    └── generate_report.sh
+```
+
+这一部分内容的设计原则是文件名要有描述性（revenue.md 而非  ref1.md）——Claude 根据文件名判断是否需要加载。
+
+**项目设计细节**
+
+下面我们还原这个财务分析 Skill 的构建细节，从零构建一个完整的财务分析 Skill。这个 Skill 标准部署结构如下：
+
+```
+your-project/.claude/skills/financial-analyzing/
+├── SKILL.md                    # 主 Skill 文件
+├── reference/
+│   ├── revenue.md             # 收入分析
+│   ├── costs.md               # 成本分析
+│   └── profitability.md       # 盈利分析
+├── templates/
+│   └── analysis_report.md     # 分析报告模板
+└── scripts/
+    └── calculate_ratios.py    # 比率计算脚本
+```
+
+主文件 SKILL.md 设计如下。
+
+~~~markdown
+---
+name: financial-analyzing
+description: Analyze financial data, calculate financial ratios, and generate analysis reports. Use when the user asks about revenue, costs, profits, margins, ROI, financial metrics, or needs financial analysis of a company or project.
+
+allowed-tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash(python:*)
+<!-- 只允许 Read、Grep、Glob 和特定的 Bash 命令 -->
+---
+
+# Financial Analysis Skill
+
+You are a financial analyst. Help users analyze financial data, calculate key metrics, and generate insightful reports.
+
+## Quick Reference
+
+| Analysis Type | When to Use | Reference |
+|--------------|-------------|-----------|
+| Revenue Analysis | 收入、营收、销售额相关 | `reference/revenue.md` |
+| Cost Analysis | 成本、费用、支出相关 | `reference/costs.md` |
+| Profitability | 利润、毛利率、净利率相关 | `reference/profitability.md` |
+
+<!-- 让 Claude 快速定位需要哪个参考文件 -->
+
+## Analysis Process
+
+### Step 1: Understand the Question
+- What financial aspect is the user asking about?
+- What data do they have available?
+- What format do they need the answer in?
+
+### Step 2: Gather Data
+- Request necessary financial data from user
+- Or read from provided files/sources
+
+### Step 3: Calculate Metrics
+For specific formulas and calculations:
+- Revenue metrics → see `reference/revenue.md`
+- Cost metrics → see `reference/costs.md`
+- Profitability metrics → see `reference/profitability.md`
+
+To run calculations programmatically:
+```bash
+python scripts/calculate_ratios.py <data_file>
+
+### Step 4: Generate Report
+Use the template in `templates/analysis_report.md` for structured output.
+
+## Output Guidelines
+
+1. Always show your calculations
+2. Explain what each metric means
+3. Provide context (industry benchmarks when available)
+4. Give actionable recommendations
+
+## Important Notes
+
+- Never make up financial data
+- Ask for clarification if data is incomplete
+- Flag any unusual numbers that might be errors
+~~~
+
+上面的 SKILL.md 设计，你会发现它本质上是一个路由器——根据用户请求的类型，将 Claude 导向不同的资源文件：
+
+```
+用户请求 → SKILL.md（路由判断） → 目标资源
+                │
+                ├─ "收入相关" → reference/revenue.md
+                ├─ "成本相关" → reference/costs.md
+                ├─ "利润相关" → reference/profitability.md
+                ├─ "要报告"   → templates/analysis_report.md
+                └─ "要计算"   → scripts/calculate_ratios.py
+```
+
+写好路由表格的经验法则包括。
+
+1. 用“用户可能说的关键词”作为路由条件（而非“文件内容的技术名称”）
+2. 每个路由条目一行，不要超过 10 个条目（超过就需要分层）
+3. 高频路由放前面
+
+除主文件之外，这个 Skill 中还包括下面几个参考文件，也就是附录。
+
+- 参考文件：reference/revenue.md
+
+只有当用户问到收入相关问题时，Claude 才会根据 SKILL.md 中 Quick Reference 表格的路由指引加载这个文件。它包含收入增长率、同比 / 环比、ARPU 等核心公式和异常信号判断标准。
+
+~~~markdown
+# Revenue Analysis Reference
+
+## Key Metrics
+
+### Revenue Growth Rate
+```
+Revenue Growth Rate = (Current Period Revenue - Previous Period Revenue) / Previous Period Revenue × 100%
+```
+**Interpretation:**
+- > 20%: High growth
+- 10-20%: Moderate growth
+- < 10%: Low growth
+- < 0%: Declining
+
+### Year-over-Year (YoY) Growth
+```
+YoY Growth = (This Year Revenue - Last Year Revenue) / Last Year Revenue × 100%
+```
+
+### Quarter-over-Quarter (QoQ) Growth
+```
+QoQ Growth = (This Quarter - Previous Quarter) / Previous Quarter × 100%
+```
+
+## Revenue Composition Analysis
+
+### Revenue by Product/Service
+```
+Product Revenue Share = Product Revenue / Total Revenue × 100%
+```
+### Revenue by Region
+```
+Regional Revenue Share = Regional Revenue / Total Revenue × 100%
+```
+## Average Revenue Metrics
+
+### Average Revenue Per User (ARPU)
+```
+ARPU = Total Revenue / Number of Users
+```
+### Average Revenue Per Account (ARPA)
+```
+ARPA = Total Revenue / Number of Accounts
+```
+
+## Red Flags to Watch
+
+1. **Revenue concentration** > 30% from single customer
+2. **Declining growth rate** over 3+ consecutive quarters
+3. **Large discrepancy** between booked and recognized revenue
+4. **Unusual seasonality** patterns
+~~~
+
+- 参考文件：reference/profitability.md
+
+这个文件聚焦盈利能力分析。包含毛利率、营业利润率、净利率三大 Margin 指标，以及 ROI、ROA、ROE 三大 Return 指标，并附带行业基准数据供对比参考。
+
+~~~markdown
+# Profitability Analysis Reference
+
+## Margin Metrics
+
+### Gross Profit Margin
+```
+Gross Margin = (Revenue - Cost of Goods Sold) / Revenue × 100%
+```
+**Industry Benchmarks:**
+| Industry | Typical Range |
+|----------|--------------|
+| Software/SaaS | 70-85% |
+| Retail | 20-50% |
+| Manufacturing | 25-35% |
+| Services | 50-70% |
+
+### Operating Profit Margin
+```
+Operating Margin = Operating Income / Revenue × 100%
+
+Operating Income = Revenue - COGS - Operating Expenses
+```
+### Net Profit Margin
+```
+Net Margin = Net Income / Revenue × 100%
+
+Net Income = Revenue - All Expenses - Taxes
+```
+## Return Metrics
+
+### Return on Investment (ROI)
+```
+ROI = (Gain from Investment - Cost of Investment) / Cost of Investment × 100%
+```
+### Return on Assets (ROA)
+
+```
+ROA = Net Income / Total Assets × 100%
+```
+### Return on Equity (ROE)
+```
+ROE = Net Income / Shareholders' Equity × 100%
+```
+
+## Profitability Red Flags
+
+1. **Gross margin declining** while revenue grows (pricing pressure)
+2. **Operating margin < 0** (not operationally profitable)
+3. **ROE significantly higher than ROA** (high leverage risk)
+4. **Net margin < industry average** for 3+ years
+~~~
+
+- 报告模板：templates/analysis_report.md
+
+模板文件是渐进式披露中的特殊资源——它不提供“知识”，而是提供“输出格式”。当用户要求“生成分析报告”时，Claude 加载这个模板来确保输出结构统一、专业。这就是企业知识管理中“标准化输出”的技术映射。
+
+```markdown
+# Financial Analysis Report Template
+
+## Executive Summary
+[One paragraph summarizing key findings and recommendations]
+
+## Company/Project Overview
+- **Name**: [Entity name]
+- **Period Analyzed**: [Date range]
+- **Data Sources**: [Where data came from]
+
+## Key Metrics
+
+| Metric | Value | Industry Avg | Assessment |
+|--------|-------|--------------|------------|
+| Revenue Growth | X% | Y% | Above/Below |
+| Gross Margin | X% | Y% | Above/Below |
+| Net Margin | X% | Y% | Above/Below |
+| ROI | X% | Y% | Above/Below |
+
+## Detailed Analysis
+
+### Revenue Analysis
+[Findings about revenue trends, composition, growth]
+
+### Cost Analysis
+[Findings about cost structure, efficiency]
+
+### Profitability Analysis
+[Findings about margins, returns]
+
+## Trend Analysis
+[How metrics have changed over time]
+
+## Recommendations
+
+### Immediate Actions
+1. [High priority recommendation]
+2. [High priority recommendation]
+
+### Medium-term Improvements
+1. [Medium priority recommendation]
+
+### Long-term Strategy
+1. [Strategic recommendation]
+
+## Risk Factors
+- [Key risk 1]
+- [Key risk 2]
+
+## Appendix
+[Supporting calculations, data tables, charts]
+```
+
+- 计算脚本：scripts/calculate_ratios.py
+
+Claude 不需要理解计算逻辑，只需执行  python calculate_ratios.py data.json 即可获得准确结果。这比让 LLM 自己做数学运算更可靠、更省 token。
+
+```markdown
+#!/usr/bin/env python3
+"""
+Financial Ratios Calculator
+
+Usage:
+    python calculate_ratios.py <data_file>
+
+Data file format (JSON):
+{
+    "revenue": 1000000,
+    "cogs": 400000,
+    "operating_expenses": 300000,
+    "net_income": 150000,
+    "total_assets": 2000000,
+    "shareholders_equity": 800000,
+    "previous_revenue": 900000
+}
+"""
+
+import json
+import sys
 
 
-**渐进式的设计模式与最佳实践**
+def calculate_ratios(data):
+    """Calculate common financial ratios."""
+    ratios = {}
+
+    # Revenue Growth
+    if 'previous_revenue' in data and data['previous_revenue'] > 0:
+        ratios['revenue_growth'] = (
+            (data['revenue'] - data['previous_revenue'])
+            / data['previous_revenue'] * 100
+        )
+
+    # Gross Margin
+    if 'cogs' in data:
+        gross_profit = data['revenue'] - data['cogs']
+        ratios['gross_margin'] = gross_profit / data['revenue'] * 100
+
+    # Operating Margin
+    if 'cogs' in data and 'operating_expenses' in data:
+        operating_income = data['revenue'] - data['cogs'] - data['operating_expenses']
+        ratios['operating_margin'] = operating_income / data['revenue'] * 100
+
+    # Net Margin
+    if 'net_income' in data:
+        ratios['net_margin'] = data['net_income'] / data['revenue'] * 100
+
+    # ROA
+    if 'net_income' in data and 'total_assets' in data:
+        ratios['roa'] = data['net_income'] / data['total_assets'] * 100
+
+    # ROE
+    if 'net_income' in data and 'shareholders_equity' in data:
+        ratios['roe'] = data['net_income'] / data['shareholders_equity'] * 100
+
+    return ratios
 
 
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python calculate_ratios.py <data_file>")
+        sys.exit(1)
 
-**内容拆分的工程方法论**
+    with open(sys.argv[1], 'r') as f:
+        data = json.load(f)
+
+    ratios = calculate_ratios(data)
+
+    print("\n=== Financial Ratios ===\n")
+    for name, value in ratios.items():
+        print(f"{name.replace('_', ' ').title()}: {value:.2f}%")
 
 
+if __name__ == '__main__':
+    main()
+```
 
+**渐进式加载实战演示**
 
+- 场景 1：简单问题
 
+用户：毛利率怎么计算？
 
+Claude 加载过程：
+
+1. 扫描 Skills → 发现  financial-analyzing 匹配
+2. 加载 SKILL.md → 看到 “Profitability → see reference/profitability.md”
+3. 加载  reference/profitability.md → 找到毛利率公式
+4. 回答用户
+
+Token 消耗：~100（扫描）+ 800（主文件）+ 600（profitability.md 部分）= ~1500 tokens
+
+其他文件（revenue.md、costs.md、templates、scripts）完全没有加载。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161546114.png)
+
+- 场景 2：完整分析
+
+用户：帮我分析 data 目录中的财务数据，生成一份完整的分析报告。
+
+Claude 加载过程：
+
+1. 扫描 Skills，发现  financial-analyzing 匹配
+2. 加载 SKILL.md
+3. 分析任务需要，加载所有 reference/*.md
+4. 需要报告格式，加载 templates/analysis_report.md
+5. 需要计算 ，执行 scripts/calculate_ratios.py
+
+Token 消耗：全部资源都用到了。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161548937.png)
+
+两个场景的关键对比如下。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161553856.jpeg)
+
+### 渐进式的设计模式与最佳实践
+
+**文件组织模式**
+
+首先谈文件组织模式，有按功能分类和按使用频率分类两种。
+
+如果你的 Skill 有多种类型的资源（知识 + 模板 + 脚本），用功能分类（推荐），例如：
+
+```
+.claude/skills/my-skill/
+├── SKILL.md           # 入口 + 路由（< 500 行）
+├── reference/         # 知识库（公式、规范、基准）
+├── templates/         # 输出模板（报告、代码骨架）
+├── examples/          # 示例集（输入输出样本）
+├── scripts/           # 可执行脚本（计算、生成、验证）
+└── data/              # 静态数据（JSON、CSV）
+```
+
+如果只有不同深度的知识文档，用频率分类，例如：
+
+```
+.claude/skills/my-skill/
+├── SKILL.md           # 核心内容（高频，总是加载）
+├── QUICKREF.md        # 快速参考（高频，常被加载）
+├── DETAILED.md        # 详细说明（中频，按需加载）
+└── ADVANCED.md        # 高级用法（低频，很少加载）
+```
+
+**主文件设计原则**
+
+主文件应该控制在  500 行以内（官方建议：Keep SKILL.md under 500 lines. Move detailed reference material to separate files.）。然后应该提供路线图，用 Quick Reference 表格做个快速路由，而非让 Claude 逐行扫描。
+
+什么内容放主文件，什么内容放引用文件？答案是高频内容内联，低频内容外链。比如偶尔用到的详细信息放在引用文件，用契约式引用。
+
+> 到底啥是契约式引用？ SKILL.md 引用辅助文件时，不要只写一个路径——要写一个契约，让 Claude 知道什么时候该加载、加载后能得到什么：
+>
+> ```markdown
+> # ❌ 弱引用（Claude 不知道何时该加载）
+> See `reference/revenue.md` for more details.
+> 
+> # ✅ 契约式引用（Claude 清楚加载条件和预期内容）
+> ## Revenue Analysis
+> When the user asks about revenue growth, ARPU, or revenue composition:
+> → Load `reference/revenue.md` for calculation formulas and industry benchmarks
+> ```
+
+### 内容拆分的工程方法论
+
+我们来解决一个更根本的问题：面对一坨知识，怎么决定什么放 SKILL.md、什么放引用文件、什么放脚本？
+
+官方建议 SKILL.md 控制在  500 行以内。为什么是 500 行？
+
+- 500 行 ≈ 2000-3000 tokens，是一个 Skill 激活后的合理上下文开销。
+- 加上 Claude 自身的系统提示和对话上下文，总 token 数保持在可控范围。
+- 超过 500 行意味着你可能把“参考资料”混进了“路由指令”。
+
+超过 500 行时的重构信号和对策如下：
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161607384.jpeg)
 
 
 
