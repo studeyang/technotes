@@ -67,6 +67,8 @@ Github: https://github.com/huangjia2019/claude-code-engineering
 - 让 AI Agent 真正进入 CI/CD，而不是停留在 IDE 里。
 - 从“写代码的人”，转变为组织管理智能体的人，从执行者蜕变为技术指挥者。
 
+> 这专栏有四章写的最棒，1. 登台望远 2. 量体裁衣 3. 循序渐进 4. 庖丁解牛。
+
 # ==01｜登台远望：Claude Code 底层技术全景导览==
 
 Claude Code 不只是一个“工具“，而是一个“平台”——你可以在上面构建自己的 AI 工作流。它的真正身份是：一个可编程、可扩展、可组合的 AI Agent 框架。
