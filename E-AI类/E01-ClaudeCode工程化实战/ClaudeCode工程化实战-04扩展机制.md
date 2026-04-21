@@ -169,6 +169,8 @@ Hook 脚本通过退出码和 stdout JSON 告诉 Claude 下一步做什么。最
 
 需要更精细的控制时，通过 stdout 输出 JSON 决策。官方推荐的  hookSpecificOutput 格式支持四种响应方式。
 
+> 以上描述了4种控制方式
+
 - 允许执行——检查通过，放行
 
 ```json
@@ -273,6 +275,7 @@ DANGEROUS_PATTERNS=(
 for pattern in "${DANGEROUS_PATTERNS[@]}"; do
     if [[ "$COMMAND" == *"$pattern"* ]]; then
         echo "BLOCKED: Command matches dangerous pattern: $pattern" >&2
+        #stdout JSON 告诉 Claude 下一步做什么
         cat <<EOF
 {
     "hookSpecificOutput": {
@@ -357,3 +360,12 @@ echo '{"tool_input":{"command":"git status"}}' | ./hooks/block-dangerous.sh
 ### PostToolUse 实战案例 3：审计日志
 
 # ==18｜庖丁解牛：Tools 工具系统内核剖析==
+
+
+
+
+
+
+
+
+

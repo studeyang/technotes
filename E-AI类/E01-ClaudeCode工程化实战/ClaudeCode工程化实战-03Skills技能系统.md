@@ -209,6 +209,8 @@ hooks:                             # 可选：作用域为此 Skill 的 Hooks
 
 > Skills 目录的额外优势是支持辅助文件目录（模板、示例、脚本等）。
 
+> See: https://code.claude.com/docs/zh-CN/skills
+
 **通过 ARGUMENTS 给 Skill 传参**
 
 当你通过  /skill-name args 调用 Skill 时，args 会通过  $ARGUMENTS 注入到 Skill 内容中。
