@@ -181,10 +181,7 @@ description: What this does        # 推荐：触发器（最重要！）
 argument-hint: "[issue-number]"    # 可选：自动补全时的参数提示
 disable-model-invocation: true     # 可选：禁止 Claude 自动触发
 user-invocable: false              # 可选：对用户隐藏 /skill-name
-allowed-tools:                     # 可选：限制可用工具
-  - Read
-  - Grep
-  - Glob
+allowed-tools: Read,Grep,Glob      # 可选：限制可用工具
 model: sonnet                      # 可选：指定执行模型
 context: fork                      # 可选：在子代理中隔离执行
 agent: Explore                     # 可选：context: fork 时的代理类型
@@ -555,7 +552,7 @@ Changes: [n] files
 
 # ==11｜循序渐进：渐进式披露架构设计==
 
-### 渐进式披露的设计哲学
+## 渐进式披露的设计哲学
 
 让我们用图书馆来类比渐进式披露的设计哲学。走进一个图书馆找资料时，你不会一次把所有书都读一遍。你是先看目录找到相关分类，再选一本具体的书，最后翻到需要的章节深入阅读。信息是逐层展开的，而不是一次性全部载入大脑。
 
@@ -575,7 +572,7 @@ Token 节省效果方面。让我们用数字说话。假设一个复杂的 Skil
 
 不难发现，大多数请求只需要部分资源，渐进式披露在这些场景下大幅节省 tokens。
 
-### 财务分析 Skill
+## 财务分析 Skill
 
 **三层架构详解**
 
@@ -1051,7 +1048,7 @@ Token 消耗：全部资源都用到了。
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161553856.jpeg)
 
-### 渐进式的设计模式与最佳实践
+## 渐进式的设计模式与最佳实践
 
 **文件组织模式**
 
@@ -1097,7 +1094,7 @@ Token 消耗：全部资源都用到了。
 > → Load `reference/revenue.md` for calculation formulas and industry benchmarks
 > ```
 
-### 内容拆分的工程方法论
+## 内容拆分的工程方法论
 
 我们来解决一个更根本的问题：面对一坨知识，怎么决定什么放 SKILL.md、什么放引用文件、什么放脚本？
 
@@ -1115,7 +1112,7 @@ Token 消耗：全部资源都用到了。
 
 在这一讲中，我们先建立起全局视角，再设计一个好的 Skill，再来看怎么把 Skills 和 SubAgents 配合起来用。
 
-### 两个组合方向：谁包含谁
+## 两个组合方向：谁包含谁
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604161705332.jpeg)
 
@@ -1209,13 +1206,13 @@ Research $ARGUMENTS thoroughly:
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604162226603.jpeg)
 
-### 三种组合模式：具体咋用
+## 三种组合模式：具体咋用
 
 **模式一：SubAgent 预加载 Skills（方向 A 的单次应用）**
 
 一个子代理预加载一个或多个 Skill，用领域知识增强自己的能力。这是最常见的模式，也是本讲的实战重点。
 
-```markdown
+```
 # 子代理在创建时预加载 Skill 作为领域知识
 ---
 name: api-doc-generator
@@ -1232,8 +1229,8 @@ skills:
 
 > 参考我的代码库06-agent-skill-combo。
 
-```markdown
-# .claude/agents/api-doc-generator.md
+```
+#.claude/agents/api-doc-generator.md
 ---
 name: api-doc-generator
 description: Generate comprehensive API documentation by scanning Express route files.
