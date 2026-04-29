@@ -14,13 +14,34 @@ Skills 解决的核心问题是，在有限的上下文窗口中，让 Agent 在
 
 在 Claude Code 中，Skills 默认情况下支持两种触发方式。
 
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604151019848.jpeg)
+| 触发方式     | 说明                                        | 示例                                                       |
+| ------------ | ------------------------------------------- | ---------------------------------------------------------- |
+| 用户显式触发 | 输入 `/skill-name`                          | `/review src/auth.ts`                                      |
+| 分层评审     | Claude 读取 description，语义匹配后自动加载 | 用户说"帮我审查这段代码"，Claude 激活 code-reviewing Skill |
 
 > 语义触发Skills的机制
 
 Claude 读取所有 Skills 的 description，通过语义理解判断当前对话是否匹配某个 Skill。当用户发送消息时，Claude 的处理流程如下图所示：
 
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202604151020583.jpeg)
+```
+                         ┌─────────────┐
+                         │   用户输入   │
+                         └──────┬──────┘
+        ┌───────────────────────↓───────────────────────┐
+        │  扫描所有 Skills 的 description (~100 tokens)  │
+        └───────────────────────┬───────────────────────┘
+        ┌───────────────────────↓───────────────────────┐
+        │            语义推理匹配找到最相关的              │
+        └───────────────────────┬───────────────────────┘
+        ┌───────────────────────↓───────────────────────┐
+        │                  是否找到匹配？                 │
+        └───────────────────────┬───────────────────────┘
+                  ┌─────────────┴─────────────┐
+                  ↓是                         ↓否
+      ┌───────────────────────────┐   ┌───────────────────────┐
+      │  加载 SKILL.md            │    │    正常处理用户请求    │
+      └───────────────────────────┘   └───────────────────────┘
+```
 
 当用户请求可能匹配多个 Skills 时，Claude 会：
 
@@ -198,7 +219,7 @@ hooks:                             # 可选：作用域为此 Skill 的 Hooks
 
 > 释题：在 Claude Code 里，令行禁止几乎可以直接翻译为：disable-model-invocation: true 。也就是说——没有用户触发，Claude 绝不主动执行。
 
-**Skills vs Commands**
+## Skills vs Commands
 
 早期，斜杠命令 /Comands 和 Skills 是两个独立组件。但在新版 Claude Code 中，Commands 已合并到 Skills，成为 Skills 的子集。
 
@@ -208,7 +229,7 @@ hooks:                             # 可选：作用域为此 Skill 的 Hooks
 
 > See: https://code.claude.com/docs/zh-CN/skills
 
-**通过 ARGUMENTS 给 Skill 传参**
+## 通过 ARGUMENTS 给 Skill 传参
 
 当你通过  /skill-name args 调用 Skill 时，args 会通过  $ARGUMENTS 注入到 Skill 内容中。
 
@@ -232,7 +253,7 @@ Fix GitHub issue $ARGUMENTS following our coding standards.
 
 Skill 支持两种参数传递方式。
 
-- 单参数——$ARGUMENTS 接收所有参数。
+**单参数——$ARGUMENTS 接收所有参数**
 
 ```markdown
 ---
@@ -246,7 +267,7 @@ Create a git commit with message: $ARGUMENTS
 
 用法：`/commit fix login bug`
 
-- 多参数—— $1，$2 接收位置参数：
+**多参数—— $1，$2 接收位置参数**
 
 ```markdown
 ---
@@ -263,7 +284,7 @@ Description: $2
 
 Claude Code 是非常灵活的，如果 Skill 中根本就没有定义 $ARGUMENTS，而你在调用 Skill 的时候又偏偏传递了参数进去。那也不怕，Claude Code 会自动在内容末尾追加  ARGUMENTS: <用户输入>，确保参数不会丢失。
 
-**! `command` 动态上下文注入**
+## 动态上下文注入
 
 当用户输入  /pr-create "Add auth" 时，模型收到的只是 Prompt 文本。它不知道：当前在哪个分支？有哪些 commit 待合并？改了哪些文件？
 
@@ -306,7 +327,7 @@ Files changed:
  3 files changed, 161 insertions(+)
 ```
 
-**实战项目：团队标准命令集**
+## 实战项目：团队标准命令集
 
 现在让我们来创建一套真正实用的团队命令，目录结构如下：
 
@@ -323,7 +344,7 @@ Files changed:
     └── log.md                     # /git:log
 ```
 
-- 命令一：智能提交 /commit
+**命令一：智能提交 /commit**
 
 ```markdown
 ---
@@ -382,7 +403,7 @@ Show a brief confirmation:
 /commit fix: resolve login validation bug
 ```
 
-- 命令二：代码审查 /review
+**命令二：代码审查 /review**
 
 ~~~markdown
 ---
@@ -456,7 +477,7 @@ Acknowledge good patterns you see
 /review src/auth/login.ts
 ```
 
-- 命令三：创建 PR /pr-create
+**命令三：创建 PR /pr-create**
 
 ~~~markdown
 ---
