@@ -1468,3 +1468,17 @@ python3 .claude/skills/route-scanning/scripts/scan-routes.py src/
 
 实际项目中，你觉得哪种模式最常用？——我感觉当然是第一种。
 
+# 13｜纲举目张：Skills 架构定位与高级能力
+
+
+
+## Skills 在 Claude Code 架构中的位置
+
+
+
+## 三级进化——从 SOP 到组织智能
+
+## Skill 设计的四种模式
+
+## 权限体系与安全设计
+
