@@ -1470,15 +1470,187 @@ python3 .claude/skills/route-scanning/scripts/scan-routes.py src/
 
 # 13｜纲举目张：Skills 架构定位与高级能力
 
-
-
 ## Skills 在 Claude Code 架构中的位置
 
+如果把 Claude Code 五层架构看作一栋工程化系统大厦，可以按“能力分层解耦”的方式理解。
 
+![img](https://static001.geekbang.org/resource/image/df/4f/df8116956785cefb993f68f487928c4f.jpg?wh=2595x1953)
+
+- LLM 是底座计算核心，相当于 CPU + Runtime，负责推理与控制循环（agentic loop）。
+- 第一层 Tool Layer 是最底层的执行接口层，类似操作系统的 syscall 或基础设施 API，定义“系统可调用的原子能力”。
+- 第二层 Knowledge Layer 是策略与操作规约层，Skills 本质是结构化 SOP 注入机制，解决“在什么上下文下，以什么步骤调用哪些工具”。
+- 第三层 Agent Layer 是执行编排层，SubAgents 提供隔离执行单元，Agent Teams 提供多单元协作拓扑，解决复杂任务拆解与职责分离。
+- 第四层 Automation Layer 是事件驱动控制层，Hooks 像 middleware 或 pipeline 拦截器，在关键节点注入自动化校验与约束逻辑。
+- 第五层 Distribution Layer 是能力封装与交付层，Plugins 将前述能力模块化、版本化，实现跨项目与跨组织复用。
+
+Skills 处于第二层（知识层）这个“承上启下”的位置，它在系统中呈现出三种结构方向。
+
+![img](https://static001.geekbang.org/resource/image/b5/6a/b589172f354dd2373f91c26e56cebb6a.jpg?wh=2757x1726)
+
+- 向下，它通过 allowed-tools 和 scripts/ 对 Tools 进行约束与编排，本质上是用知识来规范行动边界，相当于“知识约束行动”。
+- 向上，它为 SubAgents 提供预加载的专业知识，使子代理在决策前就具备特定领域能力，本质上是“知识服务决策”。
+- 在平行维度上，Skills 与 CLAUDE.md 形成互补关系：Skills 是按需加载的专业知识模块，而 CLAUDE.md 是常驻的通识背景，两者分别承担“专业能力增强”和“基础认知框架”的角色。
 
 ## 三级进化——从 SOP 到组织智能
 
+回顾 Skills 前几讲，我们实际上走了一条从简单到复杂的进化路径。这条路径映射到企业的知识管理成熟度。
+
+- 第一级是标准操作程序，把“个人经验”转化为“结构化执行规则”。
+- 第二级是专家系统，把“流程”升级为“领域能力”。
+- 第三级是组织智能，把“单点能力”升级为“系统级协同能力”。
+
+![img](https://static001.geekbang.org/resource/image/6y/cc/6yyba846e90597bc7e71dcde2a77b9cc.jpg?wh=3772x1344)
+
+三级进化还不仅仅只是结构上的升级，更关键的问题是：每一次升级到底解决了什么新的复杂性？
+
+从一个人照章执行，到一个专家应对复杂情况，再到一个团队协作完成系统级任务——每往上一级，系统面对的不确定性和协作复杂度都会跃迁。因此，我们可以从“问题维度”的角度重新审视这三级演进。
+
+![img](https://static001.geekbang.org/resource/image/5b/14/5be9b60093603a973bddb1f94d0e8e14.jpg?wh=2675x1057)
+
+第一级是 SOP 阶段：一个 Skill 解决一个标准化任务。
+
+> 一个单一 SKILL.md，把流程写清楚，步骤可复现，行为可预测。就像企业里新写一份操作手册——照着做就行。
+
+第二级专家系统阶段：在单一流程之上引入知识库（reference/）、模板（templates/）、脚本（scripts/）和权限控制，能够处理同一领域的各种复杂和边界情况。
+
+> 一个 Skill 通过渐进式披露组织丰富的领域知识，配合脚本和模板，成为完整的领域能力包。就像一个资深专家——不只有一份手册，还有工具箱、案例库、行业标准。
+
+第三级上升到组织智能：多个 Skills 与 SubAgents 配合。
+
+> 分析子代理加载分析 Skill、审查子代理加载审查 Skill、测试子代理加载测试 Skill，形成流水线式的团队协作。加上 Hooks 的自动化质量控制和 Plugin 的打包分发，就构成了完整的“组织智能”。就像一家成熟的企业——每个部门有自己的 SOP，部门间有标准化交接流程，质检自动化运行。
+
+这就是 Skills 的终极价值：它不仅仅是节省 token 或给 Claude 一份参考。Skills 是把人类组织中积累了几十年的知识管理经验——SOP、专家系统、组织学习——技术化映射到 AI Agent 架构中。
+
 ## Skill 设计的四种模式
 
+![img](https://static001.geekbang.org/resource/image/e8/e2/e8ae43f4f1f7e470644efe56yy76e0e2.jpg?wh=1732x1167)
+
+**1、模板驱动模式**
+
+模板驱动模式核心是用模板强约束输出结构，让结果稳定、可对比、可自动解析。适用于报告生成、文档输出等需要格式一致性的场景。它解决的是“输出不稳定”的问题，本质是把自然语言生成转化为结构化接口。
+
+```
+.claude/skills/report-generating/
+├── SKILL.md              # 路由 + 流程
+└── templates/
+    ├── weekly_report.md   # 周报模板
+    ├── incident.md        # 事故报告模板
+    └── review.md          # 评审报告模板
+```
+
+SKILL.md 关键写法：
+
+```markdown
+## Output Rules
+- ALWAYS use the template from `templates/` that matches the request type
+- Fill ALL placeholders — do not leave {placeholder} unfilled
+- Do NOT add sections beyond what the template defines
+```
+
+模板驱动的价值在于把输出格式标准化，使结果具备一致性、可比较性和可自动处理能力。
+
+**2、脚本增强模式**
+
+脚本增强模式的核心是把计算、匹配、数据转换等确定性逻辑交给脚本执行，而不是让 Claude 推理完成。适用于公式计算、正则匹配、指标统计等场景。它解决的是“结果不稳定”的问题，本质是把概率型推理替换为确定性执行。
+
+```
+.claude/skills/data-analyzing/
+├── SKILL.md              # 路由 + 流程
+└── scripts/
+    ├── parse_csv.py       # 数据解析
+    ├── calculate.py       # 指标计算
+    └── visualize.py       # 生成图表 HTML
+```
+
+如果你在 SKILL.md 里开始写公式，让 Claude 去计算或反复推理数值结果，那就应该停下来思考——这种确定性计算应当下沉到脚本中完成。
+
+**3、知识分层模式**
+
+知识分层模式的核心是按使用频率组织知识，高频内联，中低频按需加载。适用于规则多、领域复杂的 Skill。它解决的是“上下文膨胀”的问题，本质是通过渐进加载控制认知复杂度。
+
+```
+.claude/skills/security-reviewing/
+├── SKILL.md              # 核心检查清单（高频，~200 行）
+├── QUICKREF.md           # 常见漏洞速查（中频）
+├── OWASP_TOP10.md        # OWASP 详细标准（低频）
+├── reference/
+│   ├── xss.md           # XSS 防护详解（按需）
+│   ├── sqli.md          # SQL 注入详解（按需）
+│   └── auth.md          # 认证问题详解（按需）
+└── examples/
+    ├── good_auth.md      # 正确实现示例（按需）
+    └── bad_patterns.md   # 反模式示例（按需）
+```
+
+分层策略：
+
+```
+总是加载（SKILL.md 内联）
+  ← 80% 的请求只需要这些
+  ← 控制在 500 行以内
+
+触发时加载（Quick Reference）
+  ← 用户问到特定方向时加载
+  ← 契约式引用："When user asks about X → load Y"
+
+按需加载（reference/ + examples/）
+  ← Claude 判断需要时才读取
+  ← 文件名要有描述性
+```
+
+这就是第 11 讲“渐进式披露“策略的直接应用。但这里强调的不是怎么做，而是“什么时候选择这个模式”，答案是当你的 SKILL.md 超过 500 行时。
+
+**4、工具隔离模式**
+
+工具隔离模式的核心是通过 allowed-tools 明确能力边界，限制 Skill 可以调用的工具。
+
+```
+# 审计类 Skill：只读
+allowed-tools: [Read, Grep, Glob]
+
+# 生成类 Skill：只写不改
+allowed-tools: [Read, Grep, Glob, Write]
+
+# 分析类 Skill：只读 + 脚本
+allowed-tools: [Read, Grep, Glob, Bash(python:*)]
+
+# 执行类 Skill：受控执行
+allowed-tools: [Read, Bash(npm test:*), Bash(pytest:*)]
+```
+
+工具隔离模式的价值不在于“能做什么”，而在于明确“不能做什么”。
+
+![img](https://static001.geekbang.org/resource/image/3d/44/3d873c508359990e4c7619aa3a784144.jpg?wh=3335x1455)
+
+实际的生产级 Skill 通常组合多种模式。以我们在第 12 讲构建的 API 文档生成器为例。
+
+```
+04-api-generator = 模板驱动 + 脚本增强 + 知识分层 + 工具隔离
+
+├── SKILL.md               ← 知识分层（路由器，500 行以内）
+├── PATTERNS.md            ← 知识分层（按需加载）
+├── templates/endpoint.md  ← 模板驱动（标准化输出）
+├── scripts/detect.py      ← 脚本增强（确定性路由检测）
+└── allowed-tools          ← 工具隔离（Write 但不给 Edit）
+```
+
 ## 权限体系与安全设计
+
+当 Skill 变成组织级能力时，如何确保它“强大而不失控”？我们逐级来看。
+
+- 在第一级 SOP 阶段，风险很小——它只是执行固定步骤。
+- 在第二级专家系统阶段，Skill 已经可以调用多种工具、加载大量知识。
+- 到了第三级组织智能阶段，多个 Skills 与 SubAgents 协作，自动触发、流水线运行，如果没有清晰的权限分层，系统很容易出现“能力越强，风险越大”的问题。
+
+因此，Skill 的权限设计不是附加功能，而是组织智能能够落地的前提。
+
+权限设计本质上是在回答三个问题：
+
+- 这个 Skill 能做什么？
+- 这个 Skill 什么时候能被触发？
+- 这个 Skill 在什么边界内运行？
+
+这三问，构成了完整的 Skill 三层权限体系。
+
+![img](https://static001.geekbang.org/resource/image/6d/55/6d3e299b88ef921151e0afe7e9fed655.jpg?wh=3030x1709)
 
