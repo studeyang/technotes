@@ -1654,3 +1654,99 @@ allowed-tools: [Read, Bash(npm test:*), Bash(pytest:*)]
 
 ![img](https://static001.geekbang.org/resource/image/6d/55/6d3e299b88ef921151e0afe7e9fed655.jpg?wh=3030x1709)
 
+# 14｜星火燎原：从Claude Code到行业开放标准
+
+2025 年 10 月，Anthropic 在 Claude Code 里上线了 Skills。那时候没人觉得这是什么大事——不过是一个 Markdown 文件里写写指令嘛。
+
+2026 年 2 月，27+ Agent 平台原生支持这个格式。52,000+ Skills 被注册。Top Skills 单个安装量突破 180,000。
+
+从一个产品特性到行业开放标准，Skills 只用了不到百天。
+
+这一讲，我们来回答三个问题：第一，发生了什么；第二，为什么偏偏是 Skills 能出圈；第三，这对你作为 AI 工程师意味着什么。
+
+我们先用一张图来完整复盘这些天里发生的事情。
+
+![img](https://static001.geekbang.org/resource/image/88/b7/88dd7ddyy69ef588d01b8e32404775b7.jpg?wh=4615x2405)
+
+整个故事的转折点是 12 月 18 日——不是技术突破，而是一个战略决策：Anthropic 选择把 Skills 开放。
+
+## Skills 出圈的三个本质属性
+
+刚刚我们了解了“发生了什么”，更重要的问题是“为什么”。为什么是 Skills 出圈，而不是 SubAgents、不是 Hooks、不是 Plugins？
+
+答案藏在 Skills 的三个本质属性里。
+
+![img](https://static001.geekbang.org/resource/image/9e/9d/9e7f59e8007f183ff83e1853e387d89d.jpg?wh=1597x874)
+
+第一，声明式（Declarative）。 Skills 的载体是纯 Markdown 文件——YAML frontmatter 加 Markdown 正文。没有编程语言，没有 import/require，没有编译和构建步骤。这意味着什么？任何能读 Markdown 的系统都能理解一个 Skill。
+
+第二，自包含（Self-contained）。 一个 Skill 就是一个文件夹。它不依赖任何外部注册中心，不需要在某个平台注册，不需要安装特定的 runtime，不需要配置 API key，不需要连接外部服务。
+
+第三，知识本位（Knowledge-centric）。Skills 的价值不在格式——格式只是 Markdown；不在工具——工具是 Agent 自带的；不在运行时——运行时是 Agent 平台提供的。价值在内容本身，在“怎么做某件事”的知识，在可操作的领域智慧。
+
+这三个属性合在一起，天然具备跨平台复用的属性：
+
+```
+声明式     → 任何 LLM 都能读
+自包含     → 任何文件系统都能存
+知识本位   → 知识的价值不绑定平台 
+```
+
+**为什么 SubAgents 不能出圈**
+
+理解了 Skills 为什么能出圈，再看 SubAgents 为什么不能——两者的对比揭示了一个深层的架构原理。
+
+![img](https://static001.geekbang.org/resource/image/bc/f9/bc2bd32c8fceba4200aae4cbf9d0b9f9.jpg?wh=3490x1523)
+
+如果把 Claude Code 的所有机制排列起来看可移植性，规律非常清晰。
+
+![img](https://static001.geekbang.org/resource/image/2f/71/2f8bdef00a03bac25a6dae8645e08371.jpg?wh=3368x1405)
+
+越接近“纯知识”的机制越容易跨平台，越接近“运行时行为”的机制越绑定平台。Skills 是最纯粹的知识封装，所以它出圈了。
+
+**Agentic AI Foundation——AI 时代的 W3C**
+
+2025 年 12 月 9 日，Anthropic、OpenAI 和 Block（原 Square）在 Linux Foundation 下联合成立了  Agentic AI Foundation (AAIF)。如果你熟悉 Web 标准的历史，这就是 AI 时代的 W3C——让不同厂商的 Agent 能用同一套标准互操作。
+
+AAIF 有三大创始项目，每个解决 Agent 生态的一个核心问题。
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                 Agentic AI Foundation                     │
+│                                                          │
+│    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│    │     MCP       │  │    goose      │  │  AGENTS.md   │  │
+│    │  (Anthropic)  │  │   (Block)     │  │  (OpenAI)    │  │
+│    │              │  │              │  │              │  │
+│    │  Agent 如何   │  │  Agent 如何   │  │  Agent 如何   │  │
+│    │  连接工具？   │  │  落地执行？   │  │  理解项目？   │  │
+│    │              │  │              │  │              │  │
+│    │  = 工具接口   │  │  = 执行框架   │  │  = 项目上下文  │  │
+│    │    标准       │  │    参考实现   │  │    标准       │  │
+│    └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                          │
+│    Platinum: AWS, Anthropic, Block, Bloomberg,            │
+│              Cloudflare, Google, Microsoft, OpenAI        │
+│                                                          │
+│    Gold:     Cisco, Datadog, Docker, IBM, JetBrains,     │
+│              Oracle, Salesforce, SAP, Shopify, ...        │
+│                                                          │
+│    共 50+ 企业会员                                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+## 从 Skills 出圈看 AI 工程的趋势
+
+最后，让我们从 Skills 出圈这个事件中，提取三个更大的趋势。
+
+趋势一：声明式大于命令式。 Skills 出圈证明了在 AI Agent 生态中，声明式知识包比命令式代码更具生命力。因为 AI 的“编译器”就是 LLM——它能直接“编译”自然语言为行动。
+
+```
+传统软件：代码（命令式） → 编译器 → 机器执行
+AI Agent：知识（声明式） → LLM   → Agent 执行
+```
+
+趋势二：标准化大于平台锁定。 AAIF 的成立标志着 AI Agent 行业从平台战争走向标准协作。Anthropic 开放 MCP 和 Skills，OpenAI 开放 AGENTS.md，Block 开放 goose——竞争对手在工具层竞争，在标准层合作。
+
+趋势三：知识复用大于模型竞争。 当所有平台的 Agent 都能用同一套 Skills，模型的差异化不再来自“Agent 知道什么”，而来自“Agent 推理有多好”。知识被标准化抽取出来后，模型竞争回归到推理能力的本质。
+
