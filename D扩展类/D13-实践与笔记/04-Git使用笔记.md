@@ -127,3 +127,9 @@ git status命令执行后，出现了一些Untracked files，如何移除这些U
 git clean -fd -- fcbox-router-parent/backups fcbox-router-parent/telemetry
 ```
 
+将一些文件移出 git status 列表：
+
+```
+git rm -r --cached website
+```
+

@@ -24,23 +24,23 @@ $ grep -nri redis docs | cat --number
 
 ## 简介
 
-### 基础类
+### 1、基础类
 
 [基础类](sidebar.md ':include')
 
-### 进阶类
+### 2、进阶类
 
 [进阶类](B进阶类/sidebar.md ':include')
 
-### 架构类
+### 3、架构类
 
 [架构类](C架构类/sidebar.md ':include')
 
-### 扩展类
+### 4、扩展类
 
 [扩展类](D扩展类/sidebar.md ':include')
 
-### AI类
+### 5、AI类
 
 [AI类](E-AI类/sidebar.md ':include')
 
@@ -49,9 +49,9 @@ $ grep -nri redis docs | cat --number
 - Apollo：https://github.com/apolloconfig/apollo/tree/master/docs
 - Docsify：https://docsify.js.org/#/zh-cn/
 
-## 每周分享
+## 技术博客
 
-在学习过程中，如果遇到有深度、有帮助的内容，我会以文章的形式分享出来，内容会发表在我的[公众号](https://mp.weixin.qq.com/s/TWRVaQPhrQf9oPxsAsuIKQ)、[掘金](https://juejin.cn/user/2594503173605767/posts)和[今日头条](https://www.toutiao.com/c/user/token/MS4wLjABAAAArFlpgpSvRI74ttxw76bAENUnFIFcYTJQnZYS77fZmNQ/?source=mp_msg&tab=article)，也会维护在 Github：[studeyang/leanrning-share](https://github.com/studeyang/learning-share)。
+我会以博客的形式分享学习成果，内容发表在我的[公众号](https://mp.weixin.qq.com/s/TWRVaQPhrQf9oPxsAsuIKQ)、[掘金](https://juejin.cn/user/2594503173605767/posts)和[今日头条](https://www.toutiao.com/c/user/token/MS4wLjABAAAArFlpgpSvRI74ttxw76bAENUnFIFcYTJQnZYS77fZmNQ/?source=mp_msg&tab=article)，也会维护在 Github：[studeyang/blog](https://github.com/studeyang/blog)。
 
 公众号可通过微信搜索「杨同学technotes」或者扫下面的二维码，即可关注。
 
