@@ -37,15 +37,32 @@ claude -p "找出这个文件中的 Bug" < buggy.js
 
 下表清晰地展示了两种模式在各个维度上的差异。
 
-![img](https://static001.geekbang.org/resource/image/a1/e5/a1ebayy885dbc87acef4f347a42337e5.jpg?wh=2949x1288)
+| 特性       | 交互模式   | Headless 模式      |
+| :--------- | :--------- | :----------------- |
+| 用户界面   | 终端 TUI   | 无                 |
+| 输入方式   | 实时对话   | 一次性提示         |
+| 输出方式   | 流式显示   | stdout/JSON        |
+| 用户确认   | 可交互确认 | 自动处理或跳过     |
+| 会话持久化 | 自动保存   | 不保存（除非指定） |
+| 典型用途   | 开发调试   | 自动化/CI          |
 
 Headless 模式提供了一组命令行参数来精细控制执行行为。
 
-![img](https://static001.geekbang.org/resource/image/c9/e4/c9f508faa846b65d2488960bd8424ce4.jpg?wh=2979x1435)
+| 参数                | 说明                            | 示例                       |
+| :------------------ | :------------------------------ | :------------------------- |
+| `-p, --print`       | 启用 headless 模式              | `claude -p "任务"`         |
+| `--output-format`   | 输出格式：text/json/stream-json | `--output-format json`     |
+| `--max-turns`       | 限制最大执行轮次                | `--max-turns 5`            |
+| `--allowedTools`    | 只允许特定工具                  | `--allowedTools Read,Grep` |
+| `--disallowedTools` | 禁用特定工具                    | `--disallowedTools Bash`   |
+| `--continue`        | 继续上一个会话                  | `--continue`               |
+| `--session-id`      | 指定会话 ID                     | `--session-id abc123`      |
 
 > 特别值得注意的是  --allowedTools 和  --max-turns 这两个参数，它们是安全防护的第一道防线，能有效限制 Claude 在无人监管环境中的行为边界。
-
-![img](https://static001.geekbang.org/resource/image/5e/0b/5e9f73ce1cd9b75c0b7ecca7a4cfaf0b.jpg?wh=2523x1066)
+>
+> 在 CI/CD 环境中，我建议你总是同时设置 --allowedTools 和 --max-turns。这不是因为不信任 Claude，而是因为无人值守环境中的任何意外都会被放大——一个失控的循环可能消耗大量 API tokens，一个意外的文件修改可能破坏构建。
+>
+> 防御性编程的原则不仅适用于业务代码，也适用于 AI 自动化的配置。
 
 **输出格式**
 
@@ -116,7 +133,7 @@ claude -p "分析代码" --output-format stream-json
 {"type":"result","session_id":"abc123","is_error":false,"result":"最终结果"}
 ```
 
-下面这段 Bash 脚本展示了如何逐行读取 Stream JSON 输出，并根据事件类型做出不同响应。你可以在此基础上扩展，比如在检测到  tool_use 事件时，更新进度条，在检测到  result 事件时触发下游通知。
+下面这段 Bash 脚本展示了如何逐行读取 Stream JSON 输出，并根据事件类型做出不同响应。你可以在此基础上扩展，比如在检测到 tool_use 事件时，更新进度条，在检测到 result 事件时触发下游通知。
 
 ```bash
 claude -p "分析代码" --output-format stream-json | while IFS= read -r line; do
@@ -129,19 +146,13 @@ claude -p "分析代码" --output-format stream-json | while IFS= read -r line; 
 done
 ```
 
-
-
 **Unix 管道集成**
 
 Claude Code 的一个独特优势是它可以无缝融入 Unix 管道，成为你工具链中的一环。这不是一个附加功能，而是一种设计哲学——Claude Code 遵循 Unix“小工具、大组合”的传统，通过标准输入输出与其他命令行工具互联互通。
 
-基本管道用法如  [Anthropic 工程博客](https://www.anthropic.com/engineering/claude-code-best-practices)所述：
+管道的核心思想是：前一个命令的输出，成为后一个命令的输入。
 
-> “Claude Code 可以作为 Unix 风格的工具，允许你直接将数据管道到它（如  cat foo.txt | claude -p "query"），这对于处理日志或 CSV 特别有用。”
-
-管道的核心思想是：前一个命令的输出，成为后一个命令的输入。当 Claude Code 站在管道中间时，它接收上游数据，用 AI 理解和处理这些数据，然后把结果传给下游。这意味着你可以把 Claude 插入到任何现有的 Shell 工作流中，而不需要改变工作流的结构。
-
-```
+```bash
 # 分析日志文件
 cat server.log | claude -p "找出所有错误并总结原因"
 
@@ -152,9 +163,9 @@ curl https://api.example.com/data | claude -p "提取所有用户的邮箱地址
 cat old-code.js | claude -p "将这段 JavaScript 转换为 TypeScript"
 ```
 
-管道的真正威力在于组合。下面这些例子展示了 Claude Code 如何与  find、git、grep 等经典 Unix 工具协作。每个组合都解决了一个真实的开发场景——批量检查类型提示、总结提交变更、将散落的 TODO 转换为规范的 Issue 格式。
+管道的真正威力在于组合。
 
-```
+```bash
 # 结合 find 和 xargs 批量处理
 find src -name "*.py" | xargs -I {} claude -p "检查 {} 中的类型提示是否完整"
 
@@ -165,13 +176,9 @@ git diff HEAD~1 | claude -p "总结这次提交的变更"
 grep -r "TODO" src/ | claude -p "将这些 TODO 转换为 GitHub Issue 格式"
 ```
 
-![img](https://static001.geekbang.org/resource/image/9f/e4/9f50056b8d868b32478127874fa3cce4.jpg?wh=2409x993)
+Claude 不仅可以接收管道输入，它的输出同样可以通过管道流向下游。
 
-Claude 不仅可以接收管道输入，它的输出同样可以通过管道流向下游。这样你就能构建完整的自动化链路：数据获取 -> AI 分析 -> 结果处理 -> 通知或存储。
-
-下面的例子展示了三种典型的下游处理模式——用  jq 解析 JSON 结果、直接写入文件以及发送邮件通知。
-
-```
+```bash
 # Claude 输出 -> jq 解析 -> 下游处理
 claude -p "列出所有函数名" --output-format json | jq -r '.result' | sort | uniq
 
@@ -184,17 +191,13 @@ claude -p "检查是否有安全漏洞" --output-format json | \
   mail -s "安全扫描报告" security@company.com
 ```
 
-
-
 **批量处理模式**
 
-当你需要对大量文件执行相同的 AI 分析任务时，批量处理模式就派上用场了。[SmartScope 博客](https://smartscope.blog/en/generative-ai/claude/claude-code-batch-processing/)详细介绍了这种模式：
-
-> Claude Code 的批处理（headless 模式）允许你直接从命令行执行 AI 功能，无需使用交互式 UI。通过集成到 CI/CD 流水线和自动化脚本中，你可以高效执行大规模处理任务。
+当你需要对大量文件执行相同的 AI 分析任务时，批量处理模式就派上用场了。
 
 下面是一个批量代码审查脚本。它遍历  src 目录下的所有 TypeScript 文件，对每个文件运行 Claude 审查，并将结果保存到独立的报告文件中。注意  --max-turns 3 的设置——对于单文件审查，3 轮通常就足够了，这样既能保证审查质量，又能控制成本和耗时。
 
-```
+```bash
 #!/bin/bash
 # batch-review.sh - 批量代码审查
 
@@ -218,11 +221,9 @@ done
 echo "Reviews complete. Results in $RESULTS_DIR/"
 ```
 
+## GitHub Actions 集成
 
-
-**GitHub Actions 集成**
-
-GitHub Actions 是 Headless 模式最常见的应用场景。GitHub 是最大的代码托管平台，而 Actions 是它的原生 CI/CD 系统。Claude Code 与 GitHub Actions 的集成，让“AI 驱动的代码审查”不再停留于概念，而是几行 YAML 配置就能实现。
+Claude Code 与 GitHub Actions 的集成，让“AI 驱动的代码审查”不再停留于概念，而是几行 YAML 配置就能实现。
 
 ![img](https://static001.geekbang.org/resource/image/43/9a/433d256b69e3931b4b9f5253f0062c9a.jpg?wh=1663x741)
 
@@ -230,38 +231,29 @@ Anthropic 提供了[官方 GitHub Action](https://github.com/anthropics/claude-c
 
 > Claude Code GitHub Actions 为你的 GitHub 工作流带来 AI 驱动的自动化。只需在任何 PR 或 Issue 中 @claude，Claude 就能分析你的代码、创建 Pull Request、实现功能、修复 Bug——同时遵循你的项目规范。
 
-官方 Action 支持两种模式，分别对应不同的使用场景。Tag Mode 适合开发者主动请求帮助的场景——你在 PR 评论中 @claude，它就会响应。Agent Mode 适合完全自动化的场景——每次 PR 创建时自动触发，不需要人工干预。
+官方 Action 支持两种模式，分别对应不同的使用场景。
 
-![img](https://static001.geekbang.org/resource/image/cc/e9/cceb2473d0b8709b5c3530287fb1a4e9.jpg?wh=3068x721)
+| 模式                | 触发方式        | 适用场景           |
+| :------------------ | :-------------- | :----------------- |
+| Tag Mode (交互式)   | @claude 提及    | 开发者主动请求帮助 |
+| Agent Mode (自动化) | 直接提供 prompt | CI/CD 自动化任务   |
 
-
-
-
-
-Tag Mode 示例：
-
-在 PR 评论中输入  @claude 帮我审查这段代码，Claude 会自动响应并提供审查意见。
-
-
+Tag Mode 示例：在 PR 评论中输入 @claude 帮我审查这段代码，Claude 会自动响应并提供审查意见。
 
 Agent Mode 示例：
 
-```
+```yaml
 - uses: anthropics/claude-code-action@v1
   with:
     anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
     prompt: "审查这个 PR 的所有变更，检查安全漏洞"
 ```
 
-最简单的设置方式是在 Claude Code 终端中运行  /install-github-app，它会引导你完成整个配置过程，包括创建 GitHub App、配置 Webhook、设置权限等。
+最简单的设置方式是在 Claude Code 终端中运行 /install-github-app，它会引导你完成整个配置过程，包括创建 GitHub App、配置 Webhook、设置权限等。
 
-如果你更喜欢手动配置，或者需要定制化的工作流，可以按以下步骤操作。
+如果你更喜欢手动配置，或者需要定制化的工作流，可以按以下步骤操作。第一步是在 GitHub 仓库的 Settings -> Secrets -> Actions 中添加 `ANTHROPIC_API_KEY`——这是唯一需要的密钥。第二步是创建工作流文件，定义触发条件和执行步骤。创建 `.github/workflows/claude.yml`：
 
-第一步是在 GitHub 仓库的 Settings -> Secrets -> Actions 中添加  ANTHROPIC_API_KEY——这是唯一需要的密钥。
-
-第二步是创建工作流文件，定义触发条件和执行步骤。创建  .github/workflows/claude.yml：
-
-```
+```yaml
 name: Claude Code
 
 on:
@@ -276,7 +268,7 @@ jobs:
     # 只在 @claude 提及时触发
     if: contains(github.event.comment.body, '@claude')
 
-    permissions:
+    permissions:  # 遵循最小权限原则
       contents: read
       pull-requests: write
       issues: write
@@ -289,17 +281,13 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-这份配置只有二十几行，但它实现了一个完整的 AI 审查工作流：监听 PR 和 Issue 中的评论，在检测到 @claude 提及时触发，检出代码，然后让 Claude 分析并回复。permissions 部分遵循最小权限原则——contents: read 只允许读取代码，pull-requests: write 和  issues: write 允许发表评论。
-
-
-
-
+它实现了一个完整的 AI 审查工作流：监听 PR 和 Issue 中的评论，在检测到 @claude 提及时触发，检出代码，然后让 Claude 分析并回复。
 
 **自动化 PR 审查**
 
 自动化 PR 审查是最常见的用例——每次 PR 创建或更新时自动审查。和上面的 Tag Mode 不同，这里不需要任何人工触发，PR 一创建就会自动开始审查。这个工作流稍微复杂一些，因为它需要获取变更文件列表、构建审查 prompt、运行 Claude、然后将结果发布为 PR 评论。
 
-```
+```yaml
 name: Claude PR Review
 
 on:
@@ -375,15 +363,13 @@ jobs:
 - concurrency 配置确保同一个 PR 上不会同时运行多个审查，当开发者快速连续推送多个 commit 时，旧的审查会被取消，只保留最新的。
 - --allowedTools Read,Grep,Glob 限制 Claude 只能使用只读工具，确保审查过程不会意外修改任何文件。
 
-
-
 **自动修复 Lint 错误**
 
 除了只读审查，Headless 模式还可以用于自动修复。
 
 下面的工作流展示了一个更激进的用例：当 lint 检查失败时，让 Claude 自动修复错误并提交。这种模式适合风格类的 lint 规则（缩进、分号、import 排序等），对于逻辑类的 lint 规则则需要更谨慎。注意这里没有设置  --allowedTools，因为 Claude 需要读写文件来完成修复。
 
-```
+```yaml
 name: Auto Fix Lint Errors
 
 on:
@@ -426,21 +412,21 @@ jobs:
           git push
 ```
 
-![img](https://static001.geekbang.org/resource/image/9d/80/9d25d1dff7c9eddc1596d46cba6e9c80.jpg?wh=2598x1278)
-
-
+> 自动修复 lint 错误听起来很美好，但要谨慎使用。对于纯格式问题（如 Prettier 规则），放心让 Claude 自动修复并推送；对于可能影响语义的规则（如 no-unused-vars、no-implicit-any），让 Claude 修复，但不要自动推送，而是创建一个新的 PR 供人类审查。
+>
+> 记住，Headless 模式的价值是减少等待时间，而不是跳过人类判断。
 
 **Pre-commit Hook 集成**
 
 Pre-commit Hook 是另一个常见的 Headless 应用场景。与 CI/CD 流水线不同，Pre-commit Hook 运行在开发者的本地机器上，在代码提交之前进行检查。它的优势是即时反馈——你不需要等到代码推送到远端才知道有问题，在  git commit 的那一刻就能得到 AI 的审查意见。
 
-基本 Pre-commit Hook
+- 基本 Pre-commit Hook
 
 下面这个 Hook 脚本在每次  git commit 时自动运行。它获取暂存区的文件列表，让 Claude 快速检查有没有明显问题。如果 Claude 回复“OK”，提交正常进行；如果发现问题，提交会被阻止，并显示问题列表。注意  --max-turns 3 和  --allowedTools Read,Grep 的设置——pre-commit hook 需要快速完成，不能让开发者等太久，所以限制了执行轮次，并且只允许只读操作。
 
 我们创建  .git/hooks/pre-commit。
 
-```
+```bash
 #!/bin/bash
 # Pre-commit hook: Claude Code 快速审查
 
@@ -484,15 +470,13 @@ fi
 chmod +x .git/hooks/pre-commit
 ```
 
-
-
-自动生成 Commit Message
+- 自动生成 Commit Message
 
 另一个实用的 Hook 是自动生成 commit message。很多开发者在写 commit message 时都很头疼——要么写得太笼统（ix bug），要么干脆放弃思考（update）。这个 Hook 可以利用 Claude 分析 diff 内容，帮我们自动生成符合 Conventional Commits 规范的 commit message。
 
 创建  .git/hooks/prepare-commit-msg：
 
-```
+```bash
 #!/bin/bash
 # 自动生成 commit message
 
@@ -530,13 +514,13 @@ mv "$TEMP_FILE" "$1"
 
 
 
-使用 pre-commit 框架
+- 使用 pre-commit 框架
 
 如果你的团队使用 [pre-commit](https://pre-commit.com/) 框架来管理 Git hooks，可以将 Claude 审查集成为框架中的一个 hook。这样的好处是，hook 的安装和更新由框架统一管理，团队成员不需要手动拷贝 hook 脚本。
 
 配置  .pre-commit-config.yaml：
 
-```
+```yaml
 repos:
   - repo: local
     hooks:
@@ -550,7 +534,7 @@ repos:
 
 
 
-**实战项目：完整的 CI/CD 审查系统**
+## 实战项目：完整的 CI/CD 审查系统
 
 前面我们分别学习了 Headless 模式的各个组件——输出格式、管道集成、GitHub Actions、Pre-commit Hook。现在让我们把它们组装成一个完整的自动化审查系统。这个系统涵盖了从本地开发到远程 CI 的完整链路。
 
@@ -573,7 +557,7 @@ my-project/
 
 CLAUDE.md 在 Headless 模式中扮演着关键角色。无论是 pre-commit hook 还是 GitHub Actions 中的 Claude，都会读取项目根目录的 CLAUDE.md 来了解审查规范。这意味着你可以通过一份配置文件，统一所有环节的审查标准。
 
-```
+```markdown
 # 代码审查规范
 
 ## 审查重点
@@ -595,7 +579,7 @@ CLAUDE.md 在 Headless 模式中扮演着关键角色。无论是 pre-commit hoo
 
 scripts/review.sh 是一个独立的本地审查脚本，开发者可以在任何时候手动运行它来审查代码。它与 CI 中的审查使用相同的 Claude 能力，但运行在本地环境中。脚本包含了完整的错误处理、检查 API Key 是否设置、Claude Code 是否安装以及结果保存功能，每次审查的报告都会保存为带时间戳的 Markdown 文件。
 
-```
+```bash
 #!/bin/bash
 # review.sh - 本地代码审查脚本
 
@@ -685,7 +669,7 @@ echo "Report saved to: $REPORT_FILE"
 
 完整文件参见 .github/workflows/claude-review.yml：
 
-```
+```yaml
 name: Claude PR Review
 
 on:
@@ -830,7 +814,7 @@ jobs:
 
 根据 [eesel.ai](https://www.eesel.ai/blog/claude-code-automation) 的指南，在 CI/CD 中运行 Claude Code 时应该限制权限。最小权限原则的核心思想是：只给 Claude 完成任务所需的最少权限，不多给一分。对于只读审查任务，只允许 Read、Grep、Glob 三个工具就够了；如果不需要执行任意命令，明确禁用 Bash 工具；对于简单任务，限制执行轮次以防止无限循环。
 
-```
+```bash
 # 只读操作
 claude -p "分析代码" --allowedTools Read,Grep,Glob
 
@@ -843,7 +827,7 @@ claude -p "快速任务" --max-turns 3
 
 API Key 是访问 Claude 服务的凭证，泄露它意味着别人可以用你的账号消耗 API 额度。在 CI/CD 配置中，永远不要硬编码 API Key，而是使用平台提供的 Secrets 管理机制。
 
-```
+```yaml
 # 不要这样做
 env:
   ANTHROPIC_API_KEY: "sk-ant-xxx"  # 硬编码
@@ -870,7 +854,7 @@ env:
 
 每次 CI 运行都会消耗 API tokens，而 tokens 意味着真金白银。在高频迭代的项目中，如果每次推送都触发完整的 AI 审查，成本可能会快速累积。通过合理的触发条件和并发控制，可以在保持审查覆盖率的同时有效控制成本。
 
-```
+```yaml
 # 只在特定条件下运行
 on:
   pull_request:
@@ -884,15 +868,13 @@ concurrency:
   cancel-in-progress: true
 ```
 
+## 其它 CI 平台集成
 
+虽然 GitHub Actions 有官方支持，但 Headless 模式可以在任何 CI 平台上工作。因为 Headless 模式的本质就是命令行调用——只要平台能运行 npm install 和  claude -p，就能集成。下面是三个主流 CI 平台的配置示例。
 
-**其它 CI 平台集成**
+GitLab CI：GitLab CI 使用 `.gitlab-ci.yml` 配置文件，语法与 GitHub Actions 的 YAML 不同但概念相似。
 
-虽然 GitHub Actions 有官方支持，但 Headless 模式可以在任何 CI 平台上工作。因为 Headless 模式的本质就是命令行调用——只要平台能运行  npm install 和  claude -p，就能集成。下面是三个主流 CI 平台的配置示例。
-
-GitLab CI：GitLab CI 使用  .gitlab-ci.yml 配置文件，语法与 GitHub Actions 的 YAML 不同但概念相似。注意变量引用方式的差异——GitLab 使用  $VARIABLE_NAME，而不是 GitHub 的  ${{ secrets.VARIABLE_NAME }}。
-
-```
+```yaml
 claude-review:
   image: node:20
   script:
@@ -904,9 +886,11 @@ claude-review:
     - merge_requests
 ```
 
-CircleCI：CircleCI 使用  config.yml，放在  .circleci/ 目录下。它的配置结构是 jobs -> steps，与 GitHub Actions 的 jobs -> steps 概念对应。
+> 注意变量引用方式的差异——GitLab 使用  $VARIABLE_NAME，而不是 GitHub 的  ${{ secrets.VARIABLE_NAME }}。
 
-```
+CircleCI：CircleCI 使用 `config.yml`，放在 .circleci/ 目录下。它的配置结构是 jobs -> steps，与 GitHub Actions 的 jobs -> steps 概念对应。
+
+```yaml
 version: 2.1
 jobs:
   review:
@@ -927,7 +911,7 @@ jobs:
 
 Jenkins：Jenkins 使用 Groovy DSL 定义 Pipeline，风格与上面两个 YAML 驱动的系统截然不同。但核心逻辑是一样的，安装 Claude Code，设置环境变量，运行 headless 命令。
 
-```
+```Groovy 
 pipeline {
     agent any
     environment {
@@ -944,7 +928,7 @@ pipeline {
 }
 ```
 
-**总结一下**
+## 总结一下
 
 这一讲我们学习了 Claude Code 的 Headless 模式，让 AI 助手在无人值守的情况下自动工作。
 
@@ -2293,3 +2277,4 @@ options = ClaudeAgentOptions(
 
 ![img](https://static001.geekbang.org/resource/image/a7/d1/a7a818b892ce2a7107812808a5ccb1d1.jpg?wh=2598x1098)
 
+<u></u>
