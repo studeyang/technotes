@@ -223,15 +223,11 @@ echo "Reviews complete. Results in $RESULTS_DIR/"
 
 ## GitHub Actions 集成
 
-Claude Code 与 GitHub Actions 的集成，让“AI 驱动的代码审查”不再停留于概念，而是几行 YAML 配置就能实现。
+几行 YAML 配置就能实现 Claude Code 与 GitHub Actions 集成，让“AI 驱动的代码审查”不再停留于概念。
 
 ![img](https://static001.geekbang.org/resource/image/43/9a/433d256b69e3931b4b9f5253f0062c9a.jpg?wh=1663x741)
 
-Anthropic 提供了[官方 GitHub Action](https://github.com/anthropics/claude-code-action)，让集成变得极其简单。相比于手动安装 Claude Code 然后编写 Shell 命令调用，官方 Action 封装了安装、认证、权限管理等底层细节，你只需要提供 API Key 和 prompt 就能开始使用。
-
-> Claude Code GitHub Actions 为你的 GitHub 工作流带来 AI 驱动的自动化。只需在任何 PR 或 Issue 中 @claude，Claude 就能分析你的代码、创建 Pull Request、实现功能、修复 Bug——同时遵循你的项目规范。
-
-官方 Action 支持两种模式，分别对应不同的使用场景。
+Anthropic 提供了[官方 GitHub Action](https://github.com/anthropics/claude-code-action)，让集成变得极其简单，官方 Action 支持两种模式，分别对应不同的使用场景。
 
 | 模式                | 触发方式        | 适用场景           |
 | :------------------ | :-------------- | :----------------- |
@@ -251,7 +247,10 @@ Agent Mode 示例：
 
 最简单的设置方式是在 Claude Code 终端中运行 /install-github-app，它会引导你完成整个配置过程，包括创建 GitHub App、配置 Webhook、设置权限等。
 
-如果你更喜欢手动配置，或者需要定制化的工作流，可以按以下步骤操作。第一步是在 GitHub 仓库的 Settings -> Secrets -> Actions 中添加 `ANTHROPIC_API_KEY`——这是唯一需要的密钥。第二步是创建工作流文件，定义触发条件和执行步骤。创建 `.github/workflows/claude.yml`：
+如果你更喜欢手动配置，或者需要定制化的工作流，可以按以下步骤操作。
+
+- 第一步是在 GitHub 仓库的 Settings -> Secrets -> Actions 中添加 `ANTHROPIC_API_KEY`——这是唯一需要的密钥。
+- 第二步是创建工作流文件，定义触发条件和执行步骤。创建 `.github/workflows/claude.yml`：
 
 ```yaml
 name: Claude Code
@@ -283,9 +282,9 @@ jobs:
 
 它实现了一个完整的 AI 审查工作流：监听 PR 和 Issue 中的评论，在检测到 @claude 提及时触发，检出代码，然后让 Claude 分析并回复。
 
-**自动化 PR 审查**
+**场景一：自动化 PR 审查**
 
-自动化 PR 审查是最常见的用例——每次 PR 创建或更新时自动审查。和上面的 Tag Mode 不同，这里不需要任何人工触发，PR 一创建就会自动开始审查。这个工作流稍微复杂一些，因为它需要获取变更文件列表、构建审查 prompt、运行 Claude、然后将结果发布为 PR 评论。
+和上面的 Tag Mode 不同，这里不需要任何人工触发，PR 一创建就会自动开始审查。这个工作流稍微复杂一些，因为它需要获取变更文件列表、构建审查 prompt、然后将结果发布为 PR 评论。
 
 ```yaml
 name: Claude PR Review
@@ -321,12 +320,14 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
 
+      # 1、获取变更文件列表
       - name: Get changed files
         id: changed
         run: |
           FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
           echo "files=$(echo "$FILES" | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
+      # 2、构建审查 prompt
       - name: Run Claude Review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -340,6 +341,7 @@ jobs:
             --max-turns 10 \
             --allowedTools Read,Grep,Glob > review.json
 
+      # 3、将结果发布为 PR 评论
       - name: Post Review Comment
         uses: actions/github-script@v7
         with:
@@ -359,15 +361,19 @@ jobs:
 
 这个工作流有几个值得注意的设计决策。
 
-- fetch-depth: 0 确保 checkout 时拉取完整的 git 历史，这样才能正确计算 diff。
-- concurrency 配置确保同一个 PR 上不会同时运行多个审查，当开发者快速连续推送多个 commit 时，旧的审查会被取消，只保留最新的。
-- --allowedTools Read,Grep,Glob 限制 Claude 只能使用只读工具，确保审查过程不会意外修改任何文件。
-
-**自动修复 Lint 错误**
+- `concurrency` 配置确保同一个 PR 上不会同时运行多个审查，当开发者快速连续推送多个 commit 时，旧的审查会被取消，只保留最新的。
+- `fetch-depth: 0` 确保 checkout 时拉取完整的 git 历史，这样才能正确计算 diff。
+- `--allowedTools Read,Grep,Glob` 限制 Claude 只能使用只读工具，确保审查过程不会意外修改任何文件。
 
 除了只读审查，Headless 模式还可以用于自动修复。
 
-下面的工作流展示了一个更激进的用例：当 lint 检查失败时，让 Claude 自动修复错误并提交。这种模式适合风格类的 lint 规则（缩进、分号、import 排序等），对于逻辑类的 lint 规则则需要更谨慎。注意这里没有设置  --allowedTools，因为 Claude 需要读写文件来完成修复。
+**场景二：自动修复 Lint 错误**
+
+下面的工作流展示了一个更激进的用例：当 lint 检查失败时，让 Claude 自动修复错误并提交。
+
+> 这种模式适合风格类的 lint 规则（缩进、分号、import 排序等），可以放心让 Claude 自动修复并推送。
+>
+> 对于逻辑类的 lint 规则则需要更谨慎，可以让 Claude 修复，但不要自动推送，而是创建一个新的 PR 供人类审查。
 
 ```yaml
 name: Auto Fix Lint Errors
@@ -395,6 +401,7 @@ jobs:
         continue-on-error: true
         run: npm run lint 2>&1 | tee lint-output.txt
 
+      # 注意这里没有设置 --allowedTools，因为 Claude 需要读写文件来完成修复。
       - name: Fix with Claude
         if: steps.lint.outcome == 'failure'
         env:
@@ -412,19 +419,17 @@ jobs:
           git push
 ```
 
-> 自动修复 lint 错误听起来很美好，但要谨慎使用。对于纯格式问题（如 Prettier 规则），放心让 Claude 自动修复并推送；对于可能影响语义的规则（如 no-unused-vars、no-implicit-any），让 Claude 修复，但不要自动推送，而是创建一个新的 PR 供人类审查。
->
-> 记住，Headless 模式的价值是减少等待时间，而不是跳过人类判断。
+## Pre-commit Hook 集成
 
-**Pre-commit Hook 集成**
+Pre-commit Hook 是另一个常见的 Headless 应用场景。与 CI/CD 流水线不同，Pre-commit Hook 运行在开发者的本地机器上，在代码提交之前进行检查。
 
-Pre-commit Hook 是另一个常见的 Headless 应用场景。与 CI/CD 流水线不同，Pre-commit Hook 运行在开发者的本地机器上，在代码提交之前进行检查。它的优势是即时反馈——你不需要等到代码推送到远端才知道有问题，在  git commit 的那一刻就能得到 AI 的审查意见。
+它的优势是即时反馈——你不需要等到代码推送到远端才知道有问题，在 git commit 的那一刻就能得到 AI 的审查意见。
 
-- 基本 Pre-commit Hook
+**基本 Pre-commit Hook**
 
-下面这个 Hook 脚本在每次  git commit 时自动运行。它获取暂存区的文件列表，让 Claude 快速检查有没有明显问题。如果 Claude 回复“OK”，提交正常进行；如果发现问题，提交会被阻止，并显示问题列表。注意  --max-turns 3 和  --allowedTools Read,Grep 的设置——pre-commit hook 需要快速完成，不能让开发者等太久，所以限制了执行轮次，并且只允许只读操作。
+下面这个 Hook 脚本在每次 git commit 时自动运行。它获取暂存区的文件列表，让 Claude 快速检查有没有明显问题。如果 Claude 回复“OK”，提交正常进行；如果发现问题，提交会被阻止，并显示问题列表。
 
-我们创建  .git/hooks/pre-commit。
+我们创建 `.git/hooks/pre-commit`。
 
 ```bash
 #!/bin/bash
@@ -445,6 +450,8 @@ echo "Running Claude Code review on staged files..."
 RESULT=$(claude -p "Quick review these staged files for obvious issues:
 $STAGED_FILES
 
+# 限制执行轮次 3，因为不能让开发者等太久
+# 并且只允许只读操作
 Focus on: syntax errors, security issues, obvious bugs.
 Reply with 'OK' if no issues, or list the problems." \
   --output-format text \
@@ -470,11 +477,11 @@ fi
 chmod +x .git/hooks/pre-commit
 ```
 
-- 自动生成 Commit Message
+**自动生成 Commit Message**
 
-另一个实用的 Hook 是自动生成 commit message。很多开发者在写 commit message 时都很头疼——要么写得太笼统（ix bug），要么干脆放弃思考（update）。这个 Hook 可以利用 Claude 分析 diff 内容，帮我们自动生成符合 Conventional Commits 规范的 commit message。
+这个 Hook 可以利用 Claude 分析 diff 内容，帮我们自动生成符合 Conventional Commits 规范的 commit message。
 
-创建  .git/hooks/prepare-commit-msg：
+创建 `.git/hooks/prepare-commit-msg`：
 
 ```bash
 #!/bin/bash
@@ -486,7 +493,7 @@ if [ -n "$1" ]; then
   exit 0
 fi
 
-# 获取 diff
+# 如果获取到 diff 为空，则跳过
 DIFF=$(git diff --cached)
 
 if [ -z "$DIFF" ]; then
@@ -494,7 +501,7 @@ if [ -z "$DIFF" ]; then
 fi
 
 # 生成 commit message
-MESSAGE=$(claude -p "Generate a concise commit message for these changes:
+MESSAGE=$(claude -p "Generate a concise commit message for these changes: 
 
 $DIFF
 
@@ -512,13 +519,13 @@ cat "$1" >> "$TEMP_FILE"
 mv "$TEMP_FILE" "$1"
 ```
 
+> 使用方式：`git commit`
 
-
-- 使用 pre-commit 框架
+**使用 pre-commit 框架**
 
 如果你的团队使用 [pre-commit](https://pre-commit.com/) 框架来管理 Git hooks，可以将 Claude 审查集成为框架中的一个 hook。这样的好处是，hook 的安装和更新由框架统一管理，团队成员不需要手动拷贝 hook 脚本。
 
-配置  .pre-commit-config.yaml：
+配置 `.pre-commit-config.yaml`：
 
 ```yaml
 repos:
@@ -532,7 +539,7 @@ repos:
         stages: [pre-commit]
 ```
 
-
+<!-- 20260601 -->
 
 ## 实战项目：完整的 CI/CD 审查系统
 
