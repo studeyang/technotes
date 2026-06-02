@@ -539,15 +539,13 @@ repos:
         stages: [pre-commit]
 ```
 
-<!-- 20260601 -->
-
 ## 实战项目：完整的 CI/CD 审查系统
 
 前面我们分别学习了 Headless 模式的各个组件——输出格式、管道集成、GitHub Actions、Pre-commit Hook。现在让我们把它们组装成一个完整的自动化审查系统。这个系统涵盖了从本地开发到远程 CI 的完整链路。
 
 ![img](https://static001.geekbang.org/resource/image/dc/49/dc120ec7e1a9e4c3dd49c9a99d013049.jpg?wh=2461x1834)
 
-下面的目录结构展示了一个完整的 CI/CD 审查系统需要哪些文件。.github/workflows/ 下是 GitHub Actions 配置，scripts/ 下是本地审查脚本，.git/hooks/ 下是 pre-commit hook，CLAUDE.md 则为所有环节提供统一的审查规范。
+下面的目录结构展示了一个完整的 CI/CD 审查系统需要哪些文件。
 
 ```
 my-project/
@@ -562,7 +560,9 @@ my-project/
 └── CLAUDE.md                    # Claude 记忆文件
 ```
 
-CLAUDE.md 在 Headless 模式中扮演着关键角色。无论是 pre-commit hook 还是 GitHub Actions 中的 Claude，都会读取项目根目录的 CLAUDE.md 来了解审查规范。这意味着你可以通过一份配置文件，统一所有环节的审查标准。
+**CLAUDE.md**
+
+`CLAUDE.md` 在 Headless 模式中扮演着关键角色。无论是 pre-commit hook 还是 GitHub Actions 中的 Claude，都会读取项目根目录的 CLAUDE.md 来了解审查规范。这意味着你可以通过一份配置文件，统一所有环节的审查标准。
 
 ```markdown
 # 代码审查规范
@@ -584,7 +584,9 @@ CLAUDE.md 在 Headless 模式中扮演着关键角色。无论是 pre-commit hoo
 - 不要修改数据库迁移文件
 ```
 
-scripts/review.sh 是一个独立的本地审查脚本，开发者可以在任何时候手动运行它来审查代码。它与 CI 中的审查使用相同的 Claude 能力，但运行在本地环境中。脚本包含了完整的错误处理、检查 API Key 是否设置、Claude Code 是否安装以及结果保存功能，每次审查的报告都会保存为带时间戳的 Markdown 文件。
+**scripts/review.sh**
+
+`scripts/review.sh` 是一个独立的本地审查脚本，开发者可以在任何时候手动运行它来审查代码，它与 CI 中的审查使用相同的 Claude 能力。
 
 ```bash
 #!/bin/bash
@@ -600,7 +602,7 @@ if [ -z "$ANTHROPIC_API_KEY" ]; then
     exit 1
 fi
 
-# 检查 Claude Code
+# 检查 Claude Code 是否安装
 if ! command -v claude &> /dev/null; then
     echo "Error: Claude Code not installed"
     echo "Install with: npm install -g @anthropic-ai/claude-code"
@@ -662,19 +664,11 @@ echo ""
 echo "Report saved to: $REPORT_FILE"
 ```
 
-【新修订内容】
+**GitHub Action 配置【新修订内容】**
 
-下面是生产级的 GitHub Action 配置。目前这个版本增加了变更文件计数、结构化的审查 prompt、以及关键问题检测逻辑。如果 Claude 给出 request_changes 结论，工作流将以失败状态退出，从而阻止 PR 合并。
+下面是生产级的 GitHub Action 配置，完整文件参见 `.github/workflows/claude-review.yml`：
 
-设计要点包括以下几条。
-
-- Verdict 用唯一 sentinel token（request_changes），不能用“Approved / Needs Changes / Request Changes”这种单词列表，否则 grep 会把 prompt 模板里列出的选项当成实际结论，几乎每次都误判。
-- 多行变量通过 env: 传，不通过 ${{ }} 直接拼进 shell，避免命令注入。
-- wc -l 在空 diff 时返回 1，改用 grep -c .。
-- claude 失败时显式报错，不要让 set -eo pipefail 静默挂掉。
-- 下游全部从 review.md 文件读，不通过 ${{ steps.review.outputs.result }} 把多行 markdown 拼进 shell / JS。
-
-完整文件参见 .github/workflows/claude-review.yml：
+> 注意看文件中【要点】部分。
 
 ```yaml
 name: Claude PR Review
@@ -705,11 +699,12 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
 
+      # 【变化】1、增加了变更文件计数
       - name: Get changed files
         id: changed
         run: |
           FILES=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" || true)
-          # grep -c . 在空字符串时返回 0；wc -l 会把空字符串错误地计成 1
+          # 【要点】2、grep -c . 在空字符串时返回 0；wc -l 会把空字符串错误地计成 1
           COUNT=$(echo "$FILES" | grep -c . || true)
           {
             echo "files<<CHANGED_FILES_EOF_SENTINEL"
@@ -722,15 +717,17 @@ jobs:
         id: review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # 通过 env 传变量，避免 ${{ }} 直接拼进 shell 导致命令注入
+          # 【要点】3、多行变量通过 env: 传，不通过 ${{ }} 直接拼进 shell，避免命令注入。
           CHANGED_FILES: ${{ steps.changed.outputs.files }}
           CHANGED_COUNT: ${{ steps.changed.outputs.count }}
         run: |
           PROMPT="Review this Pull Request.
 
+          <!-- 【变化】4、增加了结构化的审查 prompt -->
           ## Changed Files (${CHANGED_COUNT} files)
           ${CHANGED_FILES}
 
+          <!-- 【变化】5、增加了关键问题检测逻辑 -->
           ## Review Focus
           1. Code Quality: clean code, naming, DRY
           2. Bugs: edge cases, error handling
@@ -747,6 +744,10 @@ jobs:
           - 🟡 Warning: <file>:<line> — <description>
           - 🔵 Suggestion: <file>:<line> — <description>
 
+          <!-- 【要点】6、Verdict 用唯一 sentinel token（request_changes），
+          不能用“Approved / Needs Changes / Request Changes”这种单词列表，
+          否则 grep 会把 prompt 模板里列出的选项当成实际结论，几乎每次都误判。
+           -->
           ### Verdict
           Output EXACTLY ONE sentinel token on its own line — do not echo
           the option list:
@@ -754,6 +755,7 @@ jobs:
           <VERDICT>needs_changes</VERDICT>
           <VERDICT>request_changes</VERDICT>"
 
+          # 【要点】7、claude 失败时显式报错，不要让 set -eo pipefail 静默挂掉。
           if ! claude -p "$PROMPT" \
             --output-format json \
             --max-turns 10 \
@@ -776,6 +778,7 @@ jobs:
             exit 1
           fi
 
+      # 【要点】8、下游全部从 review.md 文件读，不通过 ${{ steps.review.outputs.result }} 把多行 markdown 拼进 shell / JS。
       - name: Post Review Comment
         uses: actions/github-script@v7
         with:
@@ -799,6 +802,7 @@ jobs:
               body,
             });
 
+      # 【变化】9、如果 Claude 给出 request_changes 结论，工作流将以失败状态退出，从而阻止 PR 合并。
       - name: Enforce verdict
         run: |
           # 用唯一 sentinel token 判断，不会和 prompt 模板字符串冲突
@@ -811,24 +815,18 @@ jobs:
           fi
 ```
 
-> 勘误：本讲早期版本的这个示例用“Approved / Needs Changes / Request Changes”做 verdict，再用 grep -qF "Request Changes" 判定，结果 grep 把 prompt 模板里列出的选项也当成结论，导致 workflow 几乎每次都被自己的 verdict 检查触发 exit 1。感谢 Geek_122fe2 朋友的 bug 报告。
-
-
-
 **安全与成本控制**
 
-在 CI/CD 中运行 AI 代理，安全是绕不开的话题。与人类开发者不同，AI 代理不会主动判断“这个操作是否安全”，它只会尽力完成你给它的任务。所以安全的责任在配置端——你需要通过参数和权限设置，确保 Claude 只能做你允许它做的事。
-
-根据 [eesel.ai](https://www.eesel.ai/blog/claude-code-automation) 的指南，在 CI/CD 中运行 Claude Code 时应该限制权限。最小权限原则的核心思想是：只给 Claude 完成任务所需的最少权限，不多给一分。对于只读审查任务，只允许 Read、Grep、Glob 三个工具就够了；如果不需要执行任意命令，明确禁用 Bash 工具；对于简单任务，限制执行轮次以防止无限循环。
+在 CI/CD 中运行 AI 代理，安全是绕不开的话题。根据 [eesel.ai](https://www.eesel.ai/blog/claude-code-automation) 的指南，在 CI/CD 中运行 Claude Code 时应该限制权限。最小权限原则的核心思想是：只给 Claude 完成任务所需的最少权限，不多给一分。
 
 ```bash
-# 只读操作
+# 对于只读审查任务，只允许 Read、Grep、Glob 三个工具就够了
 claude -p "分析代码" --allowedTools Read,Grep,Glob
 
-# 禁用危险工具
+# 如果不需要执行任意命令，明确禁用 Bash 工具
 claude -p "任务" --disallowedTools Bash
 
-# 限制执行轮次
+# 对于简单任务，限制执行轮次以防止无限循环
 claude -p "快速任务" --max-turns 3
 ```
 
@@ -843,21 +841,6 @@ env:
 env:
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
-
-[Skywork AI](https://skywork.ai/blog/how-to-integrate-claude-code-ci-cd-guide-2025/) 的指南中有这样的警告：
-
-> 在 CI/CD 流水线中使用无人监督的 Claude Code 自动化的主要风险是：AI 可能引入细微 Bug、误解核心目标，或在尝试完成任务时增加技术债务。最好从有监督的任务开始，并在让 AI 对生产代码库进行无监督修改之前加入人工审查步骤。
-
-这段警告值得反复阅读。AI 代理在无人监管环境中的最大风险不是“做错事”，而是看起来做对了，但引入了微妙的问题。一个 AI 自动修复的 Bug 可能通过了所有现有测试，但在某个边缘条件下引入了新的问题。比如 AI 可能自动“优化”了一段缓存逻辑，代码更简洁了，也通过了所有测试。但它不小心去掉了一个过期清除的判断逻辑，结果缓存数据长期不更新，线上就会悄悄变脏。
-
-建议采用渐进式采纳策略。
-
-1. 从只读开始：先让 Claude 只做审查，不做修改。
-2. 人工审批：Claude 的修改建议需要人工确认后才能合并。
-3. 限制范围：不要让 Claude 自动修改核心业务逻辑。
-4. 审计日志：记录所有 Claude 的操作。
-
-![img](https://static001.geekbang.org/resource/image/56/66/56cd235f412dab9b4a0cfb5c07966966.jpg?wh=2634x1269)
 
 每次 CI 运行都会消耗 API tokens，而 tokens 意味着真金白银。在高频迭代的项目中，如果每次推送都触发完整的 AI 审查，成本可能会快速累积。通过合理的触发条件和并发控制，可以在保持审查覆盖率的同时有效控制成本。
 
@@ -888,14 +871,14 @@ claude-review:
     - npm install -g @anthropic-ai/claude-code
     - claude -p "Review the changes in this MR" --output-format text
   variables:
+    # 注意变量引用方式的差异：
+    # GitLab 使用 $VARIABLE_NAME，而不是 GitHub 的  ${{ secrets.VARIABLE_NAME }}
     ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
   only:
     - merge_requests
 ```
 
-> 注意变量引用方式的差异——GitLab 使用  $VARIABLE_NAME，而不是 GitHub 的  ${{ secrets.VARIABLE_NAME }}。
-
-CircleCI：CircleCI 使用 `config.yml`，放在 .circleci/ 目录下。它的配置结构是 jobs -> steps，与 GitHub Actions 的 jobs -> steps 概念对应。
+CircleCI：CircleCI 使用 `config.yml`，放在 `.circleci/` 目录下。它的配置结构是 jobs -> steps，与 GitHub Actions 的 jobs -> steps 概念对应。
 
 ```yaml
 version: 2.1
@@ -934,22 +917,6 @@ pipeline {
     }
 }
 ```
-
-## 总结一下
-
-这一讲我们学习了 Claude Code 的 Headless 模式，让 AI 助手在无人值守的情况下自动工作。
-
-Headless 模式的核心是  -p 标志。它告诉 Claude Code 不要打开交互界面，直接执行任务并输出结果。配合  --output-format 可以选择 text、json 或 stream-json 三种输出格式，分别适用于人类阅读、程序解析和实时监控。
-
-Claude Code 的一个独特优势是它能无缝融入 Unix 管道。你可以用  cat file | claude -p "分析" 将文件内容传给 Claude，也可以将 Claude 的输出通过管道传给其他工具。这种设计让 Claude 成为你工具链中的一环，而不是一个孤立的应用。
-
-GitHub Actions 是 Headless 模式最常见的应用场景。Anthropic 提供了官方 Action，支持 @claude 提及触发和自动化 prompt 两种模式。通过配置工作流，你可以实现 PR 自动审查、lint 错误自动修复、文档自动生成等功能。
-
-安全是 CI/CD 集成的关键考量。应该限制 Claude 可用的工具（用  --allowedTools）、控制执行轮次（用  --max-turns）、使用 Secrets 管理 API Key，并在让 Claude 自动修改代码前加入人工审查步骤。
-
-Headless 模式让 Claude Code 从一个“需要人坐在终端前”的工具，进化为可以 7x24 小时自动工作的智能助手。开篇故事中，那个跨时区团队的 PR 审查周期从 36 小时缩短到 8 小时，正是这种进化的体现。
-
-最后说个题外话（但我们在工程里要引起重视），最近发生的源码泄露事件，再次提醒我们，CI/CD 发布管道是安全链中最薄弱的环节。面对“无人值守”的诱惑，要有设计完善的、真正启用的防护和审核机制兜底。更多关于这个热点事件的启示和架构探讨，可以移步去看我这周三发布的加餐，期待你在评论区分享交流。
 
 # 20｜有章可循：Rules 规则系统深度剖析
 
@@ -1500,6 +1467,8 @@ rules 目录的标准结构：
   → 子代理看不到主对话的任何记忆文件
   ✅ 把关键规范写进子代理的 Markdown body 或通过 Skills 注入
 ```
+
+<!-- 2026.06.02 -->
 
 # 21｜登堂入室 ：通过Agent SDK 掌控 Claude Code
 
