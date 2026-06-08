@@ -13,7 +13,7 @@
 - **编程工具**
   - [通义灵码](E-AI类/编程工具/通义灵码.md)
   - [TRAE插件官方文档](E-AI类/编程工具/TRAE插件官方文档.md)
-  - [TRAE IDE&SOLO](E-AI类/编程工具/TRAE IDE&SOLO.md)
+  - [TRAE IDE&SOLO](E-AI类/编程工具/TRAE%20IDE&SOLO.md)
   - [ClaudeCode官方文档-01快速开始](E-AI类/编程工具/ClaudeCode官方文档-01快速开始.md)
   - [ClaudeCode官方文档-02进阶使用](E-AI类/编程工具/ClaudeCode官方文档-02进阶使用.md)
   - [Cursor官方文档](E-AI类/编程工具/Cursor官方文档.md)
