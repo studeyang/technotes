@@ -308,7 +308,135 @@ Hify 是一个简版的 AI Agent 开发平台（参考 Dify），可本地部署
 - 监控：起步 Actuator + 日志，后期 Prometheus + Grafana
 ```
 
+# 04｜架构设计（上）：应用架构与代码组织
 
+这一讲和下一讲合起来是 Hify 的完整架构设计。这一讲（上篇）聚焦代码层面——模块怎么分、Spring 代码怎么组织、外部调用怎么处理。下一讲（下篇）聚焦系统层面——怎么部署、瓶颈在哪、未来怎么扩展、数据怎么存。
+
+**应用架构：模块化单体**
+
+第一个问题：一个 Spring Boot 应用，内部怎么组织？
+
+```
+hify/
+├── hify-app/               # 启动模块，Spring Boot Application
+├── hify-provider/           # 模型提供商管理
+├── hify-agent/              # Agent 管理与配置
+├── hify-chat/               # 对话引擎
+├── hify-mcp/                # MCP 工具管理与调用
+├── hify-workflow/           # 工作流编排与执行
+├── hify-knowledge/          # 知识库与 RAG
+├── hify-common/             # 公共模块（工具类、常量、异常、DTO）
+├── hify-web/                # Vue 前端
+└── deploy/                  # Docker Compose 配置
+```
+
+模块之间的依赖关系需要想清楚。Claude Code 给出分析：
+
+- hify-chat 是依赖最多的模块——对话时要读 Agent 配置（依赖 hify-agent）、调模型（依赖 hify-provider）、可能走工作流（依赖 hify-workflow）、可能做 RAG 检索（依赖 hify-knowledge）、可能调工具（依赖 hify-mcp）
+- hify-agent 依赖 hify-mcp（Agent 要绑工具）和 hify-knowledge（Agent 要绑知识库）
+- 所有模块依赖 hify-common
+
+关键原则：依赖是单向的，不能循环。 hify-chat 可以依赖 hify-agent，但 hify-agent 不能反过来依赖 hify-chat。如果出现循环依赖，说明模块边界划错了，需要把共用的部分下沉到 hify-common。
+
+![img](https://static001.geekbang.org/resource/image/b9/yy/b9a900cc1131d947324f3f0a2bc4e7yy.jpg?wh=1432x1082)
+
+**Spring 代码组织规范**
+
+我让 Claude Code 帮我梳理：
+
+```
+Hify 是模块化单体，用 Spring Boot + MyBatis-Plus。帮我定义代码组织规范，覆盖：每个模块内部的分层结构、每一层的职责边界、跨模块调用的规则。要求具体到 AI 能直接执行，不要模糊的描述。
+```
+
+它给了一版，我调整后定稿，每个业务模块内部统一结构：
+
+```
+src/main/java/com/hify/{module}/
+├── controller/        # REST 接口
+├── service/           # 业务逻辑接口
+├── service/impl/      # 业务逻辑实现
+├── mapper/            # MyBatis-Plus Mapper
+├── entity/            # 数据库实体
+├── dto/               # 请求/响应对象
+├── config/            # 配置类
+├── exception/         # 模块级自定义异常
+└── constant/          # 模块级常量
+```
+
+每一层的职责边界：
+
+- Controller 只做两件事：参数校验和调用 Service。为什么要这么严格？因为 Claude Code 特别喜欢在 Controller 里“顺手”加逻辑，它觉得方便，但你后面测试、重构、拆分全部受影响。
+- Service 处理所有业务逻辑，包括事务管理、数据校验、业务规则。Service 之间可以互相调用，但只能调接口（interface），不能直接 new 实现类。
+- Mapper 只做数据库操作。不要在 Mapper 的 XML 里写业务逻辑（比如复杂的条件判断），那是 Service 的事。
+- Entity 和数据库表一一对应。DTO 是给接口用的请求 / 响应对象。Entity 和 DTO 之间要做转换，不要把 Entity 直接返回给前端（Entity 里可能有敏感字段），DTO 可以控制暴露哪些字段。
+
+跨模块调用规则：这条是模块化单体最关键的规范。模块之间只能通过 Service 接口调用，不能直接引用另一个模块的 Mapper、Entity 或内部类。
+
+为什么？因为我们选模块化单体的一个重要理由是“后续能拆分”。如果有一天要把 hify-chat 拆成独立服务，Service 接口不变，实现类里的本地调用改成 Feign 调用，加上网络异常处理。每个跨模块调用点改两三行代码，改动量可控。
+
+**外部调用设计**
+
+Hify 最大的技术挑战不在 CRUD，在外部 LLM 调用。LLM API 调用有三个特点：慢（一次对话 3-30 秒）、不稳定（随时可能超时、限流、报错）、多供应商（每家行为不一样）。
+
+我让 Claude Code 系统性地分析：
+
+```
+Hify 要调用多个外部 LLM API（OpenAI、Claude、Gemini、Ollama），这些调用慢且不稳定。从线程管理、容错、超时、重试四个维度，给出完整的技术方案。
+```
+
+它给的方案很全面，我逐个判断：
+
+1、线程池隔离——同意。LLM 调用必须用独立线程池，不能和 Tomcat 的业务线程池共用。
+
+> 第 03 讲分析过：50 个并发 SSE 连接，每个持续 10-30 秒，如果共用线程池，管理页面的请求排在队列里等，用户看到的就是页面一直转圈。独立线程池解决这个问题——对话请求用自己的池子，管理请求用 Tomcat 默认的池子，互不影响。
+
+2、熔断机制——同意。某个 LLM 提供商连续失败时，快速熔断，后续请求直接返回错误，不浪费时间等超时。Claude Code 建议 Resilience4j，每个提供商独立熔断器——OpenAI 挂了不影响 Claude。
+
+3、超时控制——同意，但我追问了细节。它建议对话接口 60 秒超时，连通性测试 10 秒。我追问：流式响应场景下，一个 SSE 连接可能持续一两分钟，60 秒会不会把正常对话切断？它调整了：SSE 连接超时设 120 秒，普通同步调用 60 秒。
+
+4、重试策略——同意，细节有价值。不是所有失败都值得重试。网络抖动重试有意义，认证失败重试没用（重试一百次还是认证失败），限流需要退避重试（等一等再试）。按异常类型区分重试策略，这个细节 Claude Code 给得很好。
+
+![img](https://static001.geekbang.org/resource/image/2f/fa/2fe40123318d21b0ffecf53d8eda11fa.jpg?wh=1440x790)
+
+**写进 CLAUDE.md**
+
+这一讲的所有决策写进 CLAUDE.md：
+
+```markdown
+## 架构设计
+
+### 应用架构
+模块化单体。一个 Spring Boot 应用，Maven 多模块组织。
+
+模块划分：
+- hify-provider：模型提供商管理
+- hify-agent：Agent 管理与配置
+- hify-chat：对话引擎
+- hify-mcp：MCP 工具管理与调用
+- hify-workflow：工作流编排与执行
+- hify-knowledge：知识库与 RAG
+- hify-common：公共模块
+
+依赖原则：单向依赖，不循环。共用逻辑下沉 hify-common。
+
+### 代码组织
+每个业务模块统一结构：controller / service / mapper / entity / dto / config
+
+分层规则：
+- Controller 只做参数校验和调用 Service，不写业务逻辑
+- Service 处理所有业务逻辑，包括事务管理
+- 跨模块调用走 Service 接口，不直接引用其他模块的 Mapper 或 Entity
+- Entity 不直接返回给前端，用 DTO 做转换
+
+### 外部调用处理
+- LLM 调用使用独立线程池，和业务请求隔离
+- Resilience4j 熔断，每个提供商独立熔断器
+- 同步调用 60s 超时，SSE 流式 120s 超时，连通性测试 10s
+- 按异常类型区分重试：网络抖动重试、认证失败不重试、限流退避重试
+- 流式响应使用 SseEmitter + 独立线程池，不引入 WebFlux
+```
+
+# 05｜架构设计（下）：部署架构、性能预判与数据设计
 
 
 
