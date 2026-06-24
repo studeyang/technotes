@@ -722,3 +722,141 @@ pgvector 规范：
 触发条件驱动，条件不到不动。
 ```
 
+# 06｜Claude Code 实战必备：CLAUDE.md、Skills 与工程规范
+
+这节课我们会从最基础的 CLAUDE.md 开始讲起，里面放一些基础的规范。然后在后续的课程中融入 Skill，让你体验到各个维度工具的优势。
+
+**CLAUDE.md：你和 AI 的合作协议**
+
+它的结构怎么组织？ 前三讲我们已经实践了从宏观到微观的五层：
+
+1. 项目上下文：这是什么项目，做什么不做什么（第 03 讲）
+2. 架构规范：模块划分、依赖关系、外部调用处理（第 04 讲）
+3. 代码组织规范：分层结构、Controller/Service/Mapper 职责（第 04 讲）
+4. 部署与数据库规范：部署架构、索引规则、分页规范、pgvector（第 05 讲）
+5. 接口规范与行为指令：这一讲补完
+
+接口规范
+
+```markdown
+## 接口规范
+
+### 路径
+RESTful 风格：/api/v1/{资源复数名}
+GET    /api/v1/providers          # 列表（分页）
+POST   /api/v1/providers          # 创建
+GET    /api/v1/providers/{id}     # 详情
+PUT    /api/v1/providers/{id}     # 更新
+DELETE /api/v1/providers/{id}     # 删除
+POST   /api/v1/providers/{id}/test-connection  # 非 CRUD 操作用动词
+
+### 统一响应
+所有接口返回 Result<T>：
+{ "code": 200, "message": "success", "data": {...} }
+
+### 分页
+请求：page（从 1 开始）、pageSize（默认 20，最大 100）
+响应：Result<PageResult<T>>，PageResult 包含 list、total、page、pageSize
+
+### 空值
+- 列表字段空时返回 []，不返回 null
+- 字符串字段空时返回 ""，不返回 null
+- 对象不存在时返回 null
+
+### 错误码
+四位数字，按模块分段：
+1000-1999 通用 | 2000-2999 Provider | 3000-3999 Agent
+4000-4999 Chat | 5000-5999 MCP | 6000-6999 Workflow | 7000-7999 Knowledge
+```
+
+行为指令
+
+```markdown
+## 行为指令
+
+### 写代码时
+- 每个功能用最简单直接的方式实现
+- 不引入不必要的设计模式，除非我明确要求
+- 不做过度抽象
+- 不引入技术栈以外的依赖，需要时先问我
+- 所有外部调用必须有超时设置
+- 配置项外化到 application.yml，不硬编码
+
+### 改代码时
+- 先理解相关模块的设计意图
+- 不要为了新功能破坏已有接口契约
+- 改完确保已有测试通过
+
+### 不确定时
+- 架构选择给我 2-3 个方案对比，我来拍板
+- 规范没覆盖的情况，先问我，不要自己编规矩
+```
+
+接口契约：模块级的蓝图
+
+```markdown
+# Provider 模块接口契约
+
+GET /api/v1/providers
+  描述：分页查询提供商列表
+  参数：page, pageSize, name(可选，模糊搜索)
+  响应：Result<PageResult<ProviderListResp>>
+
+POST /api/v1/providers
+  描述：创建提供商
+  请求体：ProviderCreateReq { name, type, apiKey, baseUrl }
+  响应：Result<Long>
+
+DELETE /api/v1/providers/{id}
+  描述：删除提供商（需检查是否有 Agent 在使用）
+  响应：Result<Void>
+
+POST /api/v1/providers/{id}/test-connection
+  描述：测试连通性
+  响应：Result<ConnectionTestResp> { success, latencyMs, errorCode, errorMessage }
+```
+
+**Skills：可复用的规范片段**
+
+后面每个模块开发前都要写接口契约，我把这个过程标准化成一个 Skill：
+
+```markdown
+# 接口契约设计 Skill
+
+## 触发条件
+当需要为一个新模块设计接口契约时使用。
+
+## 步骤
+1. 列出这个模块的核心业务操作（创建、查询、更新、删除、特殊操作）
+2. 每个操作定义：HTTP 方法 + 路径 + 入参 + 出参
+3. 路径遵循 /api/v1/{资源复数名} 格式
+4. 所有接口返回 Result<T>
+5. 列表接口支持分页（page, pageSize）
+6. 删除接口标注是否需要关联检查
+7. 非 CRUD 操作用动词路径（如 /test-connection）
+```
+
+创建了这个 Skill 之后，下次你说“帮我设计 Agent 模块的接口契约”，Claude Code 会自动按这个标准流程走，不需要你每次重复描述格式要求。
+
+**用业界规范喂 Claude Code**
+
+比如 Java 编码规范。阿里巴巴 Java 开发手册、Google Java Style Guide 都是业界公认的标准。你不需要自己读完几十页再手写，让 Claude Code 消化后帮你提炼：
+
+```
+我在做一个 Spring Boot 项目，请基于阿里巴巴 Java 开发手册，帮我提炼出最关键的 20 条编码规范，写成 CLAUDE.md 可以直接用的格式。重点覆盖命名、异常处理、日志、并发这几个方面。不要照搬原文，要精简到  AI  能直接执行。
+```
+
+同样的思路适用于数据库规范：
+
+```
+基于业界 MySQL 设计规范（阿里巴巴 MySQL 规范、互联网公司常见的 MySQL 最佳实践），帮我补充 Hify 项目的数据库规范。当前已有的规范是：[贴上 05 讲写的数据库规范]。帮我看看还有哪些重要的规范遗漏了。
+```
+
+这个技巧的本质是：你不需要是每个领域的专家，但你可以让 Claude Code 帮你把专家的经验转化成你项目的规范。
+
+**让 Claude Code 帮你生成完整 CLAUDE.md**
+
+```
+我在做一个叫 Hify 的项目，以下是前期做的所有决策：[贴上 03-05 讲写进 CLAUDE.md 的所有片段]。另外请基于阿里巴巴 Java 开发手册，补充编码规范部分。请帮我合并生成一份完整的 CLAUDE.md。要求：结构清晰，从项目概述到行为指令，规范要具体到 AI 能直接执行。
+```
+
