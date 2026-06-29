@@ -1434,7 +1434,3 @@ ORDER BY sum_no_index_used DESC LIMIT 20;
 
 ~~~
 
-
-
-
-
