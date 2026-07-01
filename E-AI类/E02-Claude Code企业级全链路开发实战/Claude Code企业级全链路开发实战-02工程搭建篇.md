@@ -171,6 +171,138 @@ Cluade 的指令是：
 }
 ```
 
+# 09｜工程初始化（下）：前端工程与一键启动
+
+上一讲我们搭好了后端骨架——Maven 多模块结构、公共基础设施、健康检查接口，java -jar 能跑，访问 /api/v1/health 返回 200。
+
+这一讲我们把前端 Vue 工程、前后端联通、启动脚本补齐。
+
+## 前端 Vue 工程搭建
+
+我分成三步：项目骨架、axios 统一请求层、路由和页面空壳。
+
+### 第一步：项目骨架
+
+给 Claude Code 的指令思路：
+
+```
+初始化 Hify 前端项目 hify-web。Vue 3 + TypeScript + Vite + Element Plus。目录结构按 CLAUDE.md 中定义的前端结构来。Vite 开发服务器配置代理：/api 请求转发到 localhost:8080。
+```
+
+输出是：
+
+![img](https://static001.geekbang.org/resource/image/42/88/42df25ffef87fa9e041f811c7ef50388.png?wh=1068x952)
+
+开发阶段前端跑在 5173 端口，通过 Vite 代理转发 /api 请求到后端 8080 端口，解决跨域问题。
+
+![img](https://static001.geekbang.org/resource/image/e0/3f/e0f80023f9927337bfc524542820cb3f.png?wh=1014x184)
+
+### 第二步：axios 统一请求层
+
+后端定了统一响应格式 `Result<T>`，每个接口都返回 `{ code: 200, message: "success", data: {...} }`。前端的 axios 封装要和这套格式对接，让业务代码不需要每次都手动处理 code 判断和 data 解包。
+
+给 Claude Code 的指令思路：
+
+```
+在 hify-web/src/utils/ 下创建 request.ts，封装 axios 实例。baseURL 设为 /api。响应拦截器里判断 code：200 直接返回 data  字段（自动解包），非 200 用 Element Plus 的 ElMessage.error 提示 message，然后 reject。导出 get、post、put、del 四个方法。
+```
+
+为什么要在拦截器里自动解包 data？
+
+```typescript
+// 封装之前
+const result = await providerApi.getList()
+const list = result.data  // 每次都要 .data
+
+// 封装之后
+const list = await providerApi.getList() // 直接拿到 data
+```
+
+来看生成的 request.ts 的代码：
+
+```typescript
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
+
+const instance = axios.create({
+  baseURL: '/api',
+  timeout: 60000,
+})
+
+instance.interceptors.response.use(
+  (response) => {
+    const { code, message, data } = response.data
+    if (code !== 200) {
+      ElMessage.error(message || '请求失败')
+      return Promise.reject(new Error(message))
+    }
+    return data
+  },
+  (error) => {
+    ElMessage.error(error.message || '网络异常')
+    return Promise.reject(error)
+  }
+)
+
+export const get = <T>(url: string, params?: object): Promise<T> =>
+  instance.get(url, { params })
+
+export const post = <T>(url: string, data?: object): Promise<T> =>
+  instance.post(url, data)
+
+export const put = <T>(url: string, data?: object): Promise<T> =>
+  instance.put(url, data)
+
+export const del = <T>(url: string): Promise<T> =>
+  instance.delete(url)
+```
+
+然后让 Claude Code 基于这个封装写一个示例 API 文件：
+
+```
+在 hify-web/src/api/ 下创建 health.ts，用封装好的 request 调用 GET /api/v1/health。导出 getHealth 方法。
+```
+
+文件代码是：
+
+```typescript
+import { get } from '@/utils/request'
+
+export const getHealth = () => get<string>('/v1/health')
+```
+
+### 第三步：路由和页面空壳
+
+给 Claude Code 的指令是：
+
+```
+在 hify-web 中配置 Vue Router，创建以下路由和对应的空壳页面组件：模型管理、Agent 管理、对话。每个空壳页面只显示页面名称，比如 ProviderList.vue 里就一行"模型提供商管理"。再创建一个 App.vue 布局：左侧 Element Plus 菜单栏（三个菜单项对应三个路由），右侧内容区用 router-view。
+```
+
+这一步生成的是一个有完整导航结构的空壳应用——左边菜单、右边内容，点菜单能切换页面，每个页面都是占位文字。后面往里填内容就行。
+
+![img](https://static001.geekbang.org/resource/image/60/89/608730ab62b366b6fed1ca2574769f89.png?wh=2704x1008)
+
+整个调用链路如下：
+
+![img](https://static001.geekbang.org/resource/image/c4/7a/c4cebd3e995b5936137641c30574da7a.jpg?wh=1440x592)
+
+# 10｜基础组件（上）：后端业务基础设施
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
