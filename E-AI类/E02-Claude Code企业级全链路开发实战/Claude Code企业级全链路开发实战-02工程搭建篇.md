@@ -313,5 +313,77 @@ Hify 项目工程骨架已经搭好（Maven 多模块、hify-common 的 Result /
 
 Claude Code 见过的项目比你多，它的建议不能直接照搬，但用来查漏补缺非常好。
 
+# 11｜基础组件（下）：前端 UI 设计与前端基础组件
+
+这一讲做两件事：
+
+- 让 Claude Code 当设计师，把界面从“能用”变成“好看”；
+- 把前端业务开发需要的公共组件一次性封装好。
+
+## 让 AI 当设计师
+
+### 第一步：定风格方向
+
+```
+Hify 是一个 AI Agent 开发平台，面向技术团队内部使用，主要用户是开发者和技术管理者。界面以管理后台为主——大量的表格、表单、配置页面，加上一个对话交互页面。我想要的视觉风格：浅底  +  科技感点缀。整体用浅色背景保持信息可读性（管理后台表格多，深色底长时间看眼睛累）。但不要太素——侧边栏用深色底，按钮和关键交互元素用亮色，制造科技感和品牌感。色调方向：主色用蓝紫系（科技感强），辅色用青色或薄荷绿（数据 / 状态指示）。参考 Linear、Supabase 的视觉风格——干净但不无聊，有设计感但不花哨。帮我设计一套完整的设计系统：主色 / 辅色 / 背景色阶 / 文字色阶 / 圆角 / 阴影 / 过渡动效，用 CSS 变量输出。
+```
+
+经过调整后，效果如下：
+
+![img](https://static001.geekbang.org/resource/image/by/df/byyd5b980ab0b942d44cca24e82c63df.png?wh=3312x976)
+
+### 第二步：改造侧边栏
+
+```
+改造 Hify 的侧边栏。要求：
+
+1. 背景用深色（接近纯黑但不是纯黑，用 --color-bg-dark），和浅色内容区形成对比
+2. 顶部 Logo 区域：显示"Hify"品牌名，用主色渐变文字，下面一行小字  “AI Agent Platform”
+3. 菜单项：默认白色文字 + 透明背景，hover 时背景微亮（rgba 白色 10% 透明度），选中态左边一条 3px 的主色竖线 + 背景微亮
+4. 菜单图标：每个菜单项前加 Element Plus 图标（模型管理用 Setting，Agent 管理用 User，对话用 ChatDotRound）
+5. 底部：折叠 / 展开按钮，版本号
+6. 整体要炫酷，有科技感，但不能花哨到影响使用
+```
+
+效果如下：
+
+![img](https://static001.geekbang.org/resource/image/c7/d9/c75438708370a97b1c48fd92c8e9fcd9.png?wh=3312x894)
+
+### 第三步：页面整体布局
+
+```
+优化 Hify 的页面整体布局：
+
+1. 顶栏：左侧面包屑导航（显示当前页面路径），右侧用户信息区域（头像 + 用户名 placeholder）
+2. 内容区：背景用 --color-bg-secondary（浅灰），内容卡片用白色背景 + 轻阴影 + 圆角，和背景有层次感
+3. 页面标题区域：每个页面顶部有标题 + 描述文字 + 操作按钮区（右侧）
+4. 间距统一：页面边距 24px，卡片内边距 20px，元素间距 16px
+5. 按钮样式：主要操作用主色渐变按钮（蓝紫渐变），次要操作用白色边框按钮，危险操作用红色
+```
+
+效果如下：
+
+![img](https://static001.geekbang.org/resource/image/21/8d/210fbfaa925292d7aa22c277bfb37d8d.png?wh=3310x768)
+
+## 前端基础组件：一条指令搞定
+
+用一条完整的指令让 Claude Code 一次性生成所有组件：
+
+```
+在 hify-web 中创建以下前端公共组件，放在 src/components/ 目录下。所有组件使用 Vue 3 Composition API + TypeScript + Element Plus：
+
+1. HifyTable.vue：通用列表页表格组件。Props 接收 columns 配置（label/prop/width/slot）、api 方法（返回 PageResult 格式）、是否显示分页。内部自动管理 loading 状态、分页参数、数据请求。暴露 refresh() 方法供外部调用刷新。空状态显 Element Plus 的 el-empty。
+2. HifyFormDialog.vue：通用表单弹窗组件。Props 接收  title、width、表单 rules。v-model 控制显示隐藏。内部管理提交 loading、关闭时自动重置表单。暴露 open(data?) 方法，传 data 为编辑模式，不传为新增模式。提交时触发 submi 事件，由父组件处理 API 调用。
+3. src/composables/useConfirm.ts：删除确认 composable。接收确认文案和 API 方法，弹出 ElMessageBox 确认框，确认后调用 API，成功后显示 ElMessage 成功提示，返回 Promise。一行代码完成  “确认删除→调接口→提示成功”  全流程。
+4. src/composables/useRequest.ts：请求状态管理 composable。接收 API 方法，返回 { data, loading, error, execute }。自动管理三态，避免每个页面写 try-catch-finally 样板代码。
+5. src/utils/notify.ts：统一通知封装。导出 notifySuccess/notifyError/notifyWarning 三个方法，底层调用 ElMessage，统一配置 duration 和样式。每个组件要有 TypeScript 类型定义，用泛型支持不同数据类型。组件风格和第一步定的设计系统一致。
+```
+
+## 验收
+
+启动前端，打开浏览器：
+
+![img](https://static001.geekbang.org/resource/image/93/34/930438ddd865e1251b2d38b289b9cc34.png?wh=3308x1190)
+
 
 
