@@ -190,7 +190,82 @@ CREATE TABLE provider_health (
 
 # 14｜把经验变成 Skill：让 Claude Code 自动按流程走
 
+在继续做下一个模块之前，我们先停下来做两件事。
 
+第一件事：回头看看 13 讲里真正决定模块质量的是什么。不是代码，是代码之前的那些判断——支持哪些供应商、鉴权信息怎么存、健康状态要不要独立成表。这些判断靠的是领域知识。
+
+第二件事：13 讲的交付流程是固定的——咨询→设计→拆解→执行→前端对接→验收。后面做 Agent、对话引擎、MCP，每个模块都是这套流程。既然固定，为什么不把它告诉 Claude Code，让它以后自动按流程走？
+
+这一讲我们就解决这两个问题。
+
+## 领域理解：被低估的瓶颈
+
+Claude Code 让执行成本趋近于零之后，领域理解的权重不是降低了，而是大幅提升了。
+
+然而，Claude Code 本身就是一个极好的领域学习工具，关键是你要问对问题。
+
+**领域快速理解四问**
+
+![img](https://static001.geekbang.org/resource/image/ff/c3/ff86ac79907704b0cbdc7a6c12d9fcc3.png?wh=1440x866)
+
+第一问：它是什么，解决什么问题？Dify 是 AI 应用开发平台，让不会写代码的人也能搭建 AI 应用。
+
+第二问：用在哪里，什么场景？企业用 Dify 主要做智能客服、内部知识问答、文档处理。这决定了对话能力和工具接入是刚需，工作流编排是进阶需求。
+
+第三问：由什么组成，哪些是必要的？Claude Code 列出模型管理、Agent、工作流、RAG、对话、工具接入等模块。追问“哪些是必须有的”，它帮你区分核心和外围。
+
+第四问：技术架构是怎样的？了解到 Dify 后端是 Python + Flask，用 Celery 做异步任务——不是照抄，而是理解它为什么这么选，然后根据自己的约束做不同选择。
+
+四个问题从外到内，一两个小时建立 70% 的领域认知，剩下 30% 靠亲手用一下产品、翻一下文档来补。
+
+## Skill：让 Claude Code 教你
+
+**第一步：让 Claude Code 教你 Skill 是什么**
+
+提示词是：
+
+```
+Claude Code 的 Skill 机制是什么？怎么创建 Skill、怎么使用、Skill 文件放在哪里？和 CLAUDE.md 有什么区别？请详细解释，给我举个例子。
+```
+
+Claude Code 会告诉你：
+
+![img](https://static001.geekbang.org/resource/image/c3/d9/c3aa65419200d64db34398c793b1b9d9.png?wh=1440x804)
+
+**第二步：让 Claude Code 告诉你别人怎么用 Skill**
+
+```
+业界用 Claude Code Skill 的最佳实践有哪些？大家一般用 Skill 解决什么问题？给我列举一些常见的 Skill 类型和使用场景。
+```
+
+![img](https://static001.geekbang.org/resource/image/86/3d/8636f8c3009d3973fc4e7cfcd83eb43d.png?wh=1440x862)
+
+> 有点局限了，有个开源项目名字取的好：everything claude code
+
+**第三步：让 Claude Code 帮你写 Skill**
+
+知道了 Skill 是什么、别人怎么用，现在让 Claude Code 帮你写。
+
+```
+我刚完成了 Hify 项目 Provider 模块的开发，流程是这样的：
+
+1、先用咨询模式梳理了供应商选型、数据模型设计、边界问题
+2、数据模型确定后更新 schema.sql
+3、后端按 MVC 分层拆解：Entity+Mapper → DTO → Service（CRUD+ 连通性测试 + 模型同步 + 健康检查）→ Controller
+4、每步编译或 curl 验证通过再进下一步
+5、前端对接：创建 API 文件，把 mock 数据源换成真实 API
+6、完整验收：后端 curl + 浏览器全流程
+
+帮我把这个流程沉淀成一个 Skill 文件，放在  .claude/skills/module-delivery.md。要求：每一步有明确的产出物和验证方式，关键决策点标注“等待用户确认”，把我踩过的坑写成注意事项。
+```
+
+**实际跑一遍：用 Skill 启动 Agent 模块**
+
+Skill 写好了，当场验证。给 Claude Code：
+
+```
+按模块交付 Skill 的流程，帮我做 Agent 管理模块。先从第一步开始，梳理 Agent 模块的需求和数据模型。
+```
 
 # 15｜Agent 创建与配置：复杂业务逻辑的拆解策略
 
