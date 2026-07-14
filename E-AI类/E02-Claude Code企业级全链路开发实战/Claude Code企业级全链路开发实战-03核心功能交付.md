@@ -269,6 +269,117 @@ Skill 写好了，当场验证。给 Claude Code：
 
 # 15｜Agent 创建与配置：复杂业务逻辑的拆解策略
 
+## Agent 是什么？
+
+直接向 Cluade Code 提问：
+
+```
+在 AI 应用平台（比如 Dify）里，Agent 是什么概念？它和普通的对话有什么区别？用户创建一个 Agent 需要配置哪些东西？从产品层面帮我梳理。
+```
+
+Agent 是有目标、能行动的对话主体。它不只是回答问题，而是根据目标调用工具、根据结果决定下一步。核心差异在于有没有 Tool Use + 多轮自主决策。
+
+![img](https://static001.geekbang.org/resource/image/e3/78/e379b0733f9c65b431f575yyfb7a4478.png?wh=1974x652)
+
+**从概念映射到数据结构**
+
+理解了 Agent 是什么，下一步自然是：这些信息怎么存？
+
+这次的提示词是：
+
+```
+基于刚才的分析，Agent 在数据库里应该怎么存？需要哪些表？表之间什么关系？特别是：System Prompt 用什么类型、模型参数怎么存、Agent 和工具的多对多关系怎么处理。
+```
+
+3 张表就够：agent 主表、agent_tool 关联表。chat_session 已有 agent_id 外键不需要新表。
+
+模型参数怎么存？方案 A（字段打散存）：temperature、max_tokens、max_context_turns 各一列。查询直接、类型约束清晰，加参数要 ALTER TABLE。
+
+agent_tool 绑 Server 还是绑 Tool？绑 Server 意味着 Agent 自动获得该服务的所有工具（新工具自动生效），绑 Tool 是精细管控（更繁琐）。
+
+我的判断：绑 Server。20-50 人内部使用，不需要精细管控到单个工具。简单优先。
+
+最终表结构：
+
+```sql
+CREATE TABLE agent (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description VARCHAR(500) NOT NULL DEFAULT '',
+    system_prompt TEXT COMMENT '角色指令，可以很长',
+    model_config_id BIGINT NOT NULL COMMENT '绑定的模型配置',
+    temperature DECIMAL(3,2) NOT NULL DEFAULT 0.70 COMMENT '0.00~1.00',
+    max_tokens INT NOT NULL DEFAULT 2048,
+    max_context_turns INT NOT NULL DEFAULT 10 COMMENT '保留最近几轮上下文',
+    enabled TINYINT NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    deleted TINYINT NOT NULL DEFAULT 0,
+    INDEX idx_agent_model_config_id (model_config_id)
+) COMMENT 'Agent 配置';
+
+CREATE TABLE agent_tool (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    agent_id BIGINT NOT NULL,
+    tool_id BIGINT NOT NULL COMMENT '关联 mcp_server.id',
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uk_agent_tool (agent_id, tool_id),
+    INDEX idx_agent_tool_agent_id (agent_id)
+) COMMENT 'Agent 与工具关联';
+```
+
+![img](https://static001.geekbang.org/resource/image/c2/b0/c201732bb05f9e431c5fa7d277bbe1b0.png?wh=1440x848)
+
+## 从 Agent 到 LLM 应用：智能客服
+
+概念和数据结构都有了，现在来看看它在真实业务中是什么样的。
+
+它怎么对应到上面的数据结构呢？ 我们来一一对比下。
+
+1. 选模型：GPT-4o。客服场景需要准确理解用户的问题，尤其是涉及产品功能的专业描述，4o 更稳。成本上，内部 20-50 人的使用量，4o 的费用完全可控。
+
+2. 写 System Prompt：这是 Agent 的灵魂。不是随便写一句“你是客服”就行了，每一条指令都有用意：
+
+   ```
+   你是 Hify 平台的智能客服助手，负责解答用户关于产品功能、使用方法、常见问题的咨询。语气专业友好，回答简洁明了。如果用户的问题超出你的知识范围，诚实告知并引导联系人工客服。不编造不确定的信息。
+   
+   拆解一下：
+   - 语气专业友好：不要太机械也不要太随意。
+   - 回答简洁明了：客服场景用户要的是答案不是长篇大论。
+   - 超出知识范围诚实告知：这是最关键的一条，防止模型“幻觉”编造不存在的功能。
+   - 引导联系人工客服：给用户一个兜底方案。
+   ```
+
+3. 调参数：temperature 设 0.3。temperature 越高越有创意，但也越不可控，客服场景要的是可靠不是创意，同一个问题问两次，答案应该基本一致。
+
+4. max_context_turns 设 8。每多保留一轮对话上下文，就多消耗一轮的 token 费用。客服场景大部分问题 3-5 轮就解决了，8 轮留够余量。
+
+## 拆解 Agent 的 CRUD
+
+那么智能客服的配置想清楚了，接下来回到技术实现，Agent 模块的 CRUD 怎么做。
+
+```
+帮我拆解 Agent CRUD 的完整逻辑：从前端点保存到数据库落库，中间要经过哪些步骤？把创建、查询、更新、删除四个场景都拆解出来。
+```
+
+- 创建：前端发 POST 请求  → Controller 参数校验（name 非空、modelConfigId 非空、temperature 0~1）→ Service 检查 name 唯一性  → 跨模块校验 modelConfigId 存在且 enabled（调 ProviderService 接口，不直接查 mapper）→ INSERT agent 主表  → 如果 toolIds 非空，批量 INSERT agent_tool → 清除缓存  → 返回详情。
+- 列表查询：先分页查 agent，再批量查各 agent 的工具数量（SELECT agent_id, COUNT(*) FROM agent_tool WHERE agent_id IN (...) GROUP BY agent_id）。不 JOIN，不 N+1——批量 IN 查询是最优平衡。
+- 详情查询：查 agent + 查关联的 mcp_server 列表，组装完整响应。加  @Cacheable。
+- 更新工具列表：Claude Code 对比了两种方案。方案 A 全量替换（DELETE 再 INSERT），方案 B 增量 diff。它推荐方案 A，agent_tool 数据量小，全删重插没性能问题，逻辑简单。我同意。不是所有场景都需要最优雅的方案，够用且简单就是最好的。
+- 删除：不做对话会话拦截——agent 删了，进行中的对话自然找不到 agent 配置返回错误，接受这个行为。级联删 agent_tool（物理删除，关联表没有逻辑删除的意义），agent 本身逻辑删除（deleted=1）。chat_session 里的 agent_id 不处理，历史会话保留。
+
+![img](https://static001.geekbang.org/resource/image/c0/36/c0135b123afe8e39661b86d32b85b836.png?wh=1440x1016)
+
+
+
+
+
+**从 Agent 到 LLM 应用：智能客服**
+
+
+
+**拆解 Agent 的 CRUD**
+
 
 
 # 16｜对话引擎（上）：理解对话链路与流式技术选型
