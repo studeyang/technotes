@@ -370,19 +370,196 @@ CREATE TABLE agent_tool (
 
 ![img](https://static001.geekbang.org/resource/image/c0/36/c0135b123afe8e39661b86d32b85b836.png?wh=1440x1016)
 
-
-
-
-
-**从 Agent 到 LLM 应用：智能客服**
-
-
-
-**拆解 Agent 的 CRUD**
-
-
-
 # 16｜对话引擎（上）：理解对话链路与流式技术选型
+
+对话引擎是 Hify 最核心的模块。没有它，前面做的模型管理、适配层、Agent 配置都只是准备工作。这一讲和下一讲会把对话引擎做完。
+
+我们先搞清楚对话引擎到底是什么，再动手。
+
+## 对话引擎
+
+**对话引擎是什么**
+
+```
+在 AI 应用平台里，对话引擎是什么？它的职责是什么？和普通的 HTTP 接口调用有什么区别？
+```
+
+对话引擎是连接用户和 LLM 的一条处理管道，中间要做很多事。
+
+1. 会话管理。对话引擎要维护“会话”的概念，哪些消息属于同一次对话、会话什么时候创建、什么时候结束。
+2. 上下文拼装。对话引擎要把 System Prompt + 历史消息 + 当前消息拼成一个完整的 messages 数组，每次调用都带上上下文，让 LLM “看起来”有记忆。
+3. 流式响应。对话引擎要做流式推送，LLM 生成一个字就推一个字给前端，用户看到的是像人打字一样一个字一个字冒出来。
+4. 消息存储。对话结束后，用户消息和 AI 回复要持久化到数据库。用户下次打开能看到历史记录，管理员能做数据分析。
+
+普通接口是请求 - 响应模式，一来一回就结束。对话引擎是长连接 + 流式。这带来了完全不同的技术挑战：线程不能一直占着、连接不能提前断、前端要实时渲染。
+
+**对话引擎的完整链路**
+
+概念清楚了，让 Claude Code 帮我画出完整的技术链路：
+
+```
+用户和一个 Agent 对话，从前端发消息到收到流式回复，中间每一步技术上发生了什么？从前端到 Controller 到 Service 到 LLM 再回来，逐步梳理。
+```
+
+Claude Code 给了一张非常完整的链路图：
+
+```
+用户输入 "Hify 怎么创建 Agent？"
+    │
+    ▼
+[前端] POST /api/v1/chat/sessions/{sessionId}/messages
+       接收: SSE 流式响应
+    │
+    ▼
+[ChatService] ── 组装上下文 ──
+    │  1. 查 session → 拿到 agentId
+    │  2. 查 Agent → 拿到 systemPrompt、modelConfigId、参数
+    │  3. 查 ModelConfig → 拿到 modelId、providerId
+    │  4. 查 Provider → 拿到 baseUrl、authConfig
+    │  5. 从 Redis 取最近 N 轮历史消息
+    │
+    ▼
+[ChatService] ── 写入用户消息 ──
+    │  INSERT chat_message(role='user', content)
+    │
+    ▼
+[ChatService] ── 构造 LLM 请求 ──
+    │  messages = [
+    │    { role: "system",    content: agent.systemPrompt },
+    │    { role: "user",      content: "上上轮问题" },
+    │    { role: "assistant", content: "上上轮回复" },
+    │    { role: "user",      content: "Hify 怎么创建 Agent？" }
+    │  ]
+    │
+    ▼
+[LlmHttpClient] ── 流式调用 LLM ──
+    │  llmExecutor 线程池（和业务线程隔离）
+    │  Resilience4j 熔断器包裹
+    │
+    ▼
+[LLM API] 返回 SSE 流 → 边收边推给前端
+    │
+    ▼
+[ChatService] ── 流结束后 ──
+    │  INSERT chat_message(role='assistant', content=完整回复)
+    │  更新 Redis 历史消息
+
+```
+
+**数据结构设计**
+
+在深入流式技术之前，先把数据模型定下来。
+
+```
+对话引擎需要哪些表？会话和消息怎么存？消息表需要哪些字段？
+```
+
+SQL Schema 如下：
+
+```
+chat_session
+  id          bigint PK
+  agent_id    bigint          -- 关联 agent
+  title       varchar(200)    -- 首条消息前 20 字自动生成
+  status      varchar(20)     -- ACTIVE / ARCHIVED
+  deleted / created_at / updated_at
+
+chat_message
+  id            bigint PK
+  session_id    bigint         -- 关联 chat_session
+  role          varchar(20)    -- user / assistant / system
+  content       longtext
+  tokens        int            -- token 数（上下文管理用）
+  finish_reason varchar(20)    -- stop / length / error
+  latency_ms    int            -- 响应耗时 ms
+  deleted / created_at / updated_at
+```
+
+## 流式响应：SSE 完整解析
+
+这是对话引擎技术含量最高的部分。
+
+**SSE 是什么？**
+
+```
+SSE（Server-Sent Events）的工作原理是什么？和普通 HTTP 请求有什么区别？数据格式是什么样的？
+```
+
+Claude Code 的解释：
+
+![img](https://static001.geekbang.org/resource/image/c0/3a/c016031ac44dd32e8578eb29b0c5f93a.png?wh=1440x932)
+
+客户端发请求，服务端保持连接不关闭，持续往客户端推数据，直到主动关闭。数据格式很简单，每条消息以  data: 开头，用两个换行分隔：
+
+```json
+data: {"type":"delta","content":"在"}
+
+data: {"type":"delta","content":"Hify"}
+
+data: {"type":"delta","content":"中"}
+
+data: {"type":"done","finishReason":"stop"}
+```
+
+前端用 EventSource API 接收，浏览器原生支持，不需要额外依赖：
+
+```javascript
+const es = new EventSource('/api/v1/chat/sessions/1/messages/stream')
+es.onmessage = e => appendToken(JSON.parse(e.data).content)
+es.onerror = () => es.close()
+```
+
+**为什么不用 WebSocket**
+
+```
+AI 对话的流式响应，用 SSE 还是 WebSocket？
+```
+
+![img](https://static001.geekbang.org/resource/image/f0/b7/f039c6f1767099474f974f0ffee020b7.png?wh=1411x492)
+
+业界验证：OpenAI、Anthropic、Dify，所有主流 AI 对话产品都选 SSE。
+
+**SseEmitter 的工作原理**
+
+```
+Spring MVC 的 SseEmitter 怎么工作？生命周期是什么样的？
+```
+
+SseEmitter 本质是一个长连接容器。Controller 方法返回 SseEmitter 对象后，Spring 不会关闭 HTTP 连接，而是持有它。后续代码通过  emitter.send() 往这个连接里推数据，最后  emitter.complete() 关闭连接。
+
+![img](https://static001.geekbang.org/resource/image/b1/f2/b1d674e91006e60b1f0dc7e00eb8d5f2.png?wh=1440x804)
+
+关键在于线程切换。Tomcat 的请求线程创建 SseEmitter 后立刻返回，实际的 LLM 调用在 llmExecutor 线程池里异步执行：
+
+```
+Tomcat 线程:
+  创建 SseEmitter(120s) → 提交任务给 llmExecutor → return emitter
+  （线程释放，可以处理其他请求）
+
+llmExecutor 线程:
+  调用 LLM stream API → 收到 delta → emitter.send(delta)
+                       → 收到 delta → emitter.send(delta)
+                       → 收到 [DONE] → 存消息 → emitter.complete()
+```
+
+**SseEmitter 的三个坑**
+
+1. LLM 回复容易中断。SseEmitter 默认超时 30 秒，LLM 生成一个长回复可能要一两分钟，30 秒一到连接直接断了用户看到半截回复。必须设长，new SseEmitter(120_000L)，120 秒。
+
+2. HTTP 客户端断开连接，后端要 catch 异常并释放线程。用户对话到一半关了浏览器标签页，但 llmExecutor 线程不知道，它还在调 LLM 并 emitter.send()。如果不 catch IOException 这个异常并停止 LLM 调用，线程会白跑到 LLM 输出完，浪费 llmExecutor 的线程资源。
+
+3. Nginx 缓冲。Nginx 默认会缓冲上游响应，收集一批数据后才一次性发给客户端。结果用户看到的是“等了十几秒突然全部内容一起出现”，流式效果完全失效。必须在 Nginx 配置里关掉缓冲：
+
+   ```nginx
+   location /api/ {
+       proxy_pass http://backend;
+       proxy_buffering off;
+       proxy_cache off;
+       proxy_read_timeout 120s;
+   }
+   ```
+
+
 
 
 
