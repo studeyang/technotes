@@ -559,6 +559,138 @@ llmExecutor 线程:
    }
    ```
 
+# 17｜对话引擎（下）：让智能客服真正开口说话
+
+在写 CRUD 之前，有一个核心问题要先解决：上下文。
+
+## 上下文是什么
+
+我问 Claude Code：
+
+```
+AI 对话里的“上下文”到底是什么？LLM 本身有记忆吗？多轮对话是怎么实现的？
+```
+
+LLM 本身没有记忆。 每次调用都是无状态的，你上一轮告诉它“我的订单号是 12345”，下一轮它完全不知道。它不像数据库会持久化状态，每次调用都是一张白纸。
+
+那 ChatGPT 怎么做到记住你说过什么？答案是每次调用都把历史消息重新塞进请求里，让模型在同一次推理中“看到”历史，造成记得的假象。
+
+上下文就是你传给模型的 messages 数组的全部内容：
+
+```json
+{
+  "messages": [
+    { "role": "system",    "content": "你是专业客服" },
+    { "role": "user",      "content": "我的订单在哪里" },
+    { "role": "assistant", "content": "请提供订单号" },
+    { "role": "user",      "content": "订单号是 12345" },
+    { "role": "assistant", "content": "您的订单正在配送中" },
+    { "role": "user",      "content": "大概几天到" }
+  ]
+}
+```
+
+模型能处理的 messages 总长度有上限，叫 context window，单位是 token。Claude 3.5 Sonnet 是 200K，本地 Llama 3 可能只有 8K。超出窗口直接报错或截断。而且 token 是要花钱的，历史越长，每次调用越贵。
+
+接下来我问：
+
+```
+对话上下文管理有哪几种常见策略？各自的优缺点是什么？
+```
+
+![img](https://static001.geekbang.org/resource/image/06/a7/064da2e3157yy33c5387de2b5e8d2ba7.png?wh=1695x493)
+
+最终 Hify 选滑动窗口。理由是：20-50 人内部使用，对话不会特别长。Redis List 天然支持 RPUSH 新消息，超出时 LPOP 旧的，实现十行以内。
+
+## 对话存储选型
+
+```
+对话历史应该存在哪？Redis、MySQL、向量数据库在对话引擎里分别扮演什么角色？
+```
+
+Claude Code 的分析帮我理清了三者的分工：
+
+![img](https://static001.geekbang.org/resource/image/74/5d/74b0cbdc766c70f411aff7ae35315b5d.png?wh=1440x890)
+
+MySQL 是真相来源（全量），Redis 是热缓存（最近 N 轮）。写入时两边同时写，消息存 MySQL 的同时 RPUSH 到 Redis，读取上下文只读 Redis，Redis 过期后从 MySQL 重新加载（Cache-Aside）：
+
+```java
+List<ChatMessage> history = redis.get(sessionKey);
+if (history == null) {
+    // 冷启动：从 MySQL 加载最近 N 条，回写 Redis
+    history = chatMessageMapper.selectRecent(sessionId, maxContextTurns * 2);
+    redis.set(sessionKey, history, Duration.ofHours(2));
+}
+```
+
+pgvector 在 Hify 里的角色是 RAG 知识库，把产品文档切成小段，每段生成一个向量表示（1536 维 float 数组）存进 pgvector，用户提问时做语义检索找到最相关的文档段落，拼进上下文给 LLM 参考。
+
+三者协作的完整流程：
+
+![img](https://static001.geekbang.org/resource/image/1b/61/1b78cf4f45e94cd97e4f4a5dd8139e61.png?wh=1440x961)
+
+## CRUD 实现
+
+上下文和存储方案都定了，开始写代码。
+
+![img](https://static001.geekbang.org/resource/image/3c/e4/3c43af7ab36b2e9ffe29b2eca05c9ee4.png?wh=1657x588)
+
+重点是任务  3——ChatService.sendMessage，它串联了 16 讲的整条六步链路：
+
+```
+实现 ChatService.sendMessage 方法。接收 sessionId（可选）和 content。流程：异常处理：LLM 超时走 onTimeout 回调、客户端断开 catch IOException 停止 LLM 调用、send 失败调 completeWithError。事务注意：写消息操作拆成独立方法，不要在返回 SseEmitter 的方法上加 @Transactional。
+```
+
+**验收：和智能客服对话**
+
+```bash
+# 创建会话，发第一条消息
+curl -N -X POST http://localhost:8080/api/v1/chat/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"agentId": 1}'
+# 返回 sessionId
+
+# 和智能客服对话（流式）
+curl -N -X POST http://localhost:8080/api/v1/chat/sessions/{sessionId}/messages \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"content": "Hify 怎么创建 Agent？", "stream": true}'
+
+# 应该看到流式输出：
+# data: {"type":"delta","content":"在"}
+# data: {"type":"delta","content":"Hify"}
+# data: {"type":"delta","content":"中，您可以..."}
+# data: {"type":"done","finishReason":"stop","latencyMs":3200}
+```
+
+第一轮通了。现在测上下文，这是关键验证点：
+
+```bash
+# 追问（不重复说明背景）
+curl -N -X POST http://localhost:8080/api/v1/chat/sessions/{sessionId}/messages \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"content": "那怎么配置模型？", "stream": true}'
+```
+
+检查数据：
+
+```bash
+# MySQL：全量历史
+SELECT role, LEFT(content, 50), tokens FROM chat_message
+WHERE session_id = {sessionId} ORDER BY created_at;
+
+# Redis：最近 N 轮
+redis-cli LLEN session:{sessionId}
+# 应该等于 maxContextTurns * 2（一问一答算两条）
+```
+
+全部通过。智能客服能流式回复，能记住上下文，历史太长会自动裁剪。
+
+
+
+
+
 
 
 
