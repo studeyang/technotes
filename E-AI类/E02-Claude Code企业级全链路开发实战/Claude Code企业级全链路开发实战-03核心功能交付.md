@@ -687,9 +687,115 @@ redis-cli LLEN session:{sessionId}
 
 全部通过。智能客服能流式回复，能记住上下文，历史太长会自动裁剪。
 
+# 18｜复杂前端交互：让 Claude Code 帮你搞定流式聊天界面
 
+## 复杂度分层
 
+复杂页面需要拆解，拆解的顺序有三层，有顺序依赖：
 
+- 结构层：页面长什么样，组件怎么排列
+- 行为层：用户做了什么，页面发生什么
+- 细节层：动画速度、样式微调、边界处理
+
+乱了顺序就会返工，所以正确的顺序是：先对齐结构，再描述行为，最后打磨细节。
+
+**第一步：草稿图对齐结构**
+
+打开 ChatGPT 或 Claude 的对话页面，截一张图，上传给 Claude Code：
+
+```
+参考这张图的整体布局。左侧会话列表，右侧聊天窗口，底部固定输入框。用 Element Plus 实现，配色用 Hify 的浅色主题。
+```
+
+**第二步：文字描述填充行为**
+
+静态交互：四维度描述
+
+```
+Provider 管理页。
+布局：顶部操作栏（标题 + 新增按钮），主体是 Provider 列表表格。
+数据：展示 name、type、status，status 用标签区分启用 / 禁用。
+交互：点新增弹出表单弹窗，字段包括名称、类型（下拉选 OpenAI/Anthropic/Ollama）、Base URL、API Key；保存后列表刷新；支持编辑和删除，删除需二次确认。
+接口：GET /api/v1/providers 查列表，POST 新增，PUT 编辑，DELETE 删除。
+```
+
+动态交互：时间线描述
+
+```
+发送消息的完整时间线： 
+1.用户在输入框输入内容，点发送（或按 Enter）
+2.输入框立刻清空，发送按钮变为不可点击
+3.消息区域底部出现用户消息气泡（靠右，深色背景）
+4.紧接着出现 AI 消息气泡（靠左，浅色背景），内容区域为空，显示加载动画
+5.前端用 fetch 手动处理 SSE 流（不要用 EventSource，接口是 POST）
+6.每收到一个 delta chunk，把 content 追加到 AI 气泡，同时滚动到底部
+7.收到 done 事件，加载动画消失，发送按钮恢复可用
+8.如果请求失败或收到 error 事件，AI 气泡显示红色错误提示，发送按钮恢复
+```
+
+**第三步：增量调整**
+
+调整时一个原则：每次只改一个维度，描述说清楚 delta。
+
+调整 1
+
+```
+当前打字机效果每字符间隔 50ms，感觉太快，改成 30ms，其他不变。
+(是太快还是太慢？)
+```
+
+调整 2
+
+```
+AI 消息气泡没有渲染 Markdown，引入 marked.js 把 content 渲染成 HTML，代码块用等宽字体，其他样式保持。
+```
+
+调整 3
+
+```
+会话列表的消息摘要显示完整内容，改为最多 30 个字符，超出用省略号截断。
+```
+
+## 验收：同一个接口，从 curl 到浏览器
+
+用 curl 直接调后端接口：
+
+```bash
+curl -N -X POST http://localhost:8080/api/v1/chat/sessions/{sessionId}/messages \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"content": "我的订单状态怎么查？", "stream": true}'
+
+# data: {"type":"delta","content":"您"}
+# data: {"type":"delta","content":"好"}
+# data: {"type":"delta","content":"，请问"}
+# ...
+# data: {"type":"done","finishReason":"stop","latencyMs":2800}
+```
+
+后端通了。在浏览器里调用，走完整的用户操作流程：
+
+```
+1. 打开 Hify，进入“对话”，新建对话，选“退货客服” Agent
+2. 发送“我的订单状态怎么查？”看到用户气泡靠右，AI 气泡靠左，内容逐字追加
+3. 追问“那退款流程呢？”智能客服记住上下文，直接回答，不需要重复背景
+```
+
+再问几轮，确认多轮对话连贯。
+
+![img](https://static001.geekbang.org/resource/image/5b/7f/5bd960e4031a8cyycbfa85196ccfa37f.png?wh=3296x1906)
+
+![img](https://static001.geekbang.org/resource/image/cd/b9/cdcd5a12460feaff34e1dc4c816ef9b9.png?wh=3306x1170)
+
+会话管理：
+
+```
+1. 左侧列表出现这个对话，显示 Agent 名称和消息摘要
+2. 新建第二个对话，列表有两条，点击切换，右侧记录对应切换
+3. 刷新页面，两个对话都还在（MySQL 持久化正常）
+```
+
+![img](https://static001.geekbang.org/resource/image/a0/e9/a0749cd7ebb722d9eb0c0d2d3c3315e9.png?wh=3306x1940)
 
 
 
