@@ -687,7 +687,7 @@ redis-cli LLEN session:{sessionId}
 
 全部通过。智能客服能流式回复，能记住上下文，历史太长会自动裁剪。
 
-# 18｜复杂前端交互：让 Claude Code 帮你搞定流式聊天界面
+# 18｜复杂前端交互：流式聊天界面
 
 ## 复杂度分层
 
@@ -797,9 +797,117 @@ curl -N -X POST http://localhost:8080/api/v1/chat/sessions/{sessionId}/messages 
 
 ![img](https://static001.geekbang.org/resource/image/a0/e9/a0749cd7ebb722d9eb0c0d2d3c3315e9.png?wh=3306x1940)
 
-
-
-
-
 # ==核心功能交付：高级篇==
+
+# 20｜RAG 知识库（上）：RAG 和向量数据库
+
+**先搞清楚要解决什么问题**
+
+比较好的方式是从业务痛点出发，用自己的场景问：
+
+```
+我的智能客服 Agent 现在只能靠模型的通用知识回答问题，无法引用公司的产品手册和政策文档。我听说 RAG 可以解决这个问题。帮我解释：RAG 的核心思路是什么？它是怎么让 LLM 能引用私有文档的？
+```
+
+LLM 的知识来自训练数据，训练完成后就固化了。你的产品手册、退换货政策、内部 FAQ，这些文档不在训练集里，模型物理上不知道这些内容。
+
+解决这个问题有两条路：
+
+- Fine-tuning（微调）：把文档塞进训练过程，改变模型权重。问题是贵、慢，而且文档一旦更新就得重新训练，完全不实际。
+- RAG：不动模型，在每次对话时实时把相关文档片段塞进 Prompt。模型本身没变，变的是它看到的输入。
+
+RAG 选的是第二条路，思路是检索  → 增强  → 生成。用户提问  → 去文档库找最相关的几段内容  → 把这几段原文拼进 Prompt → LLM 基于这些内容回答。
+
+**拆解技术组件，缩小陌生范围**
+
+知道 RAG 是什么、解决什么问题之后，下一步是搞清楚它涉及哪些技术组件。
+
+```
+实现一个完整的 RAG 功能，需要哪些技术组件？每个组件的作用是什么？
+```
+
+Claude Code 按数据流向拆出了两个阶段、六个组件。
+
+阶段一：文档入库管道
+
+1. 文档解析器，把各种格式的文件转成纯文本。TXT 直接读，PDF 有文字版和扫描版两种，Word 用 Apache POI 解析。
+
+   （Hify 一期只支持 TXT 和 PDF 文字版，够用。）
+
+2. 文本分块器，把长文档切成适合检索的小块。这是 RAG 里最影响效果的环节。块太大，Embedding 语义被稀释，检索不准，塞进 Prompt 还占 token 多；块太小，上下文丢失，答案不完整。常见策略有固定大小切分、按段落切分、递归分割（先按段落，太长再按句子）。
+
+   （Hify 用递归分割，chunk_size 512 token，overlap 64 token。）
+
+3. Embedding 模型，把文本转成向量（一串浮点数）。语义相近的文本向量在空间里也相近。调用方式是 POST 一个接口，拿回向量数组，和 Chat Completion 本质上是同一类 API 调用。
+
+4. 向量数据库，存向量，支持相似度检索。
+
+阶段二：检索对话链路
+
+5. 检索器，用户提问时把问题也转成向量，在向量数据库里找 Top-K 最相关的块。
+6. Prompt 组装器，把检索到的原文块拼进上下文，告诉 LLM 基于以下资料回答。
+
+向量搜索的关键是：语义相近的文本，向量距离就近。不管用词怎么不同，只要意思相近就能找到。这就是 RAG 检索质量高于关键词搜索的根本原因。
+
+**向量数据库选型**
+
+给约束让 Claude Code 分析，你来判断。
+
+```
+向量数据库有哪些主流选项？我的约束是：Java 技术栈、已有 PostgreSQL、一期数据量不大（几千到几万条分块）、基本的相似度检索够用。帮我对比 pgvector、Milvus、Qdrant、Elasticsearch 的优缺点。
+```
+
+1. pgvector 是 PostgreSQL 的扩展，装一个插件就行，不引入新组件。SQL 操作，Java 生态直接用 JDBC，零学习成本。性能在百万级以下够用。缺点是超大规模数据不如专业向量数据库。
+2. Milvus 是专业向量数据库，性能最强，支持十亿级向量。但部署极重，依赖 etcd 和 MinIO，需要单独一套集群，运维成本高，Java SDK 文档也不如 Python 完善。
+3. Qdrant 轻量，Rust 写的，单二进制部署，REST API 友好。比 Milvus 轻得多，但仍然是一个额外的服务，需要单独部署、端口要开、故障要排查。
+4. Elasticsearch 8.x 开始支持向量检索，全文加向量混合检索很强。但极重，JVM 堆内存至少 4GB 起，运维复杂度高。专门为 RAG 引入一套 ES 集群，性价比极低。
+
+我的判断：选 pgvector。能不加新依赖就不加。Hify 已经在用 PostgreSQL，pgvector 只是一个扩展，不引入新组件，不增加运维负担，SQL 操作和现有的 document 表、knowledge_base 表直接 JOIN，业务逻辑简单。一期数据量小，性能完全够用。
+
+**最小 Demo 跑通：从理论到手感**
+
+在把 pgvector 集成进 Hify 之前，我需要先有手感——能插入向量、能查到相似结果，知道它到底怎么工作。
+
+```
+我选了 pgvector。帮我从零上手：怎么安装、怎么建表、怎么插入向量、怎么做相似度查询？给我一个能跑通的最小示例。
+```
+
+Claude Code 给了建表和查询的核心 SQL：
+
+```sql
+-- 启用扩展（每个数据库执行一次）
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 建表，1536 维对应 OpenAI text-embedding-3-small
+CREATE TABLE document_chunk (
+    id        BIGSERIAL PRIMARY KEY,
+    content   TEXT NOT NULL,
+    embedding vector(1536)
+);
+
+-- 相似度查询：<=> 是余弦距离，越小越相似，取最近 3 条
+SELECT content,
+       1 - (embedding <=> '[0.011, -0.033, ...]') AS similarity
+FROM document_chunk
+ORDER BY embedding <=> '[0.011, -0.033, ...]'
+LIMIT 3;
+```
+
+`<=>` 是 pgvector 的余弦距离运算符。用  `1 - 距离` 转成相似分，越接近 1 越相似。这个运算符是 pgvector 扩展引入的，标准 SQL 里没有。
+
+然后问 Java 集成：
+
+```
+pgvector 在 Java 里怎么用？MyBatis-Plus 能直接操作 vector 类型吗？
+```
+
+MyBatis-Plus 不原生支持 vector 类型，直接用会报类型转换错误。解法是自定义 TypeHandler，告诉 MyBatis 怎么把 Java 的  float[] 和 pgvector 的  vector 类型互转。
+
+![img](https://static001.geekbang.org/resource/image/a6/75/a657fb0c98049fb7dedb9488c9090275.png?wh=1280x597)
+
+
+
+
+
+
 
