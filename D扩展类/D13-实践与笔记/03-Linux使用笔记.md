@@ -45,3 +45,10 @@ find /etc -name "nginx.conf"
 find / -type d -name "log"
 ```
 
+## 七、用户操作
+
+```bash
+# 给mwopr用户授权访问 /home/mwopr/及所有子目录下的文件
+sudo chown -R mwopr:mwopr /home/mwopr/
+```
+

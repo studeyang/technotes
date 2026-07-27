@@ -117,7 +117,7 @@ Borg 主要模块包括 BorgMaster、Borglet 和调度器。
 
 Kubernetes 借鉴了 Borg 的整体架构思想，主要由 Master 和 Node 共同组成。
 
-![image (4).png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2021/images/20211224225510.png)
+![image-20260707135629653](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071356182.png)
 
 在 Kubernetes 集群中也采用了分布式存储系统 Etcd，用于保存集群中的所有对象以及状态信息。
 
@@ -127,15 +127,15 @@ Kubernetes 的控制面包含着 kube-apiserver、kube-scheduler、kube-controll
 
 kube-apiserver 是所有内部和外部的 API 请求操作的唯一入口。同时也负责整个集群的认证、授权、访问控制、服务发现等能力。
 
-Kube-Controller-Manager 负责维护整个 Kubernetes 集群的状态，比如多副本创建、滚动更新等。
+kube-Controller-Manager 负责维护整个 Kubernetes 集群的状态，比如多副本创建、滚动更新等。
 
-Kube-scheduler 的工作简单来说就是监听未调度的 Pod，按照预定的调度策略绑定到满足条件的节点上。
+kube-scheduler 的工作简单来说就是监听未调度的 Pod，按照预定的调度策略绑定到满足条件的节点上。
 
 了解完了控制面组件，我们再来看看 Node 节点。一般来说 Node 节点上会运行以下组件。
 
 - 容器运行时主要负责容器的镜像管理以及容器创建及运行。
-- Kubelet 负责维护 Pod 的生命周期，比如创建和删除 Pod 对应的容器。同时也负责存储和网络的管理。一般会配合 CSI、CNI 插件一起工作。
-- Kube-Proxy 主要负责 Kubernetes 内部的服务通信，在主机上维护网络规则并提供转发及负载均衡能力。
+- kubelet 负责维护 Pod 的生命周期，比如创建和删除 Pod 对应的容器。同时也负责存储和网络的管理。一般会配合 CSI、CNI 插件一起工作。
+- kube-proxy 主要负责 Kubernetes 内部的服务通信，在主机上维护网络规则并提供转发及负载均衡能力。
 
 除了上述这些核心组件外，通常我们还会在 Kubernetes 集群中部署一些 Add-on 组件，常见的有：
 
@@ -148,7 +148,7 @@ Kube-scheduler 的工作简单来说就是监听未调度的 Pod，按照预定�
 
 Kubernetes 中所有的状态都是采用上报的方式实现的。APIServer 不会主动跟 Kubelet 建立请求链接，所有的容器状态汇报都是由 Kubelet 主动向 APIServer 发起的。一旦启动 Kubelet 进程以后，它会主动向 APIServer 注册自己，这是 Kubernetes 推荐的 Node 管理方式。
 
-一旦新增的 Node 被 APIServer 纳管进来后，Kubelet 进程就会定时向 APIServer 汇报“心跳”，即汇报自身的状态，包括自身健康状态、负载数据统计等。当一段时间内心跳包没有更新，那么此时 kube-controller-manager 就会将其标记为NodeLost（失联）。
+一旦新增的 Node 被 APIServer 纳管进来后，Kubelet 进程就会定时向 APIServer 汇报“心跳”，即汇报自身的状态，包括自身健康状态、负载数据统计等。当一段时间内心跳包没有更新，那么此时 kube-controller-manager 就会将其标记为 NodeLost（失联）。
 
 # 04 | 核心定义：Kubernetes 是如何搞定“不可变基础设施”的？
 
@@ -158,7 +158,7 @@ CNCF 官方是这样定义云原生的：云原生的代表技术包括容器、
 
 **怎么理解不可变基础设施？**
 
-这里的基础设施，我们可以理解为服务器、虚拟机或者是容器。不可变基础设施是指，部署完成以后，便成为一种只读状态，不可对其进行任何更改。如果需要更新或修改，就使用新的环境或服务器去替代旧的。
+这里的基础设施，我们可以理解为服务器、虚拟机或者是容器。不可变基础设施是指，部署完成以后便成为一种只读状态，不可对其进行任何更改。如果需要更新或修改，就使用新的环境或服务器去替代旧的。
 
 不可变基础设施带来了更一致、更可靠、更可预测的设计理念，可以缓解或完全避免可变基础设施中遇到的各种常见问题。
 
@@ -194,21 +194,21 @@ Pod 由一个或多个容器组成，如下图所示。Pod 中的容器不可分
 
 - 元数据（metadata）
 
-  metadata 中一般要包含如下 3 个对该对象至关重要的元信息：namespace（命名空间）、name（对象名）和 uid（对象 ID）。
+metadata 中一般要包含如下 3 个对该对象至关重要的元信息：namespace（命名空间）、name（对象名）和 uid（对象 ID）。
 
-  namespace 主要用于逻辑上的隔离，Kubernetes 中有几个内置的 namespace 有：default，kube-system，kube-public，kube-node-lease。
+namespace 主要用于逻辑上的隔离，Kubernetes 中有几个内置的 namespace 有：default，kube-system，kube-public，kube-node-lease。
 
-  name 就是用来标识对象的名称，在 namespace 内具有唯一性，在不同的 namespace 下，可以创建相同名字的对象。
+name 就是用来标识对象的名称，在 namespace 内具有唯一性，在不同的 namespace 下，可以创建相同名字的对象。
 
-  uid 是由系统自动生成的，主要用于 Kubernetes 内部标识使用，比如某个对象经历了删除重建，单纯通过名字是无法判断该对象的新旧，这个时候就可以通过 uid 来进行唯一确定。
+uid 是由系统自动生成的，主要用于 Kubernetes 内部标识使用，比如某个对象经历了删除重建，单纯通过名字是无法判断该对象的新旧，这个时候就可以通过 uid 来进行唯一确定。
 
 - 规范 （Spec）
 
-  在 Spec 中描述了该对象的详细配置信息，即用户希望的状态（Desired State）。
+在 Spec 中描述了该对象的详细配置信息，即用户希望的状态（Desired State）。
 
 - 状态（Status）
 
-  在 Kubernetes 中，不同组件之间进行信息同步，就可以通过 status 进行。像 Node 的 status 就记录了该节点的一些状态信息，其他的控制器，就可以通过 status 知道该 Node 的情况，做一些操作，比如节点宕机修复、可分配资源等。
+在 Kubernetes 中，不同组件之间进行信息同步，就可以通过 status 进行。像 Node 的 status 就记录了该节点的一些状态信息，其他的控制器，就可以通过 status 知道该 Node 的情况，做一些操作，比如节点宕机修复、可分配资源等。
 
 **一个 Pod 的真实例子**
 
@@ -352,7 +352,7 @@ Kubernetes 中定义了如下三种重启策略，可以通过spec.restartPolicy
 
 下面我们通过一个例子，来了解这三个 Probe 的工作流程。
 
-```shell
+```yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -418,7 +418,7 @@ spec:
           command: ["/usr/sbin/nginx","-s","quit"]
 ```
 
-可以看出来，我们可以借助preStop以优雅的方式停掉 Nginx 服务，从而避免强制停止容器，造成正在处理的请求无法响应。
+可以看出来，我们可以借助 preStop 以优雅的方式停掉 Nginx 服务，从而避免强制停止容器，造成正在处理的请求无法响应。
 
 **init 容器**
 

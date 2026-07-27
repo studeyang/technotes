@@ -26,7 +26,7 @@ Kubernetes 中各个对象的 metadata 字段都有 label（标签）和 annotat
 
 社区开发了下一代的 Pod 控制器 ReplicaSet（可简写为 rs） 用来替代 ReplicaController。ReplicaSet 具备更强大的基于集合的标签选择器，目前支持三种操作符：in、notin和exists。
 
-例如，你可以用environment in (production, qa)来匹配 label 中带有environment=production或environment=qa的 Pod。
+例如，你可以用 environment in (production, qa) 来匹配 label 中带有 environment=production 或 environment=qa 的 Pod。
 
 了解了标签选择器，我们就可以通过如下的 kubectl 命令查找 Pod：
 
@@ -63,11 +63,11 @@ spec:
   replicas: 3
   selector:
     matchLabels:
-      app: nginx
+      app: nginx  #1
   template:
     metadata:
       labels:
-        app: nginx
+        app: nginx  #2
         version: v1
     spec:
       containers:
@@ -105,7 +105,7 @@ spec:
     app: nginx
 ```
 
-上面这段 yaml 的意思是，在 demo 这个命名空间中，创建一个名为 nginx-demo 的服务，这个服务暴露了 80 端口，可以访问带有app=nginx这个 label 的 Pod。
+上面这段 yaml 的意思是，在 demo 这个命名空间中，创建一个名为 nginx-demo 的服务，这个服务暴露了 80 端口，可以访问带有 app=nginx 这个 label 的 Pod。
 
 我们现在利用上面这段 yaml 在集群中创建出一个 Service：
 
@@ -173,7 +173,7 @@ web-demo-1   1/1     Running             0          2s
 
 接着我们来看，StatefulSet 创建出来的 Pod 都具有固定的、且确切的主机名，并且会为每个 Pod 创建一个 DNS 域名，这个域名的格式为`$(podname).(headless service name)`。
 
-我们通过kubectl run在同一个命名空间demo中创建一个名为 dns-test 的 Pod，同时 attach 到容器中，类似于docker run -it --rm这个命令。
+我们通过 `kubectl run` 在同一个命名空间 demo 中创建一个名为 dns-test 的 Pod，同时 attach 到容器中，类似于 `docker run -it --rm` 这个命令。
 
 ```shell
 $ kubectl run -it --rm --image busybox:1.28 dns-test -n demo
@@ -214,7 +214,7 @@ StatefulSet 通过 PersistentVolumeClaim（PVC）可以保证 Pod 的存储卷�
 
 在 StatefulSet 中，支持两种更新升级策略，即 RollingUpdate 和 OnDelete。
 
-- RollingUpdate策略是默认的更新策略。可以实现 Pod 的滚动升级，跟我们上一节课中 Deployment 介绍的 RollingUpdate 策略一样。
+- RollingUpdate 策略是默认的更新策略。可以实现 Pod 的滚动升级，跟我们上一节课中 Deployment 介绍的 RollingUpdate 策略一样。
 
   比如我们这个时候做了镜像更新操作，那么整个的升级过程大致如下，先逆序删除所有的 Pod，然后依次用新镜像创建新的 Pod 出来。这里你可以通过`kubectl get pod -n demo -w -l app=nginx`来动手观察下。
 
@@ -536,7 +536,7 @@ PWD=/
 
 **Kubernetes 中的 Volume 是如何设计的？**
 
-Kubernetes 中 Volume 的生命周期是直接和 Pod 挂钩的。在 Pod 被删除时，才会对 Volume 进行解绑（unmount）、删除等操作。至于 Volume 中的数据是否会被删除，取决于Volume 的具体类型。
+Kubernetes 中 Volume 的生命周期是直接和 Pod 挂钩的。在 Pod 被删除时，才会对 Volume 进行解绑（unmount）、删除等操作。至于 Volume 中的数据是否会被删除，取决于 Volume 的具体类型。
 
 为了丰富可以对接的存储后端，Kubernetes 中提供了很多volume plugin可供使用。
 
@@ -775,9 +775,9 @@ Kubernetes 中 Service 一共有四种类型，ClusterIP、NodePort、LoadBalanc
   ```
 
   顾名思义，这种类型的 Service 通过任一 Node 节点的 IP 地址，再加上端口号就可以访问 Service 后端负载了。我们看下面这个流量图，方便理解。
-  
-  ![image (5).png](https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202203272312215.png)
-  
+
+  <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2022/202203272312215.png" alt="image (5).png" style="zoom:50%;" />
+
   NodePort 类型的 Service 创建好了以后，Kubernetes 会在每个 Node 节点上开个端口，比如这里的 30000 端口。这个时候我们可以访问任何一个 Node 的 IP 地址，通过 30000 端口即可访问该服务。
 
 那么如果在集群内部，该如何访问这些 Service 呢？

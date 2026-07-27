@@ -34,7 +34,7 @@
 - 在基础设施阶段，我怎么用咨询模式让 Claude Code 帮我发现遗漏的组件？
 - 在联调和测试阶段，当问题出在模块之间的交互而不是单个模块内部时，我怎么给它足够的上下文让它定位问题？
 
-![img](https://static001.geekbang.org/resource/image/ed/ea/edaae35df1780ca562b474185d5058ea.jpg?wh=1440x2791)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146012.jpeg)
 
 **AI 是放大器，不是发动机**
 
@@ -156,7 +156,7 @@
 
 每次 AI 跑偏，不要只改代码，也要考虑是不是规范没覆盖到？然后补上那条规范。
 
-![img](https://static001.geekbang.org/resource/image/63/e0/639275cbefa67b9360fe12075d4745e0.jpg?wh=1440x720)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146415.jpeg)
 
 **规范的质量标准**
 
@@ -211,7 +211,7 @@
 - 对话与调试：完整的对话界面，支持流式响应、多轮对话。有调试模式可以看到推理过程。发布与 API：每个应用可以发布为独立页面或 API，供外部系统调用。
 - 运营功能：用量统计、日志追踪、成员管理、API Key 管理、多租户隔离。
 
-![img](https://static001.geekbang.org/resource/image/b7/65/b76d2325df3c3b1389c71770a743f965.jpg?wh=1382x376)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146166.jpeg)
 
 看完这个清单，你就理解为什么“做一个简版 Dify”这句话很模糊了。
 
@@ -225,7 +225,7 @@
 
 然后我就整理出了最终功能清单：
 
-![img](https://static001.geekbang.org/resource/image/36/37/3614e932e56d3ce97675f06447b1b737.jpg?wh=1508x1288)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146503.jpeg)
 
 **技术选型：匹配定位，不追新**
 
@@ -338,7 +338,7 @@ hify/
 
 关键原则：依赖是单向的，不能循环。 hify-chat 可以依赖 hify-agent，但 hify-agent 不能反过来依赖 hify-chat。如果出现循环依赖，说明模块边界划错了，需要把共用的部分下沉到 hify-common。
 
-![img](https://static001.geekbang.org/resource/image/b9/yy/b9a900cc1131d947324f3f0a2bc4e7yy.jpg?wh=1432x1082)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146335.jpeg)
 
 **Spring 代码组织规范**
 
@@ -396,7 +396,7 @@ Hify 要调用多个外部 LLM API（OpenAI、Claude、Gemini、Ollama），这�
 
 4、重试策略——同意，细节有价值。不是所有失败都值得重试。网络抖动重试有意义，认证失败重试没用（重试一百次还是认证失败），限流需要退避重试（等一等再试）。按异常类型区分重试策略，这个细节 Claude Code 给得很好。
 
-![img](https://static001.geekbang.org/resource/image/2f/fa/2fe40123318d21b0ffecf53d8eda11fa.jpg?wh=1440x790)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146676.jpeg)
 
 **写进 CLAUDE.md**
 
@@ -452,15 +452,15 @@ Hify 是模块化单体，技术栈 Spring Boot + Vue + MySQL + Redis + pgvector
 
 Claude Code 回答是标准的单体  + 三个有状态服务的组合。用户请求经 Nginx 分流，静态资源直接返回，API 请求转发给 Spring Boot，Spring Boot 按需读写 MySQL（业务数据）、Redis（缓存会话）、pgvector（向量检索）。
 
-![img](https://static001.geekbang.org/resource/image/4d/eb/4d317a56e50a08ce0c361a5ffa4350eb.jpg?wh=1440x890)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146344.jpeg)
 
 各组件职责：
 
-![img](https://static001.geekbang.org/resource/image/91/05/9129efa8a7dd1c39086a8eeccb01ab05.png?wh=1412x538)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146379.png)
 
 Claude Code 还给了一个很有价值的对比——当前阶段该做什么、暂时跳过什么：
 
-![img](https://static001.geekbang.org/resource/image/a3/62/a303ac352071cb2481cf25958df8d762.png?wh=1580x454)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146474.png)
 
 **性能瓶颈预判**
 
@@ -474,7 +474,7 @@ Claude Code 还给了一个很有价值的对比——当前阶段该做什么�
 
 它按严重程度排了序：
 
-![img](https://static001.geekbang.org/resource/image/d9/yy/d9d81c19b9dbd1fbd20c0713e3a700yy.png?wh=1922x618)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146860.png)
 
 **扩展架构：几千人规模**
 
@@ -518,7 +518,7 @@ Claude Code 给了三个阶段：
 
 三个阶段的对比总览：
 
-![img](https://static001.geekbang.org/resource/image/3d/6e/3dfd0fe6f11242e837ab3464b2788c6e.png?wh=1442x704)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071146567.png)
 
 ## 数据模型概览
 
@@ -540,7 +540,7 @@ Claude Code 给了一份完整的梳理：
 
 总共约 16 张表。看着多，但按功能域分组后每组就两三张，结构清晰。
 
-![img](https://static001.geekbang.org/resource/image/2d/1d/2d69d6919860b321a022ba0a84cb371d.jpg?wh=1440x1105)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202607071147407.jpeg)
 
 有一个设计决策值得说明：message_reference 这张表，它记录的是“这条 AI 回复引用了知识库的哪些片段”。很多人做 RAG 不存这个关系，回复完就丢掉了检索结果。但存下来有两个好处：
 
