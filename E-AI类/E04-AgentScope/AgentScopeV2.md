@@ -660,13 +660,107 @@ public class ModelFallbackMiddleware implements MiddlewareBase {
 }
 ```
 
-
-
-
-
 ## 2.4 模型
 
+**概述**
 
+运行时模型层采用两层结构：上层是 Credential，承载某个提供商的 API 鉴权字段；下层是 Chat Model，即在该凭证基础上对接的具体推理模型实现。
+
+```
+CredentialBase/
+└── ChatModelBase/
+    ├── OpenAIChatModel
+    ├── AnthropicChatModel
+    ├── DashScopeChatModel
+    ├── GeminiChatModel
+    └── OllamaChatModel
+```
+
+Credential 承载某个提供商的 API 认证字段（`apiKey`、`baseUrl` 等）。
+
+**模型扩展模块**
+
+特定模型提供商的实现已经从 `agentscope-core` 迁移到独立扩展模块中。每个模型适配模块自己维护 chat model、credential、formatter、DTO、异常、SDK/API client 等。
+
+| 提供商    | Maven artifact                          | 主要包名                                   |
+| --------- | --------------------------------------- | ------------------------------------------ |
+| OpenAI    | `agentscope-extensions-model-openai`    | `io.agentscope.extensions.model.openai`    |
+| DashScope | `agentscope-extensions-model-dashscope` | `io.agentscope.extensions.model.dashscope` |
+| Gemini    | `agentscope-extensions-model-gemini`    | `io.agentscope.extensions.model.gemini`    |
+| Anthropic | `agentscope-extensions-model-anthropic` | `io.agentscope.extensions.model.anthropic` |
+| Ollama    | `agentscope-extensions-model-ollama`    | `io.agentscope.extensions.model.ollama`    |
+
+**选择模型创建方式**
+
+1、字符串 model id
+
+```java
+ReActAgent agent =
+        ReActAgent.builder()
+                .name("assistant")
+                .model("dashscope:qwen-plus") // 底层由 ModelRegistry.resolve(modelId) 解析
+                .build();
+```
+
+2、显式 Model builder
+
+```java
+import io.agentscope.extensions.model.dashscope.DashScopeChatModel;
+import io.agentscope.extensions.model.dashscope.formatter.DashScopeChatFormatter;
+
+DashScopeChatModel model =
+        DashScopeChatModel.builder()
+                .apiKey(System.getenv("DASHSCOPE_API_KEY"))
+                .modelName("qwen-plus")
+                .stream(true)
+                .formatter(new DashScopeChatFormatter())
+                .build();
+
+ReActAgent agent =
+        ReActAgent.builder()
+                .name("assistant")
+                .model(model)
+                .build();
+```
+
+3、Spring Boot 应用
+
+Spring Boot 场景下，优先使用特定模型提供商的 starter，例如 `agentscope-openai-spring-boot-starter`、`agentscope-dashscope-spring-boot-starter`、`agentscope-gemini-spring-boot-starter`、`agentscope-anthropic-spring-boot-starter`、`agentscope-ollama-spring-boot-starter`。
+
+```yaml
+agentscope:
+  model:
+    provider: openai
+  openai:
+    api-key: ${OPENAI_API_KEY}
+    model-name: gpt-4.1-mini
+    stream: true
+```
+
+各模型提供商的 Spring Boot starter 还提供了有序的 builder customizer bean。它适合用于需要设置 builder 专属能力的场景，例如自定义 formatter、默认生成参数、代理/client 配置，或其他提供商专属开关。
+
+```java
+import io.agentscope.core.model.GenerateOptions;
+import io.agentscope.spring.boot.openai.OpenAIChatModelBuilderCustomizer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+
+@Configuration(proxyBeanMethods = false)
+class ModelCustomizerConfiguration {
+
+    @Bean
+    @Order(0)
+    OpenAIChatModelBuilderCustomizer openAIModelDefaults() {
+        return builder ->
+                builder.defaultOptions(
+                        GenerateOptions.builder()
+                                .temperature(0.2)
+                                .parallelToolCalls(false)
+                                .build());
+    }
+}
+```
 
 ## 2.5 权限系统
 
