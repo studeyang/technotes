@@ -764,11 +764,272 @@ class ModelCustomizerConfiguration {
 
 ## 2.5 权限系统
 
+Permission system（`io.agentscope.core.permission`）拦截 agent 的每一次工具调用，给出三种决策之一：允许（ALLOW） 执行、拒绝（DENY） 执行，或者询问用户（ASK） 确认。
 
+**Permission Mode**
+
+可以在创建 agent 时通过 `permissionContext(...)` 设置 mode：
+
+```java
+import io.agentscope.core.ReActAgent;
+import io.agentscope.core.permission.PermissionContextState;
+import io.agentscope.core.permission.PermissionMode;
+
+PermissionContextState permCtx =
+        PermissionContextState.builder()
+                .mode(PermissionMode.DEFAULT)
+                .build();
+
+ReActAgent agent =
+        ReActAgent.builder()
+                .name("my_agent")
+                .sysPrompt("...")
+                .model(model)
+                .permissionContext(permCtx)
+                .build();
+```
+
+**Permission Rule**
+
+`PermissionRule`（record）把某个 tool 与具体的调用模式映射到三种行为之一：`ALLOW`、`DENY`、`ASK`。
+
+```java
+import io.agentscope.core.permission.PermissionBehavior;
+import io.agentscope.core.permission.PermissionContextState;
+import io.agentscope.core.permission.PermissionMode;
+import io.agentscope.core.permission.PermissionRule;
+
+PermissionContextState permCtx =
+        PermissionContextState.builder()
+                .mode(PermissionMode.DEFAULT)
+                .addAllowRule(
+                        "safe_read",
+                        new PermissionRule(
+                                "safe_read", null, PermissionBehavior.ALLOW, "userSettings"))
+                .addAskRule(
+                        "dangerous_delete",
+                        new PermissionRule(
+                                "dangerous_delete",
+                                null,
+                                PermissionBehavior.ASK,
+                                "userSettings"))
+                .addDenyRule(
+                        "drop_table",
+                        new PermissionRule(
+                                "drop_table", null, PermissionBehavior.DENY, "userSettings"))
+                .build();
+```
+
+**常见配方**
+
+1、只读探索
+
+```java
+// EXPLORE 模式：agent 可以自由调用只读工具，所有写工具会被自动拒绝。
+PermissionContextState explore =
+        PermissionContextState.builder()
+                .mode(PermissionMode.EXPLORE)
+                .build();
+
+ReActAgent explorer =
+        ReActAgent.builder()
+                .name("explorer")
+                .sysPrompt("...")
+                .model(model)
+                .permissionContext(explore)
+                .build();
+```
+
+2、无人值守自动化
+
+```java
+import io.agentscope.core.permission.PermissionBehavior;
+import io.agentscope.core.permission.PermissionRule;
+
+PermissionContextState ci =
+        PermissionContextState.builder()
+                .mode(PermissionMode.DONT_ASK)
+                .addAllowRule(
+                        "deploy",
+                        new PermissionRule(
+                                "deploy", "staging", PermissionBehavior.ALLOW, "project"))
+                .addAllowRule(
+                        "git_commit",
+                        new PermissionRule(
+                                "git_commit", null, PermissionBehavior.ALLOW, "project"))
+                .build();
+
+ReActAgent ciAgent =
+        ReActAgent.builder()
+                .name("ci_agent")
+                .sysPrompt("...")
+                .model(model)
+                .permissionContext(ci)
+                .build();
+// 只有显式放行的命令会执行；其余调用被静默拒绝
+```
+
+3、阻止危险命令
+
+```java
+PermissionContextState bypassWithDeny =
+        PermissionContextState.builder()
+                .mode(PermissionMode.BYPASS)
+                .addDenyRule(
+                        "drop_table",
+                        new PermissionRule(
+                                "drop_table", null, PermissionBehavior.DENY, "userSettings"))
+                .addDenyRule(
+                        "force_push",
+                        new PermissionRule(
+                                "force_push", null, PermissionBehavior.DENY, "userSettings"))
+                .build();
+// 除显式拒绝的工具外，其余均放行（deny 规则不可绕过）
+```
 
 ## 2.6 工具
 
+AgentScope 把 tool 相关的构件组织成三个概念：
 
+- Tool —— 任意实现 `AgentTool` 接口（通常通过继承 `ToolBase`）或在普通类的方法上标注 `@Tool` 注解的对象。Java 端把后者称为 *reflective function tool*，由 `Toolkit#registerTool(Object)` 自动反射注册。
+- Toolkit —— 容器，负责注册 tool、MCP 客户端与 skill，向模型暴露它们的 JSON schema，并把每次工具调用分发到对应的 tool 对象。
+- Tool Group —— 一组带名称的 tool / MCP / skill 集合，可以作为整体激活或停用。Agent 在运行时通过内置 meta tool 切换 group，让上下文保持聚焦。
+
+**Java Tool**
+
+Java tool 是任意满足 `AgentTool` 契约的对象。AgentScope 同时提供了一个 `ToolBase` 抽象基类用于显式建模带参数 schema 的 tool，以及一个反射适配器用于把普通方法包装成 tool。
+
+需要自定义权限策略、外部执行或更复杂的 schema 时，继承 `ToolBase`：
+
+```java
+import io.agentscope.core.message.TextBlock;
+import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.permission.PermissionBehavior;
+import io.agentscope.core.permission.PermissionDecision;
+import io.agentscope.core.tool.ToolBase;
+import io.agentscope.core.tool.ToolCallParam;
+import io.agentscope.core.tool.ToolExecutionContext;
+import java.util.List;
+import java.util.Map;
+import reactor.core.publisher.Mono;
+
+public class WebSearchTool extends ToolBase {
+
+    public WebSearchTool() {
+        super(
+                ToolBase.builder()
+                        .name("WebSearch")
+                        .description("Search the web for information on a given query.")
+                        .inputSchema(Map.of(
+                                "type", "object",
+                                "properties", Map.of(
+                                        "query", Map.of(
+                                                "type", "string",
+                                                "description", "The search query.")),
+                                "required", List.of("query")))
+                        .readOnly(true)
+                        .concurrencySafe(true));
+    }
+
+    @Override
+    public Mono<PermissionDecision> checkPermissions(
+            Map<String, Object> toolInput, ToolExecutionContext context) {
+        return Mono.just(PermissionDecision.allow("Web search is read-only."));
+    }
+
+    @Override
+    public Mono<ToolResultBlock> callAsync(ToolCallParam param) {
+        String query = (String) param.getInput().get("query");
+        return doSearchAsync(query)
+                .map(text ->
+                        ToolResultBlock.builder()
+                                .id(param.getId())
+                                .name(getName())
+                                .output(List.of(TextBlock.builder().text(text).build()))
+                                .build());
+    }
+}
+```
+
+**MCP**
+
+MCP tool 在 toolkit 中以 `mcp__{server_name}__{tool_name}` 命名，避免冲突；标注了 `readOnlyHint` 的 tool 会被权限系统自动放行。
+
+注册 MCP Tool
+
+```java
+// STDIO
+import io.agentscope.core.tool.Toolkit;
+import io.agentscope.core.tool.mcp.McpClientBuilder;
+import io.agentscope.core.tool.mcp.McpClientWrapper;
+
+McpClientWrapper filesystem =
+        McpClientBuilder.stdio()
+                .name("filesystem")
+                .command("mcp-server-filesystem")
+                .args("--root", "/my/project")
+                .build();
+
+Toolkit toolkit = new Toolkit();
+toolkit.registerMcpClient(filesystem).block();
+
+// SSE
+import io.agentscope.core.tool.mcp.McpClientBuilder;
+import io.agentscope.core.tool.mcp.McpClientWrapper;
+
+McpClientWrapper search =
+        McpClientBuilder.sse()
+                .name("search")
+                .url("https://api.search.com/mcp/sse")
+                .build();
+
+Toolkit toolkit = new Toolkit();
+toolkit.registerMcpClient(search).block();
+```
+
+**Skill**
+
+1、注册 Skill
+
+```java
+import io.agentscope.core.ReActAgent;
+import io.agentscope.core.skill.repository.FileSystemSkillRepository;
+import java.nio.file.Paths;
+
+ReActAgent agent =
+        ReActAgent.builder()
+                .name("SkillCreator")
+                .sysPrompt("...")
+                .model(model)
+                .skillRepository(new FileSystemSkillRepository(Paths.get("/path/to/skills"), false))
+                .build();
+```
+
+2、Skill 的工作方式
+
+`Toolkit` 在含 skill 时，注册与查看分两阶段进行。
+
+初始化阶段：
+
+- Toolkit 扫描所有注册的 skill 来源，收集每个 skill 的名称、描述与目录。
+- 自动把内置查看器工具 `load_skill_through_path`（实现位于 `io.agentscope.core.skill.SkillToolFactory`）注册到 `skill-build-in-tools` 这个 tool group。
+- 组装一段 system prompt 片段，列出可用 skill（仅名称与描述），并指示 agent 通过 `load_skill_through_path` 读取完整内容。
+
+运行时阶段，agent 用两个必填参数调用查看器：
+
+| 参数      | 类型                                | 说明                                                         |
+| --------- | ----------------------------------- | ------------------------------------------------------------ |
+| `skillId` | `string`（枚举：已注册的 skill ID） | 要加载的 skill。                                             |
+| `path`    | `string`                            | 传 `"SKILL.md"` 取该 skill 的 markdown 指令；或传 skill 声明过的精确资源路径，例如 `"references/guide.md"`、`"scripts/run.py"`。不要传 `"."`、`"./"`、目录或绝对路径。 |
+
+调用示例：
+
+```json
+{
+  "name": "load_skill_through_path",
+  "input": { "skillId": "pdf-extractor", "path": "SKILL.md" }
+}
+```
 
 ## 2.7 上下文与 AgentState
 
