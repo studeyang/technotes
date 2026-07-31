@@ -1033,6 +1033,201 @@ ReActAgent agent =
 
 ## 2.7 上下文与 AgentState
 
+**无状态 Agent 引擎**
+
+agent 实例本身只持有不可变的配置，所有 per-session 的可变数据都放在 `AgentState` 里，以 `(userId, sessionId)` 为索引。一个 agent 实例可以同时服务多个用户和会话，调用方只需在每次 `call()` 时传入不同的 `RuntimeContext`。
+
+**AgentState**
+
+自动持久化与恢复链路：
+
+```
+call(msgs, RuntimeContext(userId, sessionId))
+  │
+  ├─ per-session 门: 相同 (uid, sid) 串行, 不同会话并行
+  │
+  ▼
+  从缓存或 stateStore 加载 AgentState
+  │   注入到 RuntimeContext: rc.setAgentState(state)
+  │
+  ▼
+  推理循环
+  │   中间件就地改写 state.contextMutable()
+  │   (压缩、Plan、todo_write、权限调整……都在改它)
+  │
+  ▼
+  保存 AgentState
+  │   stateStore.save(userId, sessionId, "agent_state", state)
+  │
+  ▼
+  返回结果
+```
+
+内置与扩展实现：
+
+```java
+// 默认(单机):省略 .stateStore(...) 即可,自动用本地 JsonFileAgentStateStore
+HarnessAgent agent = HarnessAgent.builder()
+    .name("MyAgent")
+    .model(model)
+    .workspace(workspace)
+    .build();
+
+// 多副本生产:使用 DistributedStore
+JedisPooled jedis = new JedisPooled("redis://redis.prod:6379");
+HarnessAgent agent = HarnessAgent.builder()
+        .name("MyAgent")
+        .model(model)
+        .workspace(workspace)
+        .stateStore(new RedisAgentStateStore(jedis))
+        .distributedStore(RedisDistributedStore.fromJedis(jedis))
+        .build();
+```
+
+同 (userId, sessionId) 跨进程、跨机器实时恢复：
+
+```java
+// 节点 A:开了一段对话
+HarnessAgent agentA = HarnessAgent.builder()
+    .stateStore(redisStore)
+    /* ... */ .build();
+agentA.call(msg, RuntimeContext.builder()
+    .sessionId("alice-2026-06-02-001")
+    .userId("alice")
+    .build()).block();
+
+// 节点 B:不同物理机,完全独立的 JVM
+HarnessAgent agentB = HarnessAgent.builder()
+    .stateStore(redisStore)
+    /* 同一份存储后端 */ .build();
+
+// 节点 B 第一次用相同 (userId, sessionId) 的 call() 会自动从 Redis 拉到节点 A 之前留下的 AgentState
+agentB.call(nextMsg, RuntimeContext.builder()
+    .sessionId("alice-2026-06-02-001")
+    .userId("alice")
+    .build()).block();
+```
+
+# 03 | Harness
+
+## 3.1 Harness 架构
+
+**核心工作原理**
+
+理解 Harness 只需要记住三件事：
+
+1. 能力是叠加在推理循环关键时机上的，不是改写循环。 
+2. 能力之间互不依赖，只通过共享对象通信。它们之间靠三个共享对象交流：`RuntimeContext`、工作区、`AgentStateStore`。
+3. 内置 middleware 注册顺序固定，你自己加的跑在最前面。 
+
+**状态怎么流转**
+
+状态分三层，框架自动在层之间搬数据。
+
+- 调用内状态 —— `AgentState`（对话上下文、权限规则、Plan Mode 状态、工具状态）、`RuntimeContext`（`sessionId`、`userId`、沙箱句柄、extra）。
+- 跨调用状态 —— 每次 `call()` 结束自动写盘，下次自动加载：`AgentStateStore`（默认 `~/.agentscope/state/<agentId>/`）里的 `AgentState` 运行时快照、`sessions/<sessionId>.log.jsonl` 里的对话日志、子任务记录、沙箱元数据。
+- 长期记忆 —— 跨 session 累积 `memory/YYYY-MM-DD.md` ，后台节流任务会周期把它合并到 `MEMORY.md`。
+
+## 3.2 上下文压缩
+
+**HarnessAgent 内置的几种策略**
+
+| 策略               | 解决的问题                              | 触发时机             | 中间件                                |
+| ------------------ | --------------------------------------- | -------------------- | ------------------------------------- |
+| **对话摘要压缩**   | 上下文太”深”——消息条数 / token 累计太多 | 每次模型推理前       | `CompactionMiddleware`                |
+| **大工具结果卸载** | 上下文太”宽”——单条工具结果体量过大      | 工具执行后           | `ToolResultEvictionMiddleware`        |
+| **上下文溢出兜底** | 撞到模型 `context_length_exceeded`      | `call()` 抛错时      | `HarnessAgent.recoverFromOverflow`    |
+| **预压缩参数截断** | 工具调用参数体量大但后期没人看          | 摘要之前的轻量预处理 | `CompactionConfig.TruncateArgsConfig` |
+
+## 3.3 工作区（Workspace）
+
+**工作区目录布局**
+
+```
+.agentscope/workspace/
+├── AGENTS.md                    ← 静态：人格 + 行为约定
+├── MEMORY.md                    ← 长期记忆：策划后的长期事实
+├── tools.json                   ← 静态：MCP server + 工具白名单（可选）
+├── memory/                      ← 长期记忆：每天追加的事实流水账
+│   └── YYYY-MM-DD.md
+├── knowledge/                   ← 静态：领域知识入口 + 任意参考文件
+│   ├── KNOWLEDGE.md
+│   └── ...
+├── skills/                      ← 静态：技能目录，每个子目录一份 SKILL.md
+│   └── <skill-name>/SKILL.md
+├── subagents/                   ← 静态：子 agent 声明（文件名即 agent_id）
+│   └── <agent-id>.md
+├── plans/                       ← 运行时：Plan Mode 写下的计划文件
+│   └── PLAN.md
+└── agents/<agentId>/            ← 运行时：每个 agent 自己的运行时根
+    ├── sessions/                ← 运行时：会话索引 + 永不压缩对话日志
+    │   ├── sessions.json
+    │   └── <sessionId>.log.jsonl
+    └── tasks/                   ← 运行时：子 agent 后台任务记录
+        └── <sessionId>.json
+```
+
+workspace 的解析顺序：
+
+| 优先级 | 来源                                    | 说明                                          |
+| ------ | --------------------------------------- | --------------------------------------------- |
+| 1      | `workspace(Path)` / `workspace(String)` | Builder 显式设置，覆盖一切                    |
+| 2      | `agentscope.workspace` 系统属性         | `-Dagentscope.workspace=/data/workspace`      |
+| 3      | `AGENTSCOPE_WORKSPACE` 环境变量         | `export AGENTSCOPE_WORKSPACE=/data/workspace` |
+| 4      | 默认值                                  | `${user.dir}/.agentscope/workspace`           |
+
+
+
+**工作区内容如何被加载**
+
+**运行时数据与 Memory 怎么存**
+
+**智能体如何进化**
+
+**重点目录深入**
+
+**写入工作区的安全规则**
+
+## 3.4 记忆
+
+## 3.5 文件系统
+
+## 3.6 沙箱
+
+## 3.7 子 Agent
+
+## 3.8 技能
+
+## 3.9 计划模式
+
+## 3.10 Channel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
