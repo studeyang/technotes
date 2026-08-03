@@ -1176,31 +1176,194 @@ workspace 的解析顺序：
 | 3      | `AGENTSCOPE_WORKSPACE` 环境变量         | `export AGENTSCOPE_WORKSPACE=/data/workspace` |
 | 4      | 默认值                                  | `${user.dir}/.agentscope/workspace`           |
 
-
-
-**工作区内容如何被加载**
-
 **运行时数据与 Memory 怎么存**
 
-**智能体如何进化**
-
-**重点目录深入**
-
-**写入工作区的安全规则**
+| 数据面                      | 是什么                                                       | 落在哪                                                       |
+| --------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **`AgentState`**            | 易失的运行期上下文：对话缓冲、压缩摘要、权限 / 工具 / 任务 / Plan-Mode 上下文，以及指向工作区产物的元数据 | **`AgentStateStore`** —— 独立子系统，**不在**工作区（默认 `~/.agentscope/state/<agentId>/`） |
+| **工作区运行时 / 长期文件** | 持久产物：会话日志、任务记录、`MEMORY.md` + `memory/`        | 在工作区树内，物理位置随 filesystem 模式而定                 |
 
 ## 3.4 记忆
 
+让 agent “记住跨会话的事实”，同时避免对话上下文无限增长。Harness 把记忆拆成两层：
+
+- 第一层：日流水账 `memory/YYYY-MM-DD.md` —— 每天追加，原始且未去重；
+- 第二层：策划后长期记忆 `MEMORY.md` —— 周期性 LLM 合并去重的产物；每轮推理时作为长期记忆注入 system prompt。
+
+两层记忆是怎么工作的？
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608032012265.png)
+
 ## 3.5 文件系统
 
-## 3.6 沙箱
+`HarnessAgent` 把 agent 对工作区的访问从”一定是本机磁盘”抽象成统一接口。所有文件工具（`read_file` / `write_file` / `edit_file` / `grep_files` / `glob_files` / `list_files`）和可选的 `execute`（shell）都从这个抽象走。
 
-## 3.7 子 Agent
+这样做让你能在三种部署模式之间切换，而不改 agent 代码：
 
-## 3.8 技能
+- 本机 + shell —— 单进程、本地、信任环境；
+- 共享存储 —— 多副本 / 多 pod 共享同一份长期记忆；
+- 沙箱 —— 文件与命令都在隔离容器里执行，跨调用恢复同一份工作区。
 
-## 3.9 计划模式
+| 模式                         | 配置                                                         | 提供 shell？      | 适用场景                                                     |
+| ---------------------------- | ------------------------------------------------------------ | ----------------- | ------------------------------------------------------------ |
+| **1 · 共享存储**             | `filesystem(new RemoteFilesystemSpec(store))`                | ❌                 | 多副本要共享 `MEMORY.md` / 对话日志 / 子任务到 KV；**不希望在宿主上跑 shell** |
+| **2 · 沙箱**                 | `filesystem(new DockerFilesystemSpec()...)` 或 K8s / Daytona / E2B / AgentRun | ✅（在沙箱内）     | 隔离执行、跨调用恢复同一份工作区、可选快照 + 分布式          |
+| **3 · 本机 + shell**（默认） | `filesystem(new LocalFilesystemSpec()...)` 或**不写**        | ✅（宿主 `sh -c`） | 单进程 / 本机 / 信任环境 / 简单脚本与测试                    |
 
-## 3.10 Channel
+**模式 1：共享存储（`RemoteFilesystemSpec`）**
+
+示例场景：多副本客服 agent
+
+三个 pod 各跑一个 `HarnessAgent`，用同一个 Redis 做 `BaseStore`：
+
+```java
+DistributedStore store = RedisDistributedStore.fromJedis(
+        new JedisPooled("redis://shared-redis:6379"));
+
+HarnessAgent agent = HarnessAgent.builder()
+    .name("customer-service")
+    .model(model)
+    .workspace(Paths.get("/opt/agent/workspace"))
+    .distributedStore(store)                  // stateStore + baseStore 一键配置
+    .filesystem(new RemoteFilesystemSpec()
+        .isolationScope(IsolationScope.USER)      // 每个用户独立命名空间
+        .anonymousUserId("anonymous"))            // 未登录用户的兜底
+    .build();
+```
+
+- 三个 pod 上本地磁盘的 `AGENTS.md` / `knowledge/` / `skills/` 作为只读模板（git 同步）；
+- 运行时产物（`MEMORY.md`、`memory/`、对话日志）自动存到 Redis，任意 pod 都能读到最新状态；
+- 用户 alice 的记忆在 KV 键 `agents/customer-service/users/alice/memory/...` 下。
+
+**模式 2：沙箱（`SandboxFilesystemSpec` 系列）**
+
+适合”代码会执行不可信操作、或要隔离生产环境”。所有文件操作和 shell 命令都发到沙箱里执行，宿主完全不受影响。
+
+示例场景：编程助手（Docker + 本地快照）
+
+```java
+HarnessAgent codingAgent = HarnessAgent.builder()
+    .name("coder")
+    .model(model)
+    .workspace(Paths.get(".agentscope/workspace"))
+    .filesystem(new DockerFilesystemSpec()
+        .image("node:20-slim")
+        .isolationScope(IsolationScope.USER)
+        .memorySizeBytes(1024 * 1024 * 1024L)
+        .snapshotSpec(new LocalSnapshotSpec("/data/sandbox-snapshots")))
+    .distributedStore(store)
+    .build();
+
+// alice 第一次调用：沙箱里 npm install，装好后快照保存
+RuntimeContext rc = RuntimeContext.builder()
+    .userId("alice")
+    .sessionId("dev-session-1")
+    .build();
+agent.call(Msg.user("npm install && npm test"), rc).block();
+
+// alice 第二次调用：恢复快照，node_modules 还在，无需重新安装
+agent.call(Msg.user("npm run build"), rc).block();
+```
+
+**模式 3：本机 + shell（默认）**
+
+什么都不写就是这个：工作区落到 `${cwd}/.agentscope/workspace/`
+
+示例场景：本地开发助手
+
+```java
+HarnessAgent devHelper = HarnessAgent.builder()
+    .name("dev-helper")
+    .model(model)
+    .workspace(Paths.get(".agentscope/workspace"))
+    .filesystem(new LocalFilesystemSpec()
+        .project(Paths.get("/Users/alice/my-project"))
+        .addRoot(Paths.get("/Users/alice/.config"))
+        .mode(LocalFsMode.ROOTED)
+        .inheritEnv(true)
+        .executeTimeoutSeconds(300))
+    .build();
+```
+
+## 3.6 子 Agent
+
+让主 agent 把”可独立处理、上下文重、可并行”的任务委派出去，避免主线程膨胀。每个子 agent 都是一个临时实例（本地的 `HarnessAgent` 或远程 stub），跑自己的会话，结果通过工具返回给父 agent。
+
+最简单的用法：把子 agent 的 spec 写到工作区里就行。文件名就是 `agent_id`：
+
+```yaml
+workspace/subagents/reviewer.md
+
+---
+description: 代码审查专家。当用户需要 review PR、找代码问题、检查代码规范时使用。
+---
+
+你是一个专注代码评审的子 agent。请按以下流程工作：
+1. 先 read_file / grep_files 收集上下文
+2. 给出按文件 / 行号的具体建议
+3. 末尾给一个 1-5 的总体评分
+```
+
+然后主 agent 就能在推理时调用：
+
+```
+agent_spawn agent_id="reviewer" task="review 这次 PR 的所有改动"
+```
+
+不需要做任何注册。
+
+## 3.7 技能
+
+一个 skill 就是一份写好的能力包：一个目录里放一份 `SKILL.md`（说明用途、给 agent 看的指令），可以再带一些参考文档、脚本或样例。写好后丢给 agent，它会在合适的时候自己用。
+
+Harness 让你从两个地方装 skill：
+
+- 技能市场 —— Git 仓库、Nacos、MySQL、classpath、自定义后端
+- 工作区 —— `workspace/skills/` 下大家共用；`<userId>/skills/` 下按用户隔离
+
+把团队的 skill 仓库接进来，agent 立刻就能用：
+
+```java
+HarnessAgent agent = HarnessAgent.builder()
+        .name("assistant")
+        .model(model)
+        .workspace(workspace)
+        .skillRepository(new GitSkillRepository("https://github.com/your-org/team-skills.git"))
+        .build();
+```
+
+**Agent 是怎么读取和执行 skill 的**
+
+1、每轮推理时，agent 会在 system prompt 里看到一个 `<available_skills>` 块，列出当前可见的所有 skill：
+
+```xml
+<available_skills>
+<skill>
+  <name>code-reviewer</name>
+  <description>当用户需要代码评审、风格反馈或 PR 审核时使用。</description>
+  <skill-id>code-reviewer_workspace-namespaced</skill-id>
+  <files-root>/workspace/skills/code-reviewer</files-root>
+</skill>
+...
+</available_skills>
+```
+
+2、读 SKILL.md 和资源文件
+
+加载某个 skill 时 agent 会调用内置工具 `load_skill_through_path`：
+
+- `load_skill_through_path(skillId, path="SKILL.md")` 返回 markdown 正文
+- `load_skill_through_path(skillId, path="references/style-guide.md")` 返回该 skill 目录下的任意文件
+
+3、shell 执行
+
+当一个 skill 自带脚本（例如 `scripts/run-checks.sh`），agent 需要绝对路径才能通过 `execute_shell_command` 调用它。这个绝对路径就是 skill 条目里的 `<files-root>`。
+
+## 3.8 计划模式
+
+
+
+## 3.9 Channel
 
 
 
