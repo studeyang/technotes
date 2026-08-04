@@ -1361,23 +1361,141 @@ HarnessAgent agent = HarnessAgent.builder()
 
 ## 3.8 计划模式
 
+Plan Mode 让 agent 在动手前先”把意图想清楚 + 写下来”再执行。开启后 agent 进入一个只读阶段：
 
+- 只能调用只读工具和 4 个白名单工具：`plan_enter` / `plan_write` / `plan_exit` / `todo_write`；
+- 其它工具调用一律被拒绝（agent 看到一条”plan 阶段拒绝”提示）；
+- 退出 Plan Mode 走 HITL 确认（复用权限系统的 ASK），避免模型一意孤行直接进入执行。
+
+这条流程明确把”设计 → 写计划 → 人确认 → 执行”四步固化下来，配合 `todo_write` 与子 agent，能在长任务里有效降低”边想边改、改坏一片”的概率。
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608041944309.png)
 
 ## 3.9 Channel
 
+**快速开始**
 
+```java
+HarnessAgent agent = HarnessAgent.builder()
+    .name("assistant")
+    .sysPrompt("你是一个有用的助手。")
+    .model("dashscope:qwen-plus")
+    .build();
 
+// 绑定一个 ChatUI channel。
+ChatUiChannel chat = agent.channel(ChatUiChannel.create());
 
+// 发送消息。每个 userId 自动获得独立的 session。
+Msg reply = chat.send(SendOptions.userId("user-1"), "你好！").block();
 
+// 同一个用户，同一个 session——对话继续。
+Msg followUp = chat.send(SendOptions.userId("user-1"), "再多说一些。").block();
 
+// 不同用户，不同 session。
+Msg otherUser = chat.send(SendOptions.userId("user-2"), "你好").block();
+```
 
+**Spring Boot SSE Controller**
 
+```java
+@GetMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+public Flux<ServerSentEvent<String>> chat(@RequestParam String message,
+                                          @RequestParam String userId,
+                                          @RequestParam(required = false) String sessionId) {
+    SendOptions options = sessionId != null
+            ? SendOptions.of(userId, sessionId)
+            : SendOptions.userId(userId);
 
+    return chat.sendStream(options, message)
+            .map(event -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("type", event.getType().name());
+                payload.put("id", event.getId());
+                if (event instanceof TextBlockDeltaEvent delta) {
+                    payload.put("delta", delta.getDelta());
+                } else if (event instanceof SubagentExposedEvent se) {
+                    payload.put("subagentId", se.getSubagentId());
+                    payload.put("agentId", se.getAgentId());
+                    payload.put("label", se.getLabel());
+                }
+                return ServerSentEvent.<String>builder()
+                        .data(objectMapper.writeValueAsString(payload))
+                        .build();
+            });
+}
+```
 
+**多 HarnessAgent 路由**
 
+如果有多个 `HarnessAgent` 实例，使用 `GatewayBootstrap`：
 
+```java
+HarnessAgent salesAgent = HarnessAgent.builder()
+    .name("sales").sysPrompt("你是一个销售助手。")
+    .model("dashscope:qwen-plus").build();
 
+HarnessAgent supportAgent = HarnessAgent.builder()
+    .name("support").sysPrompt("你是一个客服 agent。")
+    .model("dashscope:qwen-plus").build();
 
+GatewayBootstrap gw = GatewayBootstrap.builder()
+    .agent("sales", salesAgent)
+    .agent("support", supportAgent)
+    .mainAgent("sales")          // 没有指定 agent 时的默认
+    .build();
+
+ChatUiChannel chat = gw.chatUiChannel();
+```
+
+使用 `SendOptions.withAgentId()` 把消息路由到指定 agent：
+
+```java
+// 路由到 sales（默认 main agent）
+chat.send(SendOptions.userId("user-1"), "有什么产品？").block();
+
+// 显式路由到 support
+chat.send(SendOptions.userId("user-1").withAgentId("support"), "账单问题").block();
+```
+
+**自定义 Channel**
+
+实现 `Channel` 接口来适配新的消息平台：
+
+```java
+public class MySlackChannel implements Channel {
+    @Override public String channelId() { return "slack"; }
+    @Override public ChannelConfig config() { return myConfig; }
+    @Override public void init(Gateway gateway) { this.gateway = gateway; }
+    @Override public void start() { /* 连接 Slack */ }
+    @Override public void stop() { /* 断开连接 */ }
+
+    @Override
+    public Mono<Msg> dispatch(InboundMessage message) {
+        RouteResult route = router.resolveRoute(config(), message);
+        return gateway.run(route.context(), message.messages(), route.outboundAddress());
+    }
+
+    // 可选：流式分发
+    @Override
+    public Flux<AgentEvent> dispatchStream(InboundMessage message) {
+        RouteResult route = router.resolveRoute(config(), message);
+        return gateway.runStream(route.context(), message.messages(), route.outboundAddress());
+    }
+}
+```
+
+通过 `GatewayBootstrap` 注册：
+
+```java
+GatewayBootstrap gw = GatewayBootstrap.builder()
+    .agent("main", agent)
+    .channel(new MySlackChannel())
+    .build();
+
+gw.start();   // 调用所有 channel 的 init() + start()
+// ...
+gw.stop();    // 调用所有 channel 的 stop()
+```
 
 
 
