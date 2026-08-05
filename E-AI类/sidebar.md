@@ -18,6 +18,6 @@
   - [ClaudeCode官方文档-02进阶使用](E-AI类/编程工具/ClaudeCode官方文档-02进阶使用.md)
   - [Cursor官方文档](E-AI类/编程工具/Cursor官方文档.md)
 
-- **AI基础**
-  - [SpringAI](E-AI类/SpringAI.md)
-  - [人工智能基础课](E-AI类/人工智能基础课.md)
+- **Agent应用开发**
+  - [SpringAI](E-AI类/E03-Agent应用开发/SpringAI.md)
+  - [人工智能基础课](E-AI类/E03-Agent应用开发/人工智能基础课.md)
