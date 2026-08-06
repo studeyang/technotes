@@ -309,7 +309,7 @@ Hify 项目工程骨架已经搭好（Maven 多模块、hify-common 的 Result /
 
 它给了一份很详细的清单：
 
-![img](https://static001.geekbang.org/resource/image/21/yy/2144ab642ebd1e1df536f2b146499eyy.png?wh=716x600)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061745558.png)
 
 Claude Code 见过的项目比你多，它的建议不能直接照搬，但用来查漏补缺非常好。
 
@@ -330,7 +330,7 @@ Hify 是一个 AI Agent 开发平台，面向技术团队内部使用，主要�
 
 经过调整后，效果如下：
 
-![img](https://static001.geekbang.org/resource/image/by/df/byyd5b980ab0b942d44cca24e82c63df.png?wh=3312x976)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061745231.png)
 
 ### 第二步：改造侧边栏
 
@@ -347,7 +347,7 @@ Hify 是一个 AI Agent 开发平台，面向技术团队内部使用，主要�
 
 效果如下：
 
-![img](https://static001.geekbang.org/resource/image/c7/d9/c75438708370a97b1c48fd92c8e9fcd9.png?wh=3312x894)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061745823.png)
 
 ### 第三步：页面整体布局
 
@@ -363,7 +363,7 @@ Hify 是一个 AI Agent 开发平台，面向技术团队内部使用，主要�
 
 效果如下：
 
-![img](https://static001.geekbang.org/resource/image/21/8d/210fbfaa925292d7aa22c277bfb37d8d.png?wh=3310x768)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061745019.png)
 
 ## 前端基础组件：一条指令搞定
 
@@ -383,7 +383,7 @@ Hify 是一个 AI Agent 开发平台，面向技术团队内部使用，主要�
 
 启动前端，打开浏览器：
 
-![img](https://static001.geekbang.org/resource/image/93/34/930438ddd865e1251b2d38b289b9cc34.png?wh=3308x1190)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061745817.png)
 
 
 

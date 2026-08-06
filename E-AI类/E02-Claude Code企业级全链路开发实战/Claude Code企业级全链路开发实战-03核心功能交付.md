@@ -20,7 +20,7 @@ Claude Code 给了一份非常详细的分析。
 
 按接口兼容性分：
 
-![img](https://static001.geekbang.org/resource/image/07/cb/077c8ba2b07501f978ee9ddb080921cb.png?wh=1850x418)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747904.png)
 
 按认证方式分：Bearer Token（OpenAI、DeepSeek）、自定义 Header（Anthropic 用 x-api-key）、URL 参数（Gemini）、无认证（Ollama）、JWT 自签名（智谱 GLM）。由于这个差异，auth_config 我们决定使用 JSON 存储。
 
@@ -28,7 +28,7 @@ Claude Code 给了一份非常详细的分析。
 
 基于这个分析，我的判断，一期支持三种类型加一个通用兼容：
 
-![img](https://static001.geekbang.org/resource/image/7a/88/7ab378297b885b468045578bafb7cd88.png?wh=1746x512)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747371.png)
 
 Gemini 消息格式差异最大，适配成本高，放二期。
 
@@ -128,13 +128,13 @@ CREATE TABLE provider_health (
 
 实体关系：
 
-![img](https://static001.geekbang.org/resource/image/b0/21/b02005b99681947c2cf04df462464421.png?wh=1440x1102)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747365.png)
 
 ## 后端拆解执行
 
 8 个任务，两三个小时全部交付。
 
-![img](https://static001.geekbang.org/resource/image/08/ab/08217b68e115ba3756ec3d2e9f383eab.png?wh=2016x896)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747600.png)
 
 我挑几个有代表性的任务展示。
 
@@ -206,7 +206,7 @@ Claude Code 让执行成本趋近于零之后，领域理解的权重不是降�
 
 **领域快速理解四问**
 
-![img](https://static001.geekbang.org/resource/image/ff/c3/ff86ac79907704b0cbdc7a6c12d9fcc3.png?wh=1440x866)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747237.png)
 
 第一问：它是什么，解决什么问题？Dify 是 AI 应用开发平台，让不会写代码的人也能搭建 AI 应用。
 
@@ -230,7 +230,7 @@ Claude Code 的 Skill 机制是什么？怎么创建 Skill、怎么使用、Skil
 
 Claude Code 会告诉你：
 
-![img](https://static001.geekbang.org/resource/image/c3/d9/c3aa65419200d64db34398c793b1b9d9.png?wh=1440x804)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747975.png)
 
 **第二步：让 Claude Code 告诉你别人怎么用 Skill**
 
@@ -238,7 +238,7 @@ Claude Code 会告诉你：
 业界用 Claude Code Skill 的最佳实践有哪些？大家一般用 Skill 解决什么问题？给我列举一些常见的 Skill 类型和使用场景。
 ```
 
-![img](https://static001.geekbang.org/resource/image/86/3d/8636f8c3009d3973fc4e7cfcd83eb43d.png?wh=1440x862)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747177.png)
 
 > 有点局限了，有个开源项目名字取的好：everything claude code
 
@@ -279,7 +279,7 @@ Skill 写好了，当场验证。给 Claude Code：
 
 Agent 是有目标、能行动的对话主体。它不只是回答问题，而是根据目标调用工具、根据结果决定下一步。核心差异在于有没有 Tool Use + 多轮自主决策。
 
-![img](https://static001.geekbang.org/resource/image/e3/78/e379b0733f9c65b431f575yyfb7a4478.png?wh=1974x652)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747521.png)
 
 **从概念映射到数据结构**
 
@@ -328,7 +328,7 @@ CREATE TABLE agent_tool (
 ) COMMENT 'Agent 与工具关联';
 ```
 
-![img](https://static001.geekbang.org/resource/image/c2/b0/c201732bb05f9e431c5fa7d277bbe1b0.png?wh=1440x848)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747720.png)
 
 ## 从 Agent 到 LLM 应用：智能客服
 
@@ -368,7 +368,7 @@ CREATE TABLE agent_tool (
 - 更新工具列表：Claude Code 对比了两种方案。方案 A 全量替换（DELETE 再 INSERT），方案 B 增量 diff。它推荐方案 A，agent_tool 数据量小，全删重插没性能问题，逻辑简单。我同意。不是所有场景都需要最优雅的方案，够用且简单就是最好的。
 - 删除：不做对话会话拦截——agent 删了，进行中的对话自然找不到 agent 配置返回错误，接受这个行为。级联删 agent_tool（物理删除，关联表没有逻辑删除的意义），agent 本身逻辑删除（deleted=1）。chat_session 里的 agent_id 不处理，历史会话保留。
 
-![img](https://static001.geekbang.org/resource/image/c0/36/c0135b123afe8e39661b86d32b85b836.png?wh=1440x1016)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747958.png)
 
 # 16｜对话引擎（上）：理解对话链路与流式技术选型
 
@@ -487,7 +487,7 @@ SSE（Server-Sent Events）的工作原理是什么？和普通 HTTP 请求有�
 
 Claude Code 的解释：
 
-![img](https://static001.geekbang.org/resource/image/c0/3a/c016031ac44dd32e8578eb29b0c5f93a.png?wh=1440x932)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747222.png)
 
 客户端发请求，服务端保持连接不关闭，持续往客户端推数据，直到主动关闭。数据格式很简单，每条消息以  data: 开头，用两个换行分隔：
 
@@ -515,7 +515,7 @@ es.onerror = () => es.close()
 AI 对话的流式响应，用 SSE 还是 WebSocket？
 ```
 
-![img](https://static001.geekbang.org/resource/image/f0/b7/f039c6f1767099474f974f0ffee020b7.png?wh=1411x492)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747016.png)
 
 业界验证：OpenAI、Anthropic、Dify，所有主流 AI 对话产品都选 SSE。
 
@@ -527,7 +527,7 @@ Spring MVC 的 SseEmitter 怎么工作？生命周期是什么样的？
 
 SseEmitter 本质是一个长连接容器。Controller 方法返回 SseEmitter 对象后，Spring 不会关闭 HTTP 连接，而是持有它。后续代码通过  emitter.send() 往这个连接里推数据，最后  emitter.complete() 关闭连接。
 
-![img](https://static001.geekbang.org/resource/image/b1/f2/b1d674e91006e60b1f0dc7e00eb8d5f2.png?wh=1440x804)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747969.png)
 
 关键在于线程切换。Tomcat 的请求线程创建 SseEmitter 后立刻返回，实际的 LLM 调用在 llmExecutor 线程池里异步执行：
 
@@ -598,7 +598,7 @@ LLM 本身没有记忆。 每次调用都是无状态的，你上一轮告诉它
 对话上下文管理有哪几种常见策略？各自的优缺点是什么？
 ```
 
-![img](https://static001.geekbang.org/resource/image/06/a7/064da2e3157yy33c5387de2b5e8d2ba7.png?wh=1695x493)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747869.png)
 
 最终 Hify 选滑动窗口。理由是：20-50 人内部使用，对话不会特别长。Redis List 天然支持 RPUSH 新消息，超出时 LPOP 旧的，实现十行以内。
 
@@ -610,7 +610,7 @@ LLM 本身没有记忆。 每次调用都是无状态的，你上一轮告诉它
 
 Claude Code 的分析帮我理清了三者的分工：
 
-![img](https://static001.geekbang.org/resource/image/74/5d/74b0cbdc766c70f411aff7ae35315b5d.png?wh=1440x890)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747959.png)
 
 MySQL 是真相来源（全量），Redis 是热缓存（最近 N 轮）。写入时两边同时写，消息存 MySQL 的同时 RPUSH 到 Redis，读取上下文只读 Redis，Redis 过期后从 MySQL 重新加载（Cache-Aside）：
 
@@ -627,13 +627,13 @@ pgvector 在 Hify 里的角色是 RAG 知识库，把产品文档切成小段，
 
 三者协作的完整流程：
 
-![img](https://static001.geekbang.org/resource/image/1b/61/1b78cf4f45e94cd97e4f4a5dd8139e61.png?wh=1440x961)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747612.png)
 
 ## CRUD 实现
 
 上下文和存储方案都定了，开始写代码。
 
-![img](https://static001.geekbang.org/resource/image/3c/e4/3c43af7ab36b2e9ffe29b2eca05c9ee4.png?wh=1657x588)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061747364.png)
 
 重点是任务  3——ChatService.sendMessage，它串联了 16 讲的整条六步链路：
 
@@ -783,9 +783,9 @@ curl -N -X POST http://localhost:8080/api/v1/chat/sessions/{sessionId}/messages 
 
 再问几轮，确认多轮对话连贯。
 
-![img](https://static001.geekbang.org/resource/image/5b/7f/5bd960e4031a8cyycbfa85196ccfa37f.png?wh=3296x1906)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061748950.png)
 
-![img](https://static001.geekbang.org/resource/image/cd/b9/cdcd5a12460feaff34e1dc4c816ef9b9.png?wh=3306x1170)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061748686.png)
 
 会话管理：
 
@@ -795,7 +795,7 @@ curl -N -X POST http://localhost:8080/api/v1/chat/sessions/{sessionId}/messages 
 3. 刷新页面，两个对话都还在（MySQL 持久化正常）
 ```
 
-![img](https://static001.geekbang.org/resource/image/a0/e9/a0749cd7ebb722d9eb0c0d2d3c3315e9.png?wh=3306x1940)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061748940.png)
 
 # ==核心功能交付：高级篇==
 
@@ -903,7 +903,7 @@ pgvector 在 Java 里怎么用？MyBatis-Plus 能直接操作 vector 类型吗�
 
 MyBatis-Plus 不原生支持 vector 类型，直接用会报类型转换错误。解法是自定义 TypeHandler，告诉 MyBatis 怎么把 Java 的  float[] 和 pgvector 的  vector 类型互转。
 
-![img](https://static001.geekbang.org/resource/image/a6/75/a657fb0c98049fb7dedb9488c9090275.png?wh=1280x597)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061748690.png)
 
 
 
