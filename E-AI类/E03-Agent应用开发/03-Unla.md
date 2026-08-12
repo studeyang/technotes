@@ -439,7 +439,269 @@ tracing:
 
 ## 3.3 网关代理配置
 
+详细的 MCP Gateway 代理服务配置指南
 
+### 基础配置
+
+```yaml
+name: "mock-server"              # 代理服务名称，全局唯一
+tenant: "default"                # 租户标识，用于多租户场景
+```
+
+### 路由配置
+
+路由配置用于定义请求的转发规则：
+
+```yaml
+routers:
+  - server: "mock-server"       # 服务名称，需要与servers中的name保持一致
+    prefix: "/gateway/user"     # 路由前缀，全局唯一，不可重复
+```
+
+默认情况下会在`prefix`的基础之上衍生出3个接入点：
+
+- SSE: `${prefix}/sse`，如：`/gateway/user/sse`
+- SSE: `${prefix}/message`，如：`/gateway/user/message`
+- StreamableHTTP: `${prefix}/mcp`，如：`/gateway/user/mcp`
+
+### CORS配置
+
+跨域资源共享（CORS）配置用于控制跨域请求的访问权限：
+
+
+```yaml
+cors:
+  allowOrigins:             # 开发测试环境可全部开放，线上最好按需开放。（大部分MCP Client是不需要开放跨域的）
+    - "*"
+  allowMethods:             # 允许的请求方法，按需开放，对于MCP（SSE和Streamable）来说通常只需要这3个方法即可
+    - "GET"
+    - "POST"
+    - "OPTIONS"
+  allowHeaders:
+    - "Content-Type"        # 必须允许的
+    - "Authorization"       # 有鉴权需求的需要支持请求里携带此Key
+    - "Mcp-Session-Id"      # 对于MCP来说，必须支持请求里携带这个Key，否则Streamable HTTP无法正常使用
+  exposeHeaders:
+    - "Mcp-Session-Id"      # 对于MCP来说，开启跨域的时候必须要暴露这个Key，否则Streamable HTTP无法正常使用
+  allowCredentials: true    # 是否增加 Access-Control-Allow-Credentials: true 这个Header
+```
+
+### 服务配置
+
+服务配置用于定义服务元信息、关联的工具列表，以及服务级别的配置
+
+```yaml
+servers:
+  - name: "mock-server"               # 服务名称，需要与routers中的server保持一致
+    namespace: "user-service"         # 服务命名空间，用于服务分组
+    description: "Mock User Service"  # 服务描述
+    allowedTools:                     # 允许使用的工具列表（为tools的子集）
+      - "register_user"
+      - "get_user_by_email"
+      - "update_user_preferences"
+    config:                                           # 服务级别的配置，可以在tools中通过{{.Config}}引用
+      Cookie: 123                                     # 写死的配置
+      Authorization: 'Bearer {{ env "AUTH_TOKEN" }}'  # 从环境变量中获取的配置，用法是'{{ env "ENV_VAR_NAME" }}'
+```
+
+### 工具配置
+
+工具配置用于定义具体的API调用规则。
+
+请求目标服务的时候会涉及组装参数的动作，目前有几个来源：
+
+1. `.Config`: 从服务级别的配置中提取值
+2. `.Args`: 直接从请求参数中提取值
+3. `.Request`: 从请求中提取的值，包括请求头`.Request.Headers`、请求体`.Request.Body`等
+
+```yaml
+# 工具配置
+tools:
+  - name: "register_user"                   # 工具名称
+    description: "Register a new user"      # 工具描述
+    method: "POST"                          # 请求目标（上游、后端）服务的HTTP方法
+    endpoint: "http://localhost:5236/users" # 目标服务地址
+    headers:                                # 请求头配置，用于在请求目标服务时携带的请求头
+      Content-Type: "application/json"      # 写死的请求头
+      Authorization: "{{.Config.Authorization}}"    # 使用服务配置中的值
+      Cookie: "{{.Config.Cookie}}"                  # 使用服务配置中的值
+    args:                         # 参数配置
+      - name: "username"          # 参数名称
+        position: "body"          # 参数位置：header, query, path, body, form-data
+        required: true            # 参数是否必填
+        type: "string"            # 参数类型
+        description: "Username"   # 参数描述
+        default: ""               # 默认值
+      - name: "email"
+        position: "body"
+        required: true
+        type: "string"
+        description: "Email"
+        default: ""
+    requestBody: |-                # 请求体模板，用于动态生成请求体，如：从参数（MCP的请求arguments）中提取的值
+      {
+        "username": "{{.Args.username}}",
+        "email": "{{.Args.email}}"
+      }
+    responseBody: |-               # 响应体模板，用于动态生成响应体，如：从响应中提取的值
+      {
+        "id": "{{.Response.Data.id}}",
+        "username": "{{.Response.Data.username}}",
+        "email": "{{.Response.Data.email}}",
+        "createdAt": "{{.Response.Data.createdAt}}"
+      }
+```
+
+###  配置存储
+
+网关代理配置可以通过以下两种方式存储：
+
+- 数据库存储（推荐）：
+  - 支持 SQLite3、PostgreSQL、MySQL
+  - 每个配置作为一条记录存储
+  - 支持动态更新和热重载
+- 文件存储：
+  - 每个配置单独存储为一个 YAML 文件
+  - 类似 Nginx 的 vhost 配置方式
+  - 文件名建议使用服务名称，如 `mock-server.yaml`
+
+###  MCP 服务代理配置
+
+除了代理 HTTP 服务外，MCP Gateway 还支持代理 MCP 服务，目前 stdio、SSE 和 streamable-http 三种传输协议都已支持。
+
+1、MCP 服务类型
+
+MCP Gateway 支持以下三种类型的 MCP 服务代理：
+
+```yaml
+mcpServers:
+  - type: "stdio"
+    name: "amap-maps"                    # 服务名称
+    command: "npx"                       # 要执行的命令
+    args:                                # 命令参数
+      - "-y"
+      - "@amap/amap-maps-mcp-server"
+    env:                                 # 环境变量
+      AMAP_MAPS_API_KEY: "{{.Request.Headers.Apikey}}"  # 从请求头中提取值
+
+  - type: "sse"
+    name: "mock-user-sse"                           # 服务名称
+    url: "http://localhost:3000/gateway/user/sse"   # 上游 SSE 服务地址，通常以/sse结尾，实际根据上游服务而定
+
+  - type: "streamable-http"
+    name: "mock-user-mcp"                           # 服务名称
+    url: "http://localhost:3000/gateway/user/mcp"   # 上游 MCP 服务地址，通常以/mcp结尾，实际根据上游服务而定
+```
+
+2、路由配置
+
+对于 MCP 服务代理，路由配置与 HTTP 服务代理类似，CORS 则根据实际情况配置（通常生产环境一般是不会开启跨域的）：
+
+```yaml
+routers:
+  - server: "amap-maps"               # 服务名称，需要与 mcpServers 中的 name 保持一致
+    prefix: "/gateway/stdio-proxy"    # 路由前缀，全局唯一
+    cors:
+      allowOrigins:
+        - "*"
+      allowMethods:
+        - "GET"
+        - "POST"
+        - "OPTIONS"
+      allowHeaders:
+        - "Content-Type"
+        - "Authorization"
+        - "Mcp-Session-Id"        # MCP 服务必须包含此头
+      exposeHeaders:
+        - "Mcp-Session-Id"        # MCP 服务必须暴露此头
+      allowCredentials: true
+```
+
+### 高级配置
+
+1、通知器配置
+
+通知器用于配置重载通知，支持多种方式：
+
+```yaml
+#通过系统信号进行通知，适用于单机部署
+notifier:
+  type: "signal"
+  signal:
+    signal: "SIGHUP"
+    pid: "/var/run/mcp-gateway.pid"
+
+#通过HTTP API进行通知，适用于远程管理
+notifier:
+  type: "api"
+  api:
+    port: 5235
+    target_url: "http://localhost:5235/_reload"
+
+#通过Redis发布订阅进行通知，适用于集群部署
+notifier:
+  type: "redis"
+  redis:
+    cluster_type: "single"
+    addr: "localhost:6379"
+    topic: "mcp-gateway:reload"
+```
+
+2、 环境变量注入
+
+在配置中可以使用环境变量，支持默认值：
+
+```yaml
+# 基础语法
+port: ${MCP_GATEWAY_PORT:5235}  # 使用环境变量，默认值 5235
+
+# 字符串格式
+logger:
+  level: "${LOGGER_LEVEL:info}"  # 使用环境变量，默认值 info
+
+# 服务配置中使用
+config:
+  ApiKey: '{{ env "API_KEY" }}'
+  BaseUrl: '{{ env "API_BASE_URL" "http://localhost:8080" }}'  # 带默认值
+```
+
+3、模板函数
+
+在请求体和响应体模板中，可以使用模板函数来处理复杂数据：
+
+```yaml
+#将对象或数组转换为 JSON 字符串，用于处理复杂数据结构
+requestBody: |-
+  {
+    "settings": {{ toJSON .Args.settings }},
+    "notifications": {{ toJSON .Args.notifications }}
+  }
+
+#对于简单的数组和对象，可以直接使用变量
+requestBody: |-
+  {
+    "tags": {{.Args.tags}},
+    "preferences": {{ .Args.preferences }}
+  }
+```
+
+4、文件上传处理
+
+支持文件上传场景：
+
+```yaml
+args:
+  - name: "file"
+    position: "form-data"
+    required: true
+    type: "string"
+    description: "File to upload"
+  - name: "description"
+    position: "form-data"
+    required: false
+    type: "string"
+    description: "File description"
+```
 
 ## 3.4 Go Template 使用指南
 
