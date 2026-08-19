@@ -801,13 +801,21 @@ curl -N -X POST http://localhost:8080/api/v1/chat/sessions/{sessionId}/messages 
 
 # 20｜RAG 知识库（上）：RAG 和向量数据库
 
+当你要给一个跑通的系统加入一个你完全不了解的技术能力，怎么做？
+
+答案不是去读文档、去找教程，而是用你现在已有的工具Claude Code，一步一步把陌生的东西变熟悉。这个方法论，以后遇到任何陌生技术都能复用。
+
 **先搞清楚要解决什么问题**
+
+碰到陌生技术，很多人的第一反应是去查“XXX是什么”。这个问题太宽泛，答案往往是一大段定义，读完还是不知道和自己的场景有什么关系。
 
 比较好的方式是从业务痛点出发，用自己的场景问：
 
 ```
 我的智能客服 Agent 现在只能靠模型的通用知识回答问题，无法引用公司的产品手册和政策文档。我听说 RAG 可以解决这个问题。帮我解释：RAG 的核心思路是什么？它是怎么让 LLM 能引用私有文档的？
 ```
+
+> 为什么要这样问？因为这样的问题有具体场景，你越能描述清楚自己的痛点，它的回答就越有针对性。
 
 LLM 的知识来自训练数据，训练完成后就固化了。你的产品手册、退换货政策、内部 FAQ，这些文档不在训练集里，模型物理上不知道这些内容。
 
@@ -857,6 +865,8 @@ Claude Code 按数据流向拆出了两个阶段、六个组件。
 向量数据库有哪些主流选项？我的约束是：Java 技术栈、已有 PostgreSQL、一期数据量不大（几千到几万条分块）、基本的相似度检索够用。帮我对比 pgvector、Milvus、Qdrant、Elasticsearch 的优缺点。
 ```
 
+> 为什么问题里要列出约束？把你的实际约束给出来，Claude Code才能给出有判断立场的分析，而不是中立的百科全书。
+
 1. pgvector 是 PostgreSQL 的扩展，装一个插件就行，不引入新组件。SQL 操作，Java 生态直接用 JDBC，零学习成本。性能在百万级以下够用。缺点是超大规模数据不如专业向量数据库。
 2. Milvus 是专业向量数据库，性能最强，支持十亿级向量。但部署极重，依赖 etcd 和 MinIO，需要单独一套集群，运维成本高，Java SDK 文档也不如 Python 完善。
 3. Qdrant 轻量，Rust 写的，单二进制部署，REST API 友好。比 Milvus 轻得多，但仍然是一个额外的服务，需要单独部署、端口要开、故障要排查。
@@ -871,6 +881,8 @@ Claude Code 按数据流向拆出了两个阶段、六个组件。
 ```
 我选了 pgvector。帮我从零上手：怎么安装、怎么建表、怎么插入向量、怎么做相似度查询？给我一个能跑通的最小示例。
 ```
+
+> 为什么要先跑最小Demo？新技术有很多细节只有亲手跑过才知道，这些问题如果第一次遇到是在Hify的代码里，排查成本会很高。先单独跑通，建立手感，再集成就不会茫然。
 
 Claude Code 给了建表和查询的核心 SQL：
 
@@ -904,6 +916,58 @@ pgvector 在 Java 里怎么用？MyBatis-Plus 能直接操作 vector 类型吗�
 MyBatis-Plus 不原生支持 vector 类型，直接用会报类型转换错误。解法是自定义 TypeHandler，告诉 MyBatis 怎么把 Java 的  float[] 和 pgvector 的  vector 类型互转。
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608061748690.png)
+
+**Embedding模型选型与接入**
+
+向量数据库搞定了。接下来是Embedding模型，它是把文本变成向量的工具。
+
+```
+我要调用OpenAI的Embedding API。接口怎么调？和Chat Completion有什么区别？有哪些模型可以选？有什么限制？
+```
+
+> 问这个问题是因为：Embedding接口虽然也是调OpenAI，但它和Chat Completion是完全不同的接口，返回结构也不一样，Chat Completion返回文本，Embedding返回向量数组。
+
+Chat Completion是“文本→文本”，Embedding是“文本→向量”。
+
+接口是 `POST /v1/embeddings`，入参 `{model, input}`，返回 `data[0].embedding`，一个长度1536的float数组。和Chat Completion最大的区别是没有流式响应，同步返回，等向量算完一次性给你。
+
+模型选哪个？Claude Code给了三个选项的对比：
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/20-RAG知识库（_970416_5a5d6b2e6a.png)
+
+我的判断：选text-embedding-3-small。同样1536维，价格是ada-002的五分之一，效果还更好。
+
+# 21｜RAG 知识库（下）：给客服一本手册，对话功能集成 RAG
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
