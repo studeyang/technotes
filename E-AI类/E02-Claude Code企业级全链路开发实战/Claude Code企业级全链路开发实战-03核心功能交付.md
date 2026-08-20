@@ -939,35 +939,178 @@ Chat Completion是“文本→文本”，Embedding是“文本→向量”。
 
 # 21｜RAG 知识库（下）：给客服一本手册，对话功能集成 RAG
 
+上一讲完成了探路，pgvector装好了，Embedding API能调了，两个能力分别验证通过。
 
+我们这节课是要实现RAG的全流程。
 
+**先想清楚要改哪里**
 
+当前链路是：
 
+```
+1. 加载 Session → 拿到 agentId
+2. 加载 Agent   → 拿到 systemPrompt、modelConfigId、temperature、maxContextTurns
+3. 加载 ModelConfig → 拿到 modelId、providerId
+4. 加载 Provider → 拿到 baseUrl、authConfig
+5. 写入用户消息到 MySQL
+6. 从 Redis 加载上下文历史
+7. 拼 messages 数组：[system] + 历史 + 当前消息
+8. 调 LLM streamChat
+9. 写入 assistant 消息，更新 Redis
+```
 
+RAG检索插在第6步之后、第7步之前，标记为第6.5步：
 
+```
+6.5 ★ RAG 检索：用户问题 → Embedding → pgvector Top-K → 相关 chunk
+```
 
+**数据模型**
 
+```
+Hify要支持RAG知识库。管理员上传文档，系统自动分块、向量化存入pgvector。对话时检索相关内容注入上下文。帮我设计数据模型。
+```
 
+Claude Code给了三张表的设计：
 
+```
+MySQL
+  knowledge_base   — 知识库容器
+  document         — 文档元信息 + 处理状态
 
+PostgreSQL (pgvector)
+  document_chunk   — 分块文本 + embedding 向量
+```
 
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/21-RAG知识库（_971417_d3cb8129e5.png)
 
+DDL
 
+```sql
+CREATE TABLE knowledge_base (
+    id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL,
+    description VARCHAR(500) DEFAULT '',
+    enabled     TINYINT(1)   NOT NULL DEFAULT 1,
+    deleted     TINYINT(1)   NOT NULL DEFAULT 0,
+    created_at  DATETIME     NOT NULL,
+    updated_at  DATETIME     NOT NULL
+);
 
+-- 关联 knowledge_base_id，记录文件元信息和处理状态。
+CREATE TABLE document (
+    id                BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    knowledge_base_id BIGINT       NOT NULL,
+    name              VARCHAR(200) NOT NULL,
+    file_type         VARCHAR(20)  NOT NULL,   -- txt / pdf / md
+    file_size         BIGINT       NOT NULL,
+    status            VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
+    -- PENDING / PROCESSING / DONE / FAILED
+    error_message     VARCHAR(500) DEFAULT '',
+    chunk_count       INT          NOT NULL DEFAULT 0,
+    deleted           TINYINT(1)   NOT NULL DEFAULT 0,
+    created_at        DATETIME     NOT NULL,
+    updated_at        DATETIME     NOT NULL,
+    KEY idx_document_kb_id (knowledge_base_id)
+);
 
+-- PostgreSQL：document_chunk
+-- 向量数据，存分块文本和embedding。
+CREATE EXTENSION IF NOT EXISTS vector;
 
+CREATE TABLE document_chunk (
+    id                BIGSERIAL    PRIMARY KEY,
+    knowledge_base_id BIGINT       NOT NULL,   -- 冗余，检索时免 JOIN
+    document_id       BIGINT       NOT NULL,
+    chunk_index       INT          NOT NULL,
+    content           TEXT         NOT NULL,
+    embedding         vector(1536) NOT NULL,   -- text-embedding-3-small
+    token_count       INT          NOT NULL DEFAULT 0,
+    deleted           SMALLINT     NOT NULL DEFAULT 0,
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
 
+CREATE INDEX idx_chunk_kb ON document_chunk (knowledge_base_id) WHERE deleted = 0;
+```
 
+agent表加一列：
 
+```sql
+ALTER TABLE agent
+    ADD COLUMN knowledge_base_id BIGINT DEFAULT NULL;
+```
 
+NULL表示不启用RAG，有值表示启用。
 
+**知识库的全流程**
 
+1、知识库CRUD指令：
 
+```
+实现以下接口：
+POST   /api/v1/knowledge-bases          — 创建知识库，参数：name（必填）、description（可选）
+GET    /api/v1/knowledge-bases          — 分页查询知识库列表，参数：page、size、name（模糊搜索）
+GET    /api/v1/knowledge-bases/{id}     — 查询单个知识库详情
+PUT    /api/v1/knowledge-bases/{id}     — 更新知识库，参数：name、description、enabled
+DELETE /api/v1/knowledge-bases/{id}     — 逻辑删除知识库
+```
 
+文档管理CRUD指令：
 
+```
+实现以下接口：
+POST   /api/v1/knowledge-bases/{kbId}/documents    — 上传文档
+       接收 multipart/form-data，校验文件类型（只接受 txt/md/pdf）和大小（不超过 10MB）
+       文件落盘到 upload 目录，MySQL 写入 document 记录（status=PENDING）
+       立即返回 documentId，提交异步任务到线程池
+GET    /api/v1/knowledge-bases/{kbId}/documents     — 分页查询知识库下的文档列表
+GET    /api/v1/documents/{id}                       — 查询单个文档详情（含 status、chunk_count、error_message）
+GET    /api/v1/documents/{id}/chunks                — 查询文档的分块列表（调 pgvector 的 JdbcTemplate）
+DELETE /api/v1/documents/{id}                       — 逻辑删除文档，同时删除 pgvector 里的 chunk
+```
 
+2、处理逻辑
 
+上传接口提交异步任务后，知识库流程开始工作，分五个环节串联处理。
 
+```
+1. 状态更新
+   document.status = PROCESSING
+
+2. 解析 — extractText(filePath, fileType) → String
+   TXT/MD：直接读文件内容，UTF-8
+   PDF：用 Apache PDFBox 提取文字层。扫描版 PDF（提取文字为空）一期不支持，返回错误
+   解析失败（加密 PDF、损坏文件）→ status=FAILED，写 error_message，后续环节不执行
+
+3. 分块 — splitChunks(text) → List<ChunkDTO>
+   递归分割：chunk_size=512 token，overlap=64 token
+   切割优先级：段落边界（\n\n）> 句子边界（句号、问号）> 字符数截断
+   每个 ChunkDTO 包含：chunkIndex、content、tokenCount
+
+4. 向量化 — embedChunks(List<ChunkDTO>) → List<ChunkDTO>（补上 embedding 字段）
+   调用 Embedding API，input 支持数组，一次请求处理多个块
+   分批逻辑：每批最多 100 条，超过就分多批
+   注意：API 返回的 data[] 数组按 index 字段排序后再和原始 chunk 列表对应
+   不能假设返回顺序和输入顺序一致
+
+5. 存储 — saveChunks(documentId, knowledgeBaseId, List<ChunkDTO>)
+   JdbcTemplate.batchUpdate() 批量写入 pgvector 的 document_chunk 表
+   写完后更新 document.status=DONE，chunk_count=N
+```
+
+3、前端页面
+
+后端接口跑通后，做前端。分两个页面：知识库管理和文档管理。
+
+知识库管理：
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/21-RAG知识库（_971417_883afd13fd.png)
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/21-RAG知识库（_971417_08f7374726.png)
+
+上传文档，拆解为向量存储：
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/21-RAG知识库（_971417_156b04a660.png)
 
 
 
