@@ -1112,6 +1112,246 @@ DELETE /api/v1/documents/{id}                       — 逻辑删除文档，同
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/21-RAG知识库（_971417_156b04a660.png)
 
+# 22｜工作流编排（上）：搞懂工作流，把它存起来
+
+智能客服现在所有问题都走同一个 Prompt，用户问退换货政策和问产品功能，客服用同样的方式回答。
+
+更好的做法是：先判断用户问的是什么类型，然后走不同的处理路径。售前走产品知识Prompt，售后走政策条款 Prompt，技术支持走故障排查 Prompt。每条路径更聚焦，回答更精准。
+
+这就是工作流要解决的问题。工作流由两部分组成：元数据和执行引擎。
+
+1. 元数据是工作流的配置，它有哪些节点、节点之间怎么连接、每个节点做什么。
+2. 执行引擎是让这份配置真正跑起来的逻辑，从起始节点开始，一步步往下走，直到结束。
+
+这一讲做元数据：搞懂工作流是什么，设计存储结构，实现CRUD。下一讲做执行引擎。
+
+**工作流是什么**
+
+先让 Claude Code 解释清楚再动手。
+
+```
+在 AI 应用平台中，工作流是什么概念？
+用智能客服的场景帮我解释，不要讲理论，给我具体的例子。
+```
+
+用户发来一条消息：“我昨天下的订单还没到，帮我查一下。”
+
+工作流的处理方式：把这件事拆成有序的步骤，每步做一件具体的事。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/22-工作流编排（上_972496_498a23d892.png)
+
+**工作流在代码里长什么样**
+
+```
+工作流在代码层面怎么表示？
+帮我用最直白的方式解释——不要说 DAG、不要说图论，
+就告诉我它在代码里是什么数据结构。
+```
+
+两个概念——节点 + 连线。节点是做什么，每个节点就是一条数据库记录：
+
+```
+WorkflowNode {
+    workflowId  = 1
+    type        = "LLM"       // 这个节点干什么：调LLM / 调API / 做判断
+    name        = "意图识别"
+    config      = {"prompt": "判断用户意图，返回 ORDER_QUERY 或 POLICY_QUERY"}
+}
+
+WorkflowNode {
+    workflowId  = 1
+    type        = "CONDITION"
+    name        = "有没有订单号"
+    config      = {"expression": "{{intent}} == 'ORDER_QUERY'"}
+}
+```
+
+连线是做完去哪，记录节点之间的跳转关系：
+
+```
+WorkflowEdge {
+    sourceNodeKey = "classify"   // 从"意图识别"
+    targetNodeKey = "router"     // 到"条件判断"
+    condition     = null         // 无条件，直接走
+}
+
+WorkflowEdge {
+    sourceNodeKey = "router"     // 从"条件判断"
+    targetNodeKey = "order_api"  // 到"查询订单"
+    condition     = "true"       // 条件为真时走这条线
+}
+```
+
+两张表，存库是平铺的两张表，执行时加载进内存变成 Map + while 循环。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/22-工作流编排（上_972496_66c469dd95.png)
+
+理解了这些，工作流就不神秘了。下一步把它映射成完整的存储设计。
+
+**工作流怎么设计，由哪些部分组成**
+
+让Claude Code帮我把代码设计做完整。
+
+```
+基于上面的工作流结构，帮我设计数据模型。要考虑：
+
+1.如何存储工作流基本信息
+2.如何存储节点，不同类型节点配置格式不同怎么处理
+3.如何存储节点之间的连接关系
+4.Java 代码里如何做类型安全的解析
+```
+
+一份 JSON 拆成三张表，创建时拆分写入，查询时组装还原。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/22-工作流编排（上_972496_8ffe0dfe8b.png)
+
+- `workflow` 存工作流基本信息：名称、描述、状态（DRAFT / PUBLISHED / DISABLED）。
+- `workflow_node` 存节点：`node_key` 是节点在工作流内的唯一标识（如 `classify`、`router`），`type` 是节点类型，`config` 是JSON字段存各类型节点的配置。
+- `workflow_edge` 存连线：`source_node_key` → `target_node_key`，`condition` 是条件表达式，`NULL` 表示无条件直接走。
+
+Java 代码实现：
+
+```java
+public sealed interface NodeConfig
+    permits StartNodeConfig, LlmNodeConfig, ConditionNodeConfig,
+            ApiCallNodeConfig, KnowledgeNodeConfig, EndNodeConfig {}
+
+// 每种类型一个 record
+public record LlmNodeConfig(Long modelConfigId, String prompt, String outputVariable)
+    implements NodeConfig {}
+
+// 解析时按 type 分发
+NodeConfig config = switch (type) {
+    case "LLM"       -> objectMapper.readValue(configJson, LlmNodeConfig.class);
+    case "CONDITION" -> objectMapper.readValue(configJson, ConditionNodeConfig.class);
+    // ...
+};
+```
+
+执行引擎里用 `switch` 模式匹配处理不同类型：
+
+```java
+switch (config) {
+    case LlmNodeConfig llm            -> executeLlm(llm, context);
+    case ConditionNodeConfig cond     -> evaluateCondition(cond, context);
+    case ApiCallNodeConfig api        -> callApi(api, context);
+    case KnowledgeNodeConfig kb       -> retrieveKnowledge(kb, context);
+    case StartNodeConfig start        -> initContext(start, context);
+    case EndNodeConfig end            -> buildOutput(end, context);
+}
+// 漏写任何一个 case，编译报错
+```
+
+新增节点类型只需要加一个 `record`，在 `NodeConfigParser` 加一行 `case`，不改其他代码。
+
+**实现CRUD**
+
+设计确认了，开始实现，我们的提示词如下：
+
+```markdown
+在 hify-workflow 模块中实现工作流的 CRUD。
+
+接口列表：
+POST   /api/v1/workflows          — 创建工作流
+GET    /api/v1/workflows          — 分页查询工作流列表
+GET    /api/v1/workflows/{id}     — 查询工作流详情（含完整节点和边）
+PUT    /api/v1/workflows/{id}     — 更新工作流
+DELETE /api/v1/workflows/{id}     — 逻辑删除工作流
+
+约束：
+- 创建接口接收完整请求体（包含 nodes 和 edges），拆分写入三张表
+  workflow 写一条，nodes 批量插入 workflow_node，edges 批量插入 workflow_edge
+  三张表在同一个事务里，任何一张写失败全部回滚
+
+- 查询详情接口从三张表组装回完整结构返回
+  nodes 数组和 edges 数组都要还原，结构和创建时一致
+
+- 更新工作流时，先逻辑删除原有的 nodes 和 edges，再批量插入新的
+  不要做 diff 更新，直接替换
+
+- 删除工作流时，关联的 nodes 和 edges 一起逻辑删除
+
+- 节点配置用 NodeConfigParser 解析，NodeConfig sealed interface + record 体系
+
+- 代码放在 hify-workflow 模块，遵循 CLAUDE.md 的代码组织规范
+```
+
+一个关键约束：更新时直接替换，不做 diff。工作流改动往往涉及多个节点和边，diff 逻辑复杂且容易出错。先删再插，三张表始终保持一致，多几条SQL完全值得。
+
+**串起来验证**
+
+CRUD 实现完，用一份真实的工作流配置验证数据模型能正确存储和还原。
+
+```bash
+# 创建工作流
+curl -X POST http://localhost:8080/api/v1/workflows \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "智能客服分类工作流",
+    "nodes": [
+      {"nodeKey": "classify", "type": "LLM", "name": "问题分类",
+       "config": {"prompt": "判断问题类型，返回：售前/售后/技术支持", "outputVariable": "intent"}},
+      {"nodeKey": "router", "type": "CONDITION", "name": "路由分发",
+       "config": {"expression": "{{intent}}", "outputVariable": "route"}},
+      {"nodeKey": "presale", "type": "LLM", "name": "售前咨询",
+       "config": {"prompt": "你是产品顾问，介绍产品功能和优势", "outputVariable": "answer"}},
+      {"nodeKey": "aftersale", "type": "LLM", "name": "售后服务",
+       "config": {"prompt": "你是售后客服，回答退换货和保修问题", "outputVariable": "answer"}},
+      {"nodeKey": "techsupport", "type": "LLM", "name": "技术支持",
+       "config": {"prompt": "你是技术工程师，帮用户排查使用问题", "outputVariable": "answer"}}
+    ],
+    "edges": [
+      {"sourceNodeKey": "classify",  "targetNodeKey": "router",      "condition": null},
+      {"sourceNodeKey": "router",    "targetNodeKey": "presale",     "condition": "售前"},
+      {"sourceNodeKey": "router",    "targetNodeKey": "aftersale",   "condition": "售后"},
+      {"sourceNodeKey": "router",    "targetNodeKey": "techsupport", "condition": "技术支持"}
+    ]
+  }'
+
+# 查询详情，验证能完整还原
+curl http://localhost:8080/api/v1/workflows/1
+# 返回的结构应和创建时一致：五个节点都在，四条边都在，config 没有丢失字段
+
+# 给 Agent 绑定工作流
+curl -X PUT http://localhost:8080/api/v1/agents/1 \
+  -H "Content-Type: application/json" \
+  -d '{"workflowId": 1}'
+```
+
+验收标准只有一个：创建进去的配置，查询出来能完整还原。不多不少，节点对齐，边对齐，config JSON字段不丢失。
+
+# 26
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
