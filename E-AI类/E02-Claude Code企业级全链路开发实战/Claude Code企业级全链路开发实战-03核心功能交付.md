@@ -1320,6 +1320,157 @@ curl -X PUT http://localhost:8080/api/v1/agents/1 \
 
 验收标准只有一个：创建进去的配置，查询出来能完整还原。不多不少，节点对齐，边对齐，config JSON字段不丢失。
 
+# 23｜工作流编排（下）：实现执行引擎，让工作流跑起来
+
+22讲我们把工作流的元数据存进去了，但它只是一份静态配置，存进去读出来，就是不会动，这一讲让它动起来。怎么让它动起来呢？就是我们这节课要讲的执行引擎。
+
+**执行引擎是什么**
+
+```
+工作流执行引擎是什么概念？
+它和 22 讲存的工作流配置是什么关系？
+怎么被触发？从用户发消息到工作流执行完毕返回结果，完整链路是什么样的？
+不要讲理论，结合 Hify 智能客服的场景解释。
+```
+
+WorkflowServiceImpl 是工作流的元数据的存储，它是管配置的。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/23-工作流编排（下_972505_a3fe963edc.png)
+
+执行引擎是从数据库加载配置，构建 `nodeMap + edgeMap`，然后从起始节点开始一个节点一个节点地执行，最终结果通过 SseEmitter 推给用户。
+
+**业界怎么做**
+
+```
+工作流执行引擎在业界有哪些主流的实现方案？
+重点看 Dify、Coze、n8n 这类 AI 应用平台是怎么设计的。
+我想了解：线程模型怎么选、节点执行怎么隔离、上下文数据怎么在节点间传递、错误处理和执行记录怎么做。
+最后给我一个建议：Hify 这种体量的项目应该选哪种方案，为什么。
+```
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/23-工作流编排（下_972505_5a410e8e4b.png)
+
+**执行引擎在代码里长什么样**
+
+```
+基于上面的调研结论，帮我把 Hify 执行引擎的代码结构梳理清楚。
+四个部分：线程池、ExecutionContext、NodeExecutor 体系、核心循环。
+每个部分是什么，相互之间怎么协作，用代码示例说明。
+先把现有的代码都读清楚，不基于假设设计。
+```
+
+Claude Code 先把现有代码读完，`ThreadPoolConfig.java`、`NodeConfigDef.java`、`NodeConfigParser.java`、`WorkflowNode.java`、`LlmHttpClient.java` 等，然后基于真实代码给出设计。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/23-工作流编排（下_972505_c0295f5427.png)
+
+ExecutionContext：贯穿整个工作流的变量池。对标 Dify 的 VariablePool。一次执行创建一个，从 START 节点活到 END 节点。
+
+```java
+public class ExecutionContext {
+    private final Map<String, Object> variables = new LinkedHashMap<>();
+
+    public ExecutionContext(Long workflowRunId, String userMessage) {
+        variables.put("start.userMessage", userMessage);  // 预写入，后续节点用 {{start.userMessage}} 引用
+    }
+
+    public void set(String nodeKey, String varName, Object value) {
+        variables.put(nodeKey + "." + varName, value);
+    }
+
+    // 把 "根据以下内容判断意图：{{start.userMessage}}" 替换为实际值
+    public String resolve(String template) {
+        String result = template;
+        for (Map.Entry<String, Object> entry : variables.entrySet()) {
+            result = result.replace("{{" + entry.getKey() + "}}",
+                entry.getValue() != null ? entry.getValue().toString() : "");
+        }
+        return result;
+    }
+}
+```
+
+NodeExecutor 体系：四种 Executor，Spring 自动注册到 Registry，按 type 分发。
+
+```java
+public interface NodeExecutor {
+    void execute(WorkflowNode node, NodeConfigDef config, ExecutionContext ctx);
+    String nodeType();
+}
+```
+
+1. `LlmNodeExecutor`：解析 config 里的 promptTemplate，用 `ctx.resolve()` 替换模板变量，复用已有的 ProviderAdapter 调 LLM，把返回内容写入 ctx。
+2. `ConditionNodeExecutor`：解析 expression，`ctx.resolve()` 替换变量后做字符串匹配，把 true / false 写入 ctx。
+3. `ApiCallNodeExecutor`：解析 url，替换变量后用 `LlmHttpClient` 调外部接口，把响应写入 ctx。
+4. `KnowledgeNodeExecutor`：调 `KnowledgeService.searchChunks()`，把检索结果拼成字符串写入 ctx，后续 LLM 节点用 `{{kb.docs}}` 引用。
+
+核心循环：WorkflowEngine。把前三件事串起来，加上执行记录。骨架就是一个while循环：
+
+```java
+public String execute(Long workflowId, String userMessage) {
+    // 1. 从 DB 加载配置，构建内存结构
+    Map<String, WorkflowNode> nodeMap = loadNodeMap(workflowId);
+    Map<String, List<WorkflowEdge>> edgeMap = loadEdgeMap(workflowId);
+
+    // 2. 创建执行记录 + Context
+    WorkflowRun run = createRun(workflowId, userMessage);
+    ExecutionContext ctx = new ExecutionContext(run.getId(), userMessage);
+
+    // 3. 从 START 节点开始逐节点执行
+    String currentKey = findStartKey(nodeMap);
+    while (currentKey != null) {
+        WorkflowNode node = nodeMap.get(currentKey);
+        if ("END".equals(node.getType())) break;
+
+        WorkflowNodeRun nodeRun = createNodeRun(run.getId(), node);
+        try {
+            NodeConfigDef config = configParser.parse(node.getType(), node.getConfig());
+            executorRegistry.get(node.getType()).execute(node, config, ctx);
+            finishNodeRun(nodeRun, "SUCCESS", ctx.snapshot(), null, elapsed);
+        } catch (Exception e) {
+            finishNodeRun(nodeRun, "FAILED", ctx.snapshot(), e.getMessage(), elapsed);
+            throw e;  // 向外抛，外层更新 run 状态
+        }
+
+        currentKey = pickNext(edgeMap, currentKey, node.getType(), ctx);
+    }
+
+    // 4. 取最终输出
+    String output = resolveEndOutput(nodeMap, ctx, currentKey);
+    finishRun(run, "SUCCESS", output, null);
+    return output;
+}
+```
+
+**前端**
+
+先说说工作流前端真正应该是什么样子。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/23-工作流编排（下_972505_bedf8a3df6.png)
+
+完整的工作流前端是可视化拖拽编排：节点从左侧面板拖进画布，节点之间连线，点击节点在右侧面板配置 Prompt 和参数。Dify、Coze、n8n 都是这个形态。
+
+> 用 React Flow 或 Vue Flow 库就可以实现。
+
+我们本次做最简版：列表页 + 创建页，JSON直接手写提交。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/23-工作流编排（下_972505_1b41e9a3dd.png)
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/23-工作流编排（下_972505_ce8b0d7bc9.png)
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/23-工作流编排（下_972505_fe5237aa12.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 26
 
 
