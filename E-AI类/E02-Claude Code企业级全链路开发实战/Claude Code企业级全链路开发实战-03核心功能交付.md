@@ -1459,15 +1459,243 @@ public String execute(Long workflowId, String userMessage) {
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/23-工作流编排（下_972505_fe5237aa12.png)
 
+# 24｜MCP 工具接入（上）：搞懂协议，把 Client 跑通
 
+这一讲搞懂协议，把 Client 跑通。下一讲开发真实的 MCP Server。
 
+**为什么不直接调API**
 
+智能客服要对接的系统不止一个，订单系统、库存系统、工单系统、物流系统，每个系统的API格式都不一样：
 
+```
+订单系统：POST /orders/query，JSON，Bearer Token
+物流系统：GET  /tracking?waybillNo=SF123，XML，签名验证
+工单系统：GraphQL，OAuth2
+库存系统：gRPC，proto 文件
+```
 
+让 Hify 直接对接每个系统，就要为每个系统写一套适配代码，处理不同的参数格式、认证方式、返回结构。
 
+更麻烦的是，LLM 怎么知道有哪些工具可用？你得手动写进 Prompt，每接一个新系统，就要改 Prompt。
 
+Anthropic 在 2024年 底提出了 MCP 协议来解决这个问题。
 
+**MCP是什么**
 
+```
+MCP 协议是什么？它解决什么问题？
+和直接调 REST API 有什么区别？
+用智能客服的场景帮我解释，重点说清楚为什么需要标准化协议。
+```
+
+MCP 是工具的标准化描述和调用协议。工具提供方按 MCP 标准暴露自己的能力，调用方通过统一方式发现和调用这些工具。
+
+Tool Schema：每个工具的标准描述，包括名称、说明、参数类型等。LLM 通过 Schema 知道有哪些工具可用，决定什么时候调哪个。
+
+```json
+{
+  "name": "query_order",
+  "description": "根据用户ID和订单号查询订单状态，当用户询问订单、物流、快递相关问题时使用",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "userId":  {"type": "string", "description": "用户ID"},
+      "orderId": {"type": "string", "description": "订单号，不知道时传空字符串"}
+    },
+    "required": ["userId"]
+  }
+}
+```
+
+MCP 之前，M个 AI 平台 × N个工具 = M×N 套适配代码。MCP之后，工具开发者只写一个 Server，任何支持 MCP 的平台都能接 = M+N。这和 USB 解决的问题一样。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/24-MCP工具接入_972992_b60654207d.png)
+
+**Function Calling是什么**
+
+知道了MCP是什么，下一个问题：LLM怎么知道要调哪个工具？
+
+```
+Function Calling 是什么？
+LLM 怎么知道有哪些工具可用？
+怎么决定什么时候调工具、调哪个、传什么参数？
+一次用户对话如果需要调工具，完整的交互流程是什么样的？
+```
+
+LLM 本质上只能输入文本、输出文本。Function Calling 是一种约定，LLM 的输出文本里，有时候不是给用户看的回答，而是一个结构化的“我要调这个函数、传这些参数”的指令。
+
+LLM 怎么知道有哪些工具？工具定义随每次请求一起发过去。不是持久记忆，是每次都告知。
+
+```json
+{
+  "messages": [{"role": "user", "content": "我昨天下的订单还没到"}],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "query_order",
+        "description": "查询订单状态，当用户询问订单、物流、快递相关问题时使用",
+        "parameters": { ... }
+      }
+    }
+  ]
+}
+```
+
+LLM 怎么决定调哪个工具？靠 `description` 字段。LLM 读到“我昨天下的订单还没到”，判断这是订单问题，`query_order` 的 description 说“用户询问订单相关问题时使用”，场景匹配，调它。
+
+下面是一次用户对话后的过程。
+
+第一次 LLM 调用，LLM 判断需要调工具，返回的是工具调用指令：
+
+```json
+{
+  "finish_reason": "tool_calls",
+  "message": {
+    "tool_calls": [{
+      "id": "call_abc123",
+      "function": {
+        "name": "query_order",
+        "arguments": "{\"userId\": \"u001\", \"orderId\": \"12345\"}"
+      }
+    }]
+  }
+}
+```
+
+Hify 拿到指令，通过 MCP Client 调订单服务，拿到真实数据，把结果追加进对话历史：
+
+```json
+{"role": "tool", "tool_call_id": "call_abc123",
+ "content": "{\"status\":\"运输中\",\"trackingNo\":\"SF1234567\",\"estimatedDate\":\"明天\"}"}
+```
+
+第二次 LLM 调用，LLM 基于工具结果生成最终回答，`finish_reason` 变成 `stop`，这次是真正给用户的回答。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/24-MCP工具接入_972992_963fedc7c4.png)
+
+循环次数由 LLM 决定，不是固定的。理论上 LLM 可以连续调多个工具（先查订单再查物流），Agent 框架一般设置最大轮次（比如10次）防止死循环。
+
+**MCP Client选型**
+
+```
+Java 生态有哪些 MCP Client 的 SDK？
+帮我调研主流选项，从成熟度、文档质量、和 Spring 生态兼容性几个维度对比。
+最后给出建议，Hify 应该选哪个。
+```
+
+调研结果有三个实质选项：
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/24-MCP工具接入_972992_391053b3ac.png)
+
+Claude Code的建议：用官方Java SDK，不用Spring AI MCP。
+
+```xml
+<!-- hify-mcp/pom.xml -->
+<dependency>
+    <groupId>io.modelcontextprotocol.sdk</groupId>
+    <artifactId>mcp</artifactId>
+    <version>1.1.1</version>
+</dependency>
+
+```
+
+> Hify 已经有自己的一套：`ProviderAdapter` 适配各LLM、`LlmHttpClient` 做HTTP 通信、`ChatServiceImpl` 管对话流程。
+>
+> 引入Spring AI MCP 意味着：引入整个 `spring-ai-bom`，工具调用结果要适配 `ToolCallback` 接口，这和现有 `ProviderAdapter` 冲突。
+>
+> 官方 Java SDK 只做一件事：实现 MCP 协议的序列化/反序列化和请求响应。不绑定任何 AI 框架，剩下的连接管理、异常处理、工具结果转换全按 Hify 现有风格写。
+
+**动手实现**
+
+MCP Server管理
+
+```
+在 hify-mcp 模块中实现 MCP Server 管理。参照 12 讲 Provider 管理的模式。
+
+接口列表：
+POST   /api/v1/mcp-servers              创建 MCP Server（name、endpoint、enabled）
+GET    /api/v1/mcp-servers              分页查询列表
+GET    /api/v1/mcp-servers/{id}         查询详情（含工具列表）
+PUT    /api/v1/mcp-servers/{id}         更新
+DELETE /api/v1/mcp-servers/{id}         逻辑删除
+POST   /api/v1/mcp-servers/{id}/test    测试连通性
+
+连通性测试逻辑：
+  用 io.modelcontextprotocol.sdk:mcp:1.1.1 的 McpSyncClient
+  调 tools/list 接口，成功则把返回的工具列表存入 mcp_tool 表
+  （name、description、inputSchema JSON 字段）
+  失败返回错误信息
+
+删除时检查：是否有 Agent 绑定了该 Server 的工具，有则拒绝删除
+
+实现 McpClientService：
+  callTool(mcpServerId, toolName, arguments) → String
+    按调用创建 McpSyncClient，用完关闭（try-with-resources）
+    工具调用失败 catch 住，抛 BizException(MCP_TOOL_CALL_FAILED)
+    结果取 TextContent，多条用换行拼接
+
+  listTools(mcpServerId) → List<String>
+    同样 try-with-resources，失败抛 BizException(MCP_SERVER_NOT_FOUND)
+
+代码放在 hify-mcp 模块，遵循 CLAUDE.md 规范
+```
+
+Agent绑定工具
+
+```
+新建 agent_tool 关联表，支持多工具绑定：
+
+CREATE TABLE agent_tool (
+    id        BIGINT   AUTO_INCREMENT PRIMARY KEY,
+    agent_id  BIGINT   NOT NULL,
+    tool_id   BIGINT   NOT NULL,
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uk_agent_tool (agent_id, tool_id)
+);
+
+实现接口：
+PUT /api/v1/agents/{id}/tools    绑定工具列表（传 toolId 数组，全量替换）
+
+约束：
+- 绑定时校验 toolId 是否存在且对应 MCP Server 处于启用状态
+- 一个 Agent 最多绑定 10 个工具（防止 tools 参数过长影响 LLM 效果）
+```
+
+接入对话引擎
+
+```
+修改 ChatService 的对话逻辑，加入 MCP 工具调用支持。
+
+改动范围：只改 buildMessages 和 LLM 调用这两处。
+
+具体逻辑：
+1. 加载 Agent 绑定的工具列表
+   从 agent_tool 关联 mcp_tool 表，拿到所有工具的 name、description、inputSchema
+2. 工具列表不为空时，把 tool schema 加入第一次 LLM 调用的 tools 参数
+3. 第一次 LLM 调用后判断返回：
+   finish_reason = "tool_calls"：解析 tool_calls，执行第 4 步
+   finish_reason = "stop"：直接走原有流式推送逻辑
+4. 解析 tool_calls，拿工具名和 arguments JSON
+   从 mcp_tool 表找到对应的 mcpServerId
+   调 McpClientService.callTool(mcpServerId, toolName, arguments)
+5. 把工具结果作为 role=tool 的消息追加进对话历史
+   对应上 tool_call_id（LLM 第一次返回的那个 id）
+6. 发起第二次 LLM 调用（流式），结果推给用户
+
+约束：
+- 工具列表为空时，和原有逻辑完全一致，一行不改
+- RAG 和工具调用不冲突：system prompt 里既可以有 RAG 检索结果，
+  也可以有工具 schema，一个 Agent 可以同时绑知识库和工具
+- workflowId 不为空时已经 return，不进入这段逻辑
+- 工具调用失败：把错误信息作为 tool 消息返回给 LLM，
+  让 LLM 告知用户，不要直接抛异常中断对话
+- 不改 Controller 层，不改 SseEmitter 管理逻辑
+```
+
+下面是我们实现的在 MCP 工具的管理：
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/24-MCP工具接入_972992_3350699525.png)
 
 
 
