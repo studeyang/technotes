@@ -1697,7 +1697,166 @@ PUT /api/v1/agents/{id}/tools    绑定工具列表（传 toolId 数组，全量
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/24-MCP工具接入_972992_3350699525.png)
 
+# 25｜MCP 工具接入（下）：自建 MCP Server，让 Agent 能做真正的事
 
+这一讲做一个真实的退款MCP Server，连接内部财务系统，让Agent真正能“做事”，不只是“说事”。
+
+**MCP Server 在代码里长什么样**
+
+```
+一个 MCP Server 在代码层面是什么？
+目录结构长什么样？和 Hify 是什么关系？用三层结构帮我解释。
+```
+
+一般MCP Server目录结构如下：
+
+```
+hify-mcp-refund/                  ← 独立 Maven 项目
+├── pom.xml
+└── src/main/java/
+    ├── RefundMcpApplication.java ← Spring Boot 启动类
+    ├── config/
+    │   └── McpConfig.java        ← 注册工具到 MCP SDK
+    └── service/
+        └── RefundService.java    ← 真正的业务逻辑
+```
+
+MCP Server的代码只有两件我们需要关心的事：
+
+1. 声明这个MCP工具的schema，名字、描述、需要什么参数。
+2. 然后实现业务逻辑，收到调用请求后查数据库或调接口。
+
+MCP Server对Hify是黑盒。Hify只存了一个endpoint地址，发标准协议请求。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/25-MCP工具接入_973023_a1d7e15829.png)
+
+**让Claude Code拆解实现步骤**
+
+```
+我要开发一个退款 MCP Server，独立的 Spring Boot 应用，用 Java MCP SDK。
+提供四个工具：check_refund_eligibility、submit_refund、get_refund_status、cancel_refund，操作 refund_application 表。
+帮我拆解实现步骤，从建项目到能被 Hify 调用，每步给出验证方式。
+```
+
+Claude Code 给的拆解是：
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/25-MCP工具接入_973023_61bbbd79ea.png)
+
+逐步实现：
+
+1、建项目，注册 MCP Server Bean
+
+```
+创建独立 Spring Boot 工程 hify-mcp-refund。
+引入依赖：
+  io.modelcontextprotocol.sdk:mcp-spring-webmvc:1.1.1
+  spring-boot-starter-web
+```
+
+SDK 自动暴露的两个端点：`GET /sse` 供Hify发现和监听，`POST /messages` 供 Hify 发工具调用请求。
+
+2、建表和数据访问层
+
+```
+建 refund_application 表：
+  orderId、userId、amount、reason
+  status（PENDING/APPROVED/PROCESSING/COMPLETED/REJECTED）
+  rejectReason、createdAt、updatedAt
+
+用 Spring Data JPA 实现 RefundRepository。
+加查询方法：findTopByOrderIdOrderByCreatedAtDesc
+——按订单号查最新的退款申请。
+```
+
+3、实现业务逻辑
+
+```
+实现 RefundService，四个方法对应四个工具：
+
+checkEligibility(orderId)：
+  查订单是否在退款期内（一期简化：7天内且已签收）
+  返回 Map：eligible、reason、deadline、amount
+
+submitRefund(orderId, userId, amount, reason)：
+  检查同一订单是否有 PENDING/APPROVED/PROCESSING 状态的申请
+  有则返回错误：该订单已有进行中的退款申请，编号：xxx
+  无则写入 refund_application，status=PENDING
+  返回 Map：refundId、status、statusLabel、estimatedDays=3
+
+getStatus(orderId)：
+  查最新的退款申请记录
+  status 用英文枚举，statusLabel 用中文给 LLM 直接说给用户
+  返回 Map：refundId、orderId、amount、status、statusLabel、
+           submittedAt、rejectReason
+
+cancelRefund(refundId)：
+  只有 PENDING 状态可以撤销
+  PENDING 以外返回：退款已在处理中，无法撤销
+
+约束：
+- 异常情况返回友好提示，不要抛出技术错误信息给 LLM
+- 返回值 LLM 会直接读，设计时考虑 LLM 怎么把它说给用户
+```
+
+4、注册工具到 MCP 协议
+
+```
+在 McpConfig 里，把四个工具注册到 McpSyncServer。
+
+每个工具需要：
+  工具名称（name）
+  description——重点：说清楚"什么情况下调这个工具"
+  inputSchema（JSON Schema 格式）
+  handler（调用 RefundService 对应方法，结果序列化为 JSON 返回）
+
+description 示例写法：
+  check_refund_eligibility：
+    "查询订单退款资格。用户说'我要退款'时，先调此工具确认是否符合条件，
+     再决定是否提交申请。不要跳过此步直接提交。"
+
+  submit_refund：
+    "提交退款申请。仅在用户确认退款意愿、且 check_refund_eligibility
+     返回 eligible=true 后调用。"
+
+调用失败时返回 {"error": "错误原因"}，isError=true
+不要让 SDK 抛出异常中断整个对话 
+```
+
+5、验证
+
+```bash
+# 建立 SSE 连接，拿 sessionId
+curl -N http://localhost:9001/sse
+# 返回：data: {"type":"endpoint","endpoint":"/messages?sessionId=xxx"}
+
+# 用 sessionId 发 tools/list
+curl -X POST "http://localhost:9001/messages?sessionId=xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+# 应该返回四个工具
+```
+
+**MCP 调试工具**
+
+```
+在 Hify 前端的 MCP Server 详情页中，新增"调试"Tab。
+
+后端接口：
+POST /api/v1/mcp-servers/{id}/debug
+  入参：toolName、arguments（Map）
+  逻辑：复用 McpClientService.callTool()
+  返回：result（String）、elapsedMs（Int）
+
+约束：
+- 参数表单根据 inputSchema 动态渲染，不要写死字段
+- 调用中 loading，防止重复点击
+```
+
+Claude Code 会根据这个提示词给我们做成页面。
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/25-MCP工具接入_973023_502c29c436.png)
+
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/25-MCP工具接入_973023_5c43c82d48.png)
 
 # 26
 
