@@ -1858,41 +1858,5 @@ Claude Code 会根据这个提示词给我们做成页面。
 
 ![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/25-MCP工具接入_973023_5c43c82d48.png)
 
-# 26
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# 26 实操课
 
