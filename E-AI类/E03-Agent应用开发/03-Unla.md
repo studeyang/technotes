@@ -11,6 +11,10 @@ Unla 是一个网关服务，它能够通过配置将现有的 MCP 服务和 API
 
 ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608052025550.webp)
 
+- API Server: 管理平台后端，可理解为控制面
+- MCP Gateway: 核心服务，负责实际的网关服务，可理解为数据面
+- Web 前端: 管理平台前端，提供可视化的管理界面
+
 **核心功能**
 
 - 协议与代理能力
@@ -39,50 +43,9 @@ Unla 是一个网关服务，它能够通过配置将现有的 MCP 服务和 API
 
 # 02 | 快速开始
 
-All-in-One 部署将所有服务打包在一个容器中，适合单机部署或本机使用。包含以下服务：
-
-- API Server: 管理平台后端，可理解为控制面
-- MCP Gateway: 核心服务，负责实际的网关服务，可理解为数据面
-- Mock User Service: 模拟用户服务，提供测试用的用户服务
-- Web 前端: 管理平台前端，提供可视化的管理界面
-- Nginx: 反向代理其他几个服务
-
-建议挂载以下目录：
-
-- `/app/configs`: 配置文件目录
-- `/app/data`: 数据目录
-- `/app/.env`: 环境变量文件
-
 **部署步骤**
 
-1、创建目录并下载配置
-
-```bash
-mkdir -p unla/{configs,data}
-cd unla/
-curl -sL https://raw.githubusercontent.com/amoylab/unla/refs/heads/main/configs/apiserver.yaml -o configs/apiserver.yaml
-curl -sL https://raw.githubusercontent.com/amoylab/unla/refs/heads/main/configs/mcp-gateway.yaml -o configs/mcp-gateway.yaml
-curl -sL https://raw.githubusercontent.com/amoylab/unla/refs/heads/main/.env.example -o .env.allinone
-```
-
-2、启动容器
-
-```bash
-# 使用阿里云容器镜像服务镜像（建议在中国境内使用）
-docker run -d \
-           --name unla \
-           -p 8080:80 \
-           -p 5234:5234 \
-           -p 5235:5235 \
-           -p 5335:5335 \
-           -p 5236:5236 \
-           -e ENV=production \
-           -v $(pwd)/configs:/app/configs \
-           -v $(pwd)/data:/app/data \
-           -v $(pwd)/.env.allinone:/app/.env \
-           --restart unless-stopped \
-           registry.ap-southeast-1.aliyuncs.com/amoylab/unla-allinone:latest
-```
+略
 
 **访问和配置**
 
@@ -214,8 +177,6 @@ notifier:
 super_admin:
   username: "${SUPER_ADMIN_USERNAME:admin}"                                     # 超级管理员用户名
   password: "${SUPER_ADMIN_PASSWORD:changeme-please-use-a-secure-password}"     # 超级管理员密码（生产环境请修改）
-
-
 ```
 
 ### JWT 配置
@@ -705,25 +666,180 @@ args:
 
 ## 3.4 Go Template 使用指南
 
+1、从环境变量中获取配置
+
+```yaml
+config:
+  Authorization: 'Bearer {{ env "AUTH_TOKEN" }}'  # 从环境变量中获取配置
+```
+
+2、从请求头中提取值
+
+```yaml
+headers:
+  Authorization: "{{.Request.Headers.Authorization}}"   # 透传客户端的 Authorization 头
+  Cookie: "{{.Config.Cookie}}"                          # 使用服务配置中的值
+```
+
+> Header 命名带 '-' 会报错，例如：hl-user-id
+
+3、构建请求体
 
 
-# 04 | Web 配置
+```yaml
+requestBody: |-
+  {
+	"data": {{ toJSON (printf "{\"sub\": %s }" .Args.formData) }},
+	"attachments": {{ .Args.attachments }}
+  }
+```
+
+> toJSON：转成 JSON 字符串
+
+4、处理嵌套的响应数据
 
 
+```yaml
+responseBody: |-
+  {
+    "id": "{{.Response.Data.id}}",
+    "username": "{{.Response.Data.username}}",
+    "email": "{{.Response.Data.email}}",
+    "createdAt": "{{.Response.Data.createdAt}}",
+    "preferences": {
+      "isPublic": {{.Response.Data.preferences.isPublic}},
+      "showEmail": {{.Response.Data.preferences.showEmail}},
+      "theme": "{{.Response.Data.preferences.theme}}",
+      "tags": {{.Response.Data.preferences.tags}}
+    }
+  }
+```
 
-# 05 | 客户端使用
+5、处理数组数据
 
+```yaml
+responseBody: |-
+  {
+	"data": [
+	  {{- $len := len .Response.Data.data -}}
+	  {{- $rows := fromJSON .Response.Data.data }}
+	  {{- range $i, $e := $rows }}
+	  {
+		"id": "{{ $e.id }}",
+		"name": "{{ $e.name }}",
+		"code": "{{ $e.code }}"
+	  }{{ if lt (add $i 1) $len }},{{ end }}
+	  {{- end }}
+	]
+  }
+```
 
+6、在 URL 中使用参数
 
-# 06 | 开发文档
+```yaml
+endpoint: "http://localhost:5236/users/{{.Args.email}}/preferences"
+```
 
+7、安全获取嵌套字段（safeGet/safeGetOr）
 
+当嵌套对象中的某一层为 `null`（或不存在）时，直接访问会在模板渲染阶段报错。
 
-# 07 | API 文档
+为了解决这个问题，新增了两个函数：`safeGet` 和 `safeGetOr`。
 
+- `safeGet <path> <root>`：安全读取嵌套字段；若任意中间层为 `nil`/不存在，则返回空值（不会报错）。
+- `safeGetOr <path> <root> <default>`：在 `safeGet` 的基础上提供默认值；当取值失败时返回 `<default>`。
 
+示例数据（正常情况）：
 
-# 08 | 端点示例
+```json
+{
+  "id": "28050608-7f39-42cf-be06-4982135dada9",
+  "username": "2",
+  "email": "1",
+  "createdAt": "2025-09-12T11:43:16.086506+08:00",
+  "preferences": {
+    "theme": "light"
+  }
+}
+```
 
+当 `preferences` 为 `null` 时：
 
+```json
+{
+  "id": "28050608-7f39-42cf-be06-4982135dada9",
+  "username": "2",
+  "email": "1",
+  "createdAt": "2025-09-12T11:43:16.086506+08:00",
+  "preferences": null
+}
+```
+
+这时：
+
+```yaml
+# 使用 safeGet：不会报错，渲染为空值（显示为 <no value>）
+responseBody: |-
+  {
+    "id": "{{.Response.Data.id}}",
+    "username": "{{.Response.Data.username}}",
+    "email": "{{.Response.Data.email}}",
+    "createdAt": "{{.Response.Data.createdAt}}",
+    "theme": "{{ safeGet "Response.Data.preferences.theme" . }}"
+  }
+
+# 使用 safeGetOr：提供默认值
+responseBody: |-
+  {
+    "id": "{{.Response.Data.id}}",
+    "username": "{{.Response.Data.username}}",
+    "email": "{{.Response.Data.email}}",
+    "createdAt": "{{.Response.Data.createdAt}}",
+    "theme": "{{ safeGetOr "Response.Data.preferences.theme" . "light" }}"
+  }
+```
+
+# 04 | 客户端使用
+
+## 4.1 Cursor 配置指南
+
+**配置步骤**
+
+1、创建配置目录
+
+```
+mkdir -p .cursor
+touch .cursor/mcp.json
+```
+
+2、配置 MCP Server
+
+在 `.cursor/mcp.json` 中添加以下配置，这里我们直接用自己的模拟用户服务来试：
+
+```json
+{
+  "mcpServers": {
+    "user": {
+      "url": "http://localhost:5235/gateway/user/sse"
+    }
+  }
+}
+```
+
+3、启用 MCP Server
+
+- 打开 Cursor 设置
+- 在 **MCP** 栏里启用这个 MCP Server
+- 启用之后你会看到它变成一个小绿点
+- 同时还会列出可用的 Tools
+
+**使用示例**
+
+```
+帮我注册一个用户 Leo ifuryst@gmail.com
+```
+
+```
+帮我查询一下用户ifuryst@gmail.com，如果没查到帮我注册一下，用户名是Leo
+```
 

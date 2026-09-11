@@ -1,8 +1,529 @@
-> 参考资料：https://java.agentscope.io/v2/zh/docs/index.html
+> 参考资料：
+>
+> - https://java.agentscope.io/v1/zh/docs/quickstart/installation.html
+> - https://java.agentscope.io/v2/zh/docs/index.html
+
+# ==V1==
 
 # 01 | 快速开始
 
-`ReActAgent` 只有”请求-推理-工具-回复”一轮循环。harness 要回答的是另一组问题：下一轮怎么办、下一天怎么办、上下文爆了怎么办、状态丢了怎么办、任务太重怎么办。
+## 1.1 安装
+
+All-in-One（推荐）
+
+```xml
+<dependency>
+    <groupId>io.agentscope</groupId>
+    <artifactId>agentscope</artifactId>
+    <version>2.0.0</version>
+</dependency>
+```
+
+## 1.2 核心概念
+
+ **消息（Message）**
+
+解决的问题：智能体需要一种统一的数据结构来承载各种类型的信息——文本、图像、工具调用等。
+
+Message 是 AgentScope 最核心的数据结构，用于：
+
+- 在智能体之间交换信息
+- 在记忆中存储对话历史
+- 作为与 LLM API 交互的统一媒介
+
+**智能体（Agent）**
+
+解决的问题：需要一个统一的抽象来封装”接收消息 → 处理 → 返回响应”的逻辑。
+
+**工具（Tool）**
+
+解决的问题：LLM 本身只能生成文本，无法执行实际操作。工具让智能体能够查询数据库、调用 API、执行计算等。
+
+AgentScope 中的”工具”是带有 `@Tool` 注解的 Java 方法，支持：
+
+- 实例方法、静态方法、类方法
+- 同步或异步调用
+- 流式或非流式返回
+
+**记忆（Memory）**
+
+解决的问题：智能体需要记住对话历史，才能进行有上下文的对话。Memory 管理对话历史，`ReActAgent` 会自动：
+
+- 将用户消息加入记忆
+- 将工具调用和结果加入记忆
+- 将智能体响应加入记忆
+- 在推理时读取记忆作为上下文
+
+默认使用 `InMemoryMemory`（内存存储）
+
+**格式化器（Formatter）**
+
+解决的问题：不同的 LLM 提供商有不同的 API 格式，需要一个适配层来屏蔽差异。
+
+Formatter 负责将 AgentScope 的消息转换为特定 LLM API 所需的格式。
+
+**钩子（Hook）**
+
+解决的问题：需要在智能体执行的各个阶段插入自定义逻辑，如日志、监控、消息修改等。
+
+**状态管理与会话**
+
+解决的问题：智能体的对话历史、配置等状态需要能够保存和恢复，以支持会话持久化。
+
+**响应式编程**
+
+解决的问题：LLM 调用和工具执行通常涉及 I/O 操作，同步阻塞会浪费资源。
+
+# 02 | 功能指南
+
+## 2.1 工具系统
+
+工具系统让智能体能够执行 API 调用、数据库查询、文件操作等外部操作。
+
+定义工具：
+
+```java
+public class WeatherService {
+    @Tool(description = "获取指定城市的天气")
+    public String getWeather(
+            @ToolParam(name = "city", description = "城市名称") String city) {
+        return city + " 的天气：晴天，25°C";
+    }
+}
+```
+
+## 2.2 MCP
+
+AgentScope Java 提供对 MCP (Model Context Protocol) 的完整支持，使智能体能够连接到外部工具服务器并使用 MCP 生态系统中的工具。
+
+**什么是 MCP？**
+
+MCP 是用于将 AI 应用程序连接到外部数据源和工具的标准协议。它支持：
+
+- 统一的工具接口：通过单个协议访问各种工具
+- 外部工具服务器：连接到专门的服务（文件系统、git、数据库等）
+- 生态系统集成：使用不断增长的 MCP 生态系统中的工具
+- 灵活的传输：支持 StdIO、SSE 和 HTTP 传输
+
+**快速开始**
+
+1、连接到 MCP 服务器
+
+```java
+// StdIO 传输 - 连接到本地 MCP 服务器
+McpClientWrapper mcpClient = McpClientBuilder.create("filesystem-mcp")
+        .stdioTransport("npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp")
+        .buildAsync()
+        .block();
+```
+
+2、注册 MCP 工具
+
+```java
+Toolkit toolkit = new Toolkit();
+// 注册 MCP 服务器的所有工具
+toolkit.registerMcpClient(mcpClient).block();
+```
+
+3、在智能体中配置 MCP
+
+```java
+ReActAgent agent = ReActAgent.builder()
+        .name("Assistant")
+        .model(model)
+        .toolkit(toolkit)  // MCP 工具现已可用
+        .memory(new InMemoryMemory())
+        .build();
+```
+
+**Higress AI Agteway 集成**
+
+> https://higress.ai/
+
+AgentScope 提供了 Higress AI Gateway 扩展，支持通过 Higress 网关统一访问 MCP 工具，并利用语义检索能力自动选择最合适的工具。
+
+基本使用：
+
+```java
+// 1. 创建 Higress MCP 客户端
+HigressMcpClientWrapper higressClient = HigressMcpClientBuilder
+        .create("higress")
+        .streamableHttpEndpoint("your higress mcp server endpoint")
+        .buildAsync()
+        .block();
+// 2. 注册到 HigressToolkit
+HigressToolkit toolkit = new HigressToolkit();
+toolkit.registerMcpClient(higressClient).block();
+```
+
+语义工具搜索：
+
+```java
+// 启用工具搜索，返回最相关的 5 个工具
+HigressMcpClientWrapper higressClient = HigressMcpClientBuilder
+        .create("higress")
+        .streamableHttpEndpoint("http://your-higress-gateway/mcp-servers/union-tools-search")
+        .toolSearch("查询天气和地图信息", 5)  // query 和 topK
+        .buildAsync()
+        .block();
+```
+
+## 2.3 Agent as Tool
+
+Agent as Tool 允许将一个智能体注册为工具，供其他智能体调用。这种模式适用于构建层级式或协作式的多智能体系统：
+
+- 专家分工：主智能体根据任务类型调用不同的专家智能体
+- 任务委托：将复杂子任务委托给专门的智能体处理
+- 多轮对话：子智能体可以维护对话状态，支持连续交互
+
+**快速开始**
+
+```java
+// 创建模型
+DashScopeChatModel model = DashScopeChatModel.builder()
+        .apiKey(System.getenv("DASHSCOPE_API_KEY"))
+        .modelName("qwen-plus")
+        .build();
+
+// 创建子智能体的 Provider（工厂）
+// 注意：必须使用 lambda 表达式，确保每次调用创建新实例
+Toolkit toolkit = new Toolkit();
+toolkit.registration()
+        .subAgent(() -> ReActAgent.builder()
+                .name("Expert")
+                .sysPrompt("你是一个领域专家，负责回答专业问题。")
+                .model(model)
+                .build())
+        .apply();
+
+// 创建主智能体，配置工具
+ReActAgent mainAgent = ReActAgent.builder()
+        .name("Coordinator")
+        .sysPrompt("你是一个协调员。当遇到专业问题时，调用 call_expert 工具咨询专家。")
+        .model(model)
+        .toolkit(toolkit)
+        .build();
+
+// 主智能体会在需要时自动调用专家智能体
+Msg response = mainAgent.call(userMsg).block();
+```
+
+## 2.4 Agent Skill
+
+Agent Skill 是扩展智能体能力的模块化技能包。每个 Skill 包含指令、元数据和可选资源(如脚本、参考文档、示例等)，智能体在执行相关任务时会自动使用这些资源。
+
+**工作流程** 
+
+用户提问 → AI 识别相关 Skill → 调用 `load_skill_through_path` 工具加载内容并激活绑定的 Tool → 按需访问资源 → 完成任务
+
+**Skill 结构**
+
+```
+skill-name/
+├── SKILL.md          # 必需: 入口文件,包含 YAML frontmatter 和指令
+├── references/       # 可选: 详细参考文档
+│   ├── api-doc.md
+│   └── best-practices.md
+├── examples/         # 可选: 工作示例
+│   └── example1.java
+└── scripts/          # 可选: 可执行脚本
+    └── process.py
+```
+
+**SKILL.md 格式规范**
+
+```markdown
+---
+name: skill-name                    # 必需: 技能名称(小写字母、数字、中划线)
+description: This skill should be used when...  # 必需: 触发描述,说明何时使用
+homepage: https://example.com/docs  # 可选: 额外 metadata,会暴露到智能体提示词中
+metadata:
+  clawdbot:
+    requires:
+      env:
+        - API_KEY
+---
+
+# 技能名称
+
+## 功能概述
+[详细说明该技能的功能]
+
+## 使用方法
+[使用步骤和最佳实践]
+
+## 可用资源
+- references/api-doc.md: API 参考文档
+- scripts/process.py: 数据处理脚本
+```
+
+Metadata 说明：
+
+- YAML frontmatter 中除 `name`、`description` 外的字段都会作为 Skill metadata 保留，不再局限于固定字段
+- 支持嵌套 `Map/List`
+- 非法 frontmatter 或超过解析器限制的 frontmatter 会被忽略，并按空 metadata 处理
+
+**创建 Skill**
+
+方式一：使用 Builder
+
+```java
+AgentSkill skill = AgentSkill.builder()
+    .name("data_analysis")
+    .description("Use this skill when analyzing data, calculating statistics, or generating reports")
+    .skillContent("# Data Analysis\n...")
+    .addResource("references/api-doc.md", "# API Reference\n...")
+    .addResource("references/best-practices.md", "# Best Practices\n...")
+    .addResource("examples/example1.java", "public class Example1 {\n...\n}")
+    .addResource("scripts/process.py", "def process(data): ...\n")
+    .build();
+```
+
+方式二：从 Markdown 创建
+
+```java
+String skillMd = """
+---
+name: data_analysis
+description: Use this skill when analyzing data, calculating statistics, or generating reports
+---
+# 技能名称
+Content...
+""";
+
+Map<String, String> resources = Map.of(
+    "references/formulas.md", "# 常用公式\n...",
+    "examples/sample.csv", "name,value\nA,100\nB,200"
+);
+
+AgentSkill skill = SkillUtil.createFrom(skillMd, resources);
+```
+
+方式三：直接构造
+
+```java
+AgentSkill skill = new AgentSkill(
+    "data_analysis",                    // name
+    "Use when analyzing data...",       // description
+    "# Data Analysis\n...",             // skillContent
+    resources                            // resources (可为 null)
+);
+```
+
+**高级功能**
+
+- 功能 1: Tool 的渐进式披露
+
+将 Tool 与 Skill 绑定，仅在 Skill 被 LLM 使用时才传递相关 Tool。
+
+示例代码：
+
+```java
+// toolkit
+Toolkit toolkit = new Toolkit();
+AgentTool loadDataTool = new AgentTool(...);
+
+// skill
+AgentSkill dataSkill = AgentSkill.builder()
+    .name("data_analysis")
+    .description("Comprehensive data analysis capabilities")
+    .skillContent("# Data Analysis\n...")
+    .build();
+
+SkillBox skillBox = new SkillBox(toolkit);
+skillBox.registration()
+    .skill(dataSkill)
+    .tool(loadDataTool)
+    .apply();
+
+// agent
+ReActAgent agent = ReActAgent.builder()
+    .name("Assistant")
+    .model(model)
+    .toolkit(toolkit)
+    .skillBox(skillBox)
+    .build();
+```
+
+- 功能 2: Skill 持久化存储
+
+方式一：文件系统存储
+
+```java
+AgentSkillRepository repo = new FileSystemSkillRepository(Path.of("./skills"));
+repo.save(List.of(skill), false);
+AgentSkill loaded = repo.getSkill("data_analysis");
+```
+
+方式二：MySQL数据库存储
+
+
+```java
+// 使用简单构造函数（使用默认数据库/表名）
+DataSource dataSource = createDataSource();
+MysqlSkillRepository repo = new MysqlSkillRepository(dataSource, true, true);
+
+// 使用Builder进行自定义配置
+MysqlSkillRepository repo = MysqlSkillRepository.builder(dataSource)
+        .databaseName("my_database")
+        .skillsTableName("my_skills")
+        .resourcesTableName("my_resources")
+        .createIfNotExist(true)
+        .writeable(true)
+        .build();
+
+repo.save(List.of(skill), false);
+AgentSkill loaded = repo.getSkill("data_analysis");
+```
+
+方式三：Git仓库 (只读)
+
+```java
+AgentSkillRepository repo = new GitSkillRepository(
+    "https://github.com/your-org/your-skills-repo.git");
+AgentSkill skill = repo.getSkill("data-analysis");
+List<AgentSkill> allSkills = repo.getAllSkills();
+```
+
+更新机制：默认每次读取都会做轻量化的远端引用检查，仅当远端 HEAD 变化时才会 pull。
+
+```java
+//可以关闭自动同步，改为手动调用 `sync()` 刷新
+GitSkillRepository manualRepo = new GitSkillRepository(
+    "https://github.com/your-org/your-skills-repo.git", false);
+manualRepo.sync();
+```
+
+方式四：Classpath 仓库 (只读)
+
+```java
+try (ClasspathSkillRepository repository = new ClasspathSkillRepository("skills")) {
+    AgentSkill skill = repository.getSkill("data-analysis");
+    List<AgentSkill> allSkills = repository.getAllSkills();
+} catch //...
+```
+
+方式五：Nacos 仓库 (只读)
+
+```java
+// 使用已构建的 AiService 创建 Nacos 技能仓库
+try (NacosSkillRepository repository = new NacosSkillRepository(aiService, "namespace")) {
+    AgentSkill skill = repository.getSkill("data-analysis");
+    boolean exists = repository.skillExists("data-analysis");
+} catch //...
+```
+
+## 2.5 RAG
+
+
+
+## 2.9 Human-in-the-Loop
+
+Human-in-the-Loop 让你可以在智能体执行过程中插入人工审核环节。当智能体准备调用工具时，你可以先暂停让用户确认，再决定是否继续。
+
+**两个暂停时机**
+
+智能体的执行分为”推理”和”行动”两个阶段，你可以选择在不同时机暂停：
+
+- 推理后暂停：模型决定要调用哪些工具后，在实际执行前暂停。此时你可以看到工具名称和参数，让用户决定是否允许执行。
+- 行动后暂停：工具执行完毕后，在进入下一轮推理前暂停。此时你可以看到执行结果，让用户决定是否继续。
+
+**典型场景：敏感操作确认**
+
+以下示例展示如何在执行删除文件、发送邮件等敏感操作前，先让用户确认：
+
+```java
+// 1. 创建确认 Hook
+Hook confirmationHook = new Hook() {
+    private static final List<String> SENSITIVE_TOOLS = List.of("delete_file", "send_email");
+
+    @Override
+    public <T extends HookEvent> Mono<T> onEvent(T event) {
+        if (event instanceof PostReasoningEvent e) {
+            Msg reasoningMsg = e.getReasoningMessage();
+            List<ToolUseBlock> toolCalls = reasoningMsg.getContentBlocks(ToolUseBlock.class);
+
+            // 如果包含敏感工具，暂停等待确认
+            boolean hasSensitive = toolCalls.stream()
+                .anyMatch(t -> SENSITIVE_TOOLS.contains(t.getName()));
+
+            if (hasSensitive) {
+                //PostReasoningEvent.stopAgent() — 推理后暂停
+                //PostActingEvent.stopAgent() — 行动后暂停
+                e.stopAgent();
+            }
+        }
+        return Mono.just(event);
+    }
+};
+
+// 2. 创建智能体
+ReActAgent agent = ReActAgent.builder()
+    .name("Assistant")
+    .model(model)
+    .toolkit(toolkit)
+    .hook(confirmationHook)
+    .build();
+```
+
+**处理暂停和恢复**
+
+当智能体暂停时，返回的消息会包含待执行的工具信息。你需要展示给用户，并根据用户选择决定下一步：
+
+```java
+Msg response = agent.call(userMsg).block();
+
+// 检查是否有待确认的工具调用
+while (response.hasContentBlocks(ToolUseBlock.class)) {
+    // 展示待执行的工具
+    List<ToolUseBlock> pending = response.getContentBlocks(ToolUseBlock.class);
+    for (ToolUseBlock tool : pending) {
+        System.out.println("工具: " + tool.getName());
+        System.out.println("参数: " + tool.getInput());
+    }
+
+    //agent.call() — 继续执行待处理的工具
+    //agent.call(toolResultMsg) — 提供自定义的工具结果后继续
+    if (userConfirms()) {
+        // 用户确认，继续执行
+        response = agent.call().block();
+    } else {
+        // 用户拒绝，返回取消信息
+        Msg cancelResult = Msg.builder()
+            .role(MsgRole.TOOL)
+            .content(pending.stream()
+                .map(t -> ToolResultBlock.of(t.getId(), t.getName(),
+                    TextBlock.builder().text("操作已取消").build()))
+                .toArray(ToolResultBlock[]::new))
+            .build();
+        response = agent.call(cancelResult).block();
+    }
+}
+
+// 最终响应
+//response.getGenerateReason() 返回 REASONING_STOP_REQUESTED 或 ACTING_STOP_REQUESTED
+System.out.println(response.getTextContent());
+```
+
+## 2.17 AG-UI 协议
+
+AG-UI 是一个前后端通信协议，用于将智能体暴露给 Web 前端。通过 AG-UI，你可以快速将 AgentScope 智能体接入支持该协议的前端框架。
+
+> 示例项目：https://github.com/agentscope-ai/agentscope-java/tree/main/agentscope-examples/agui
+
+# 03 | 多智能体
+
+
+
+# 04 | HARNESS
+
+
+
+# ==V2==
+
+# 01 | 快速开始
+
+`ReActAgent` 只有”请求-推理-工具-回复”一轮循环。harness 要回答的是另一组问题：下一轮怎么办？下一天怎么办？上下文爆了怎么办？状态丢了怎么办？任务太重怎么办？
 
 引入依赖：
 
@@ -1237,7 +1758,31 @@ HarnessAgent agent = HarnessAgent.builder()
 
 **模式 2：沙箱（`SandboxFilesystemSpec` 系列）**
 
-适合”代码会执行不可信操作、或要隔离生产环境”。所有文件操作和 shell 命令都发到沙箱里执行，宿主完全不受影响。
+> 见：3.6 沙箱
+
+**模式 3：本机 + shell（默认）**
+
+什么都不写就是这个：工作区落到 `${cwd}/.agentscope/workspace/`
+
+示例场景：本地开发助手
+
+```java
+HarnessAgent devHelper = HarnessAgent.builder()
+    .name("dev-helper")
+    .model(model)
+    .workspace(Paths.get(".agentscope/workspace"))
+    .filesystem(new LocalFilesystemSpec()
+        .project(Paths.get("/Users/alice/my-project"))
+        .addRoot(Paths.get("/Users/alice/.config"))
+        .mode(LocalFsMode.ROOTED)
+        .inheritEnv(true)
+        .executeTimeoutSeconds(300))
+    .build();
+```
+
+## 3.6 沙箱
+
+适合“代码会执行不可信操作、或要隔离生产环境”。所有文件操作和 shell 命令都发到沙箱里执行，宿主完全不受影响。
 
 示例场景：编程助手（Docker + 本地快照）
 
@@ -1265,27 +1810,34 @@ agent.call(Msg.user("npm install && npm test"), rc).block();
 agent.call(Msg.user("npm run build"), rc).block();
 ```
 
-**模式 3：本机 + shell（默认）**
+**IsolationScope**
 
-什么都不写就是这个：工作区落到 `${cwd}/.agentscope/workspace/`
+| Scope          | 谁共享                                                       | 典型场景                              |
+| -------------- | ------------------------------------------------------------ | ------------------------------------- |
+| `USER`（默认） | 同 `userId` 的多个 session 共享；userId 缺失时自动降级为 `SESSION` | 多用户 SaaS，同一用户跨会话保持工作区 |
+| `SESSION`      | 每个 sessionId 独立                                          | 严格按对话隔离                        |
+| `AGENT`        | 这个 agent 的所有用户 / 会话共享                             | 公共工具型 agent、共享知识库          |
+| `GLOBAL`       | 一个 store 内全局共享                                        | 谨慎使用                              |
 
-示例场景：本地开发助手
+**快照**
 
-```java
-HarnessAgent devHelper = HarnessAgent.builder()
-    .name("dev-helper")
-    .model(model)
-    .workspace(Paths.get(".agentscope/workspace"))
-    .filesystem(new LocalFilesystemSpec()
-        .project(Paths.get("/Users/alice/my-project"))
-        .addRoot(Paths.get("/Users/alice/.config"))
-        .mode(LocalFsMode.ROOTED)
-        .inheritEnv(true)
-        .executeTimeoutSeconds(300))
-    .build();
-```
+沙箱在每次 `call()` 结束时把工作区状态打包成快照存起来；下次 `call()` 开始时按情况恢复：
 
-## 3.6 子 Agent
+- 容器还在 + 工作区还在 → 直接接着用（最快）
+- 容器没了 → 拿快照重新起一个，恢复工作区
+- 没快照 → 按 `WorkspaceSpec` 全量初始化（冷启动）
+
+快照存到哪里取决于你配的 `snapshotSpec`：
+
+| 选项                       | 适合                                  |
+| -------------------------- | ------------------------------------- |
+| `NoopSnapshotSpec`（默认） | 不持久化；容器没了就走冷启动          |
+| `LocalSnapshotSpec`        | 宿主本地文件（单机长期运行）          |
+| `OssSnapshotSpec`          | OSS / S3 兼容存储（多副本）           |
+| `RedisSnapshotSpec`        | Redis（低延迟、小工作区）             |
+| `JdbcSnapshotSpec`         | MySQL / JDBC BLOB（已有关系型数据库） |
+
+## 3.7 子 Agent
 
 让主 agent 把”可独立处理、上下文重、可并行”的任务委派出去，避免主线程膨胀。每个子 agent 都是一个临时实例（本地的 `HarnessAgent` 或远程 stub），跑自己的会话，结果通过工具返回给父 agent。
 
@@ -1312,7 +1864,7 @@ agent_spawn agent_id="reviewer" task="review 这次 PR 的所有改动"
 
 不需要做任何注册。
 
-## 3.7 技能
+## 3.8 技能
 
 一个 skill 就是一份写好的能力包：一个目录里放一份 `SKILL.md`（说明用途、给 agent 看的指令），可以再带一些参考文档、脚本或样例。写好后丢给 agent，它会在合适的时候自己用。
 
@@ -1359,7 +1911,7 @@ HarnessAgent agent = HarnessAgent.builder()
 
 当一个 skill 自带脚本（例如 `scripts/run-checks.sh`），agent 需要绝对路径才能通过 `execute_shell_command` 调用它。这个绝对路径就是 skill 条目里的 `<files-root>`。
 
-## 3.8 计划模式
+## 3.9 计划模式
 
 Plan Mode 让 agent 在动手前先”把意图想清楚 + 写下来”再执行。开启后 agent 进入一个只读阶段：
 
@@ -1371,7 +1923,7 @@ Plan Mode 让 agent 在动手前先”把意图想清楚 + 写下来”再执行
 
 ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202608041944309.png)
 
-## 3.9 Channel
+## 3.10 Channel
 
 **快速开始**
 
@@ -1496,20 +2048,4 @@ gw.start();   // 调用所有 channel 的 init() + start()
 // ...
 gw.stop();    // 调用所有 channel 的 stop()
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
