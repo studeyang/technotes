@@ -124,7 +124,103 @@ Agent 与 Agent 之间的交互，和人类之间的沟通有点类似。但问�
 
 ![img](https://static001.geekbang.org/resource/image/76/ec/7605de495fb9b5c87e7a008d510ca6ec.jpg?wh=2749x1657)
 
+# 协议综述篇 (2讲)
+
+# 01｜开箱即用：MCP是LLM开发范式的增强
+
+这节课，我们将用一个通过 MCP 协议调用外部工具的实战，来理解 MCP 协议的强大之处。
+
+我们不妨先来回顾一下这两三年来，也就是 MCP 出现之前，我们是如何使用大模型的。
+
+**从提示工程到 RAG**
+
+RAG 这种 LLM 应用开发范式背后的基本思想，就是通过将 LLM 与外部数据源相结合来提高其准确性和相关性。
+
+1. 检索：首先通过向量数据库或其他检索系统，找出与用户查询相关的信息；
+2. 增强：将检索到的信息作为上下文提供给大模型；
+3. 生成：大模型基于这些额外信息生成回答。
+
+![img](https://static001.geekbang.org/resource/image/f4/53/f4347e68188a8834965932fd2f602a53.jpg)
+
+举例来说，我们需要编写 SQL 查询来检索过去 10 天内最畅销的产品。由于 LLM 不知道表模式或列名，因此直接询问 LLM 可能会导致无法使用的 SQL 查询。为了改进这一点，可以通过 RAG 来获取模式和列，以便 LLM 可以更准确地生成查询。
+
+**从 RAG 到 Agent 和工具调用**
+
+RAG 解决的是让 LLM 使用内部知识，同时减少幻觉的问题，但是它并没有增强大模型的行动能力。
+
+于是 Agent 模式应运而生。Agent 本质上是赋予了大模型使用工具并采取行动的开发范式。它的工作流程包括：
+
+1. 规划：大模型理解用户需求，规划解决方案。
+2. 工具选择：决定使用哪些工具来完成任务。
+3. 工具调用：调用选定的工具并处理返回结果。
+4. 反思与调整：评估进展，必要时调整计划。
+5. 输出结果：向用户呈现最终结果。
+
+![img](https://static001.geekbang.org/resource/image/74/75/74795f1839ca9df24bd35a596007ef75.jpg?wh=3536x2172)
+
+**大模型应用开发的两个范式**
+
+以上所说的 RAG 和 Agent，就是大模型应用开发的目前最常用，也最通用的两个范式。
+
+![img](https://static001.geekbang.org/resource/image/a3/85/a3dyyc6b092bcef2yy139623c5382a85.png?wh=1084x496)
+
+**MCP 增强了 RAG 和 Agent**
+
+对于 RAG 来说，MCP 通过定义统一的 SessionMessage 协议和工具发现机制，使 RAG 能够无缝接入多源数据检索，只需一次集成即可动态检索并注入上下文，大幅提高了检索增强生成的准确性和可维护性。
+
+同时，MCP 为 Agent 提供了标准化的工具调用接口和结果回传格式，让大模型可以自主选择、分步调度各类工具执行复杂任务，无需手动注册或编码集成。这将显著提升 Agent 应用的开发效率和扩展能力。
+
+**MCP 实战：Cursor（或 Copilot）+ DuckDB**
+
+下面，我们正式开始一次通过 MCP 进行工具调用的实战。这个实战案例中，我要在我的代码编辑器中用一个叫做 DuckDB 的数据分析工具来帮我自动分析我的图书销售情况。
+
+> 如果你也像我一样，对 [MotherDuck](https://motherduck.com/docs/getting-started/) 完全不了解。那么正合适，MCP 简单到什么程度呢？你在完全不懂的情况下，也可以快速展开对该服务的使用。 所有细节都封装在 MCP 协议内部，我们只要知道它大概可以做数据分析就可以开始用了。
+
+把下面这段配置给复制并粘贴到你的 mcp.json 文件中。
+
+```json
+{
+  "mcpServers": {
+    "mcp-server-motherduck": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-motherduck",
+        "--db-path",
+        "md:",
+        "--motherduck-token",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRvaHVhbmdqaWFAZ21haWwuY29tIiwic2Vzc2lvbiI6InRvaHVhbmdqaWEuZ21haWwuY29tIiwicGF0IjoiLUFvRmlRcE9xREZNb05sVFdwZzJha28yMDNnc0tkM3VyMXhBeHRKS3phZyIsInVzZXJJZCI6ImU0ZmUwZTYxLTgxMDEtNDdlZC05OGNhLTJmNGQ2MjZkYTUxYyIsImlzcyI6Im1kX3BhdCIsInJlYWRPbmx5IjpmYWxzZSwidG9rZW5UeXBlIjoicmVhZF93cml0ZSIsImlhdCI6MTc0Nzc0MTUxOX0.kmAvQ2AllpYo9UdotsqaysLHfe_yU51EeOpXYd85bkc"
+      ]
+    }
+  }
+}
+
+```
+
+接下来，我们利用 Cursor 这个 MCP Client 来调用 Mother Duck 的工具服务了！我在 Cursor 的对话界面中输入下面的话：
+
+```
+请调用mother duck工具帮我做数据分析
+```
+
+![img](https://static001.geekbang.org/resource/image/8f/2d/8f0ec49f4f1fcccf7a455fac9d89162d.png?wh=1237x302)
+
+Cursor 回答我说当然可以，但是你需要提交一个数据表。在 MotherDuck 网页版进行了几个简单操作，就把我的数据文件上载到了云端数据库。
+
+![img](https://static001.geekbang.org/resource/image/56/94/5602b35ac30f717a2cf9c9e3d58d6c94.png?wh=600x1069)
 
 
 
+
+
+
+
+
+
+# 快速实战篇 (3讲)
+
+
+
+
+
+# MCP详解篇 (6讲)
 
