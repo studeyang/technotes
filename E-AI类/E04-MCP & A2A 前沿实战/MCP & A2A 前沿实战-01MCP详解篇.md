@@ -208,11 +208,153 @@ Cursor 回答我说当然可以，但是你需要提交一个数据表。在 Mot
 
 ![img](https://static001.geekbang.org/resource/image/56/94/5602b35ac30f717a2cf9c9e3d58d6c94.png?wh=600x1069)
 
+# 02｜来而有往：A2A 协议是 Agent 之间的桥梁
+
+在大规模部署自主 AI Agent 的时代，不同供应商和框架下的 Agent 往往各自为政，难以互通协作。在多 Agent 协作的场景下，我们需要一种全新的协议来实现 Agent 之间的无缝对话。这就是 Google 在 2025年4月 发布的 Agent-to-Agent 协议（简称 A2A）。
+
+**A2A和MCP是互补而非互斥关系**
+
+A2A 与 MCP 各有专长，再加上 LLM，它们共同构成了一个完整的智能代理生态系统。正如下图所示，两者的关系可以这样理解：
+
+- LLM：是 Agent 毫无疑问的“大脑”，负责处理信息，推理，做决策。
+- MCP：负责模型与工具/资源的连接，是 Agent 的“手”，让 Agent 能够获取信息和执行操作。
+- A2A：负责 Agent 之间的通信，是 Agent 的“嘴”，让 Agent 能够相互交流、协作完成任务。
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/73d76434f9f324846aed5c35449f746c.png)
+
+“Local Agents”（本地智能体）是在主智能体生态系统内工作的较小的子智能体。
+
+**A2A的5大核心设计原则**
+
+A2A 协议设计有5个核心设计原则。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/192367eb31ce092fc53e8d1552476d1e.jpg)
+
+第一是拥抱 Agent 能力：Agent 无需共享内部思考、计划或工具，因此 Agent 相互之间成为黑盒，无需向对方暴露任何不想暴露的隐私。
+
+第二是基于现有标准：在 HTTP、Server-Sent Events、JSON-RPC 等成熟技术之上构建，确保与现有 IT 架构无缝集成。
+
+第三是企业级安全：A2A 内置与 OpenAPI 同级别的认证与授权机制，满足企业级安全与合规需求。
+
+第四是长任务支持：除了即时调用，还可管理需人机环节介入、耗时数小时甚至数天的深度研究任务，并实时反馈状态与结果。
+
+第五是多模态无差别：不仅限于文本，还原生支持音频、视频、富表单、嵌入式 iframe 等多种交互形式。
+
+**A2A协议的角色**
+
+我们接下来来看一下协议中定义的三个关键角色，看看它们如何各司其职、协同配合，共同支撑多 Agent 生态的运行。
+
+如下图所示，A2A协议定义了三个角色。
+
+1. 用户（User）：最终用户（人类或服务），使用Agent系统完成任务。
+
+2. 客户端（Client）：代表用户向远程Agent请求行动的实体。
+
+3. 远程Agent（Remote Agent）：作为A2A服务器的“黑盒”Agent。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/79a01b084bfda6bdab450f87bd922ac0.png)
+
+**A2A协议的核心对象**
+
+A2A 协议设计了一套完整的对象体系，包括 Agent Card、Task、Artifact 和Message。它们用于实现不同 Agent 之间的高效协作，这些核心对象相互配合，共同构成了 A2A 的通信框架。
+
+1、Agent Card（Agent名片）
+
+每个支持 A2A 的远程 Agent 需要发布一个 JSON 格式的 “Agent Card”，描述该 Agent 的能力和认证机制。Client 可以通过这些信息选择最适合的 Agent 来完成任务。
+
+我们来看看一个典型的 Agent Card 长什么样：
+
+```json
+{
+  "name": "Google Maps Agent",
+  "description": "Plan routes, remember places, and generate directions",
+  "url": "https://maps-agent.google.com",
+  "provider": {
+    "organization": "Google",
+    "url": "https://google.com"
+  },
+  "version": "1.0.0",
+  "authentication": {
+    "schemes": "OAuth2"
+  },
+  "defaultInputModes": ["text/plain"],
+  "defaultOutputModes": ["text/plain", "application/html"],
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false
+  },
+  "skills": [
+    {
+      "id": "route-planner",
+      "name": "Route planning",
+      "description": "Helps plan routing between two locations",
+      "tags": ["maps", "routing", "navigation"],
+      "examples": [
+        "plan my route from Sunnyvale to Mountain View",
+        "what's the commute time from Sunnyvale to San Francisco at 9AM"
+      ],
+      "outputModes": ["application/html", "video/mp4"]
+    }
+  ]
+}
+
+```
+
+2、Task（任务）
+
+Task 是 Client 和 Remote Agent 之间协作的核心概念。一个 Task 代表一个需要完成的任务，包含状态、历史记录和结果。
+
+Task 的具体状态列表如下：
+
+- submitted（已提交）
+
+- working（处理中）
+
+- input-required（需要额外输入）
+
+- completed（已完成）
+
+- canceled（已取消）
+
+- failed（失败）
+
+- unknown（未知）
+
+3、Artifact（成果）
+
+Artifact 是 Remote Agent 生成的任务结果。Artifact 可以有多个部分（parts），可以是文本、图像等。
+
+4、Message（消息）
+
+Message 用于 Client 和 Remote Agent 之间的通信，可以包含指令、状态更新等内容。一个 Message 可以包含多个 parts，用于传递不同类型的内容。
+
+**A2A协议工作流程**
+
+A2A协议的典型工作流程如下：
+
+1. 能力发现：每个 Agent 通过一个 JSON 格式的 “Agent Card” 公布自己能执行的能力（如检索文档、调度会议等）。
+2. 任务管理：Agent 间围绕一个 “task” 对象展开协作。该对象有生命周期、状态更新和最终产物（artifact），支持即时完成与长跑任务两种模式。
+3. 消息协作：双方可互发消息，携带上下文、用户指令或中间产物；消息中包含若干 “parts”，每个 part 都指明内容类型，便于双方就 UI 呈现形式（如图片、表单、视频）进行协商。
+4. 状态同步：通过 SSE 等机制，Client Agent 与 Remote Agent 保持实时状态同步，确保用户看到最新的进度和结果。
+
+以“招聘候选人搜寻”这个应用场景为例：
+
+- 用户在统一界面下向自己的 Agent 发起“寻找 XX 岗位候选人”请求。
+
+- Client Agent 根据岗位需求调用简历检索 Agent、技能筛选 Agent 等多个 Remote Agent。
+
+- 各 Agent 协同返回候选人名单（artifact），并由 Client Agent 汇总、展示。
+
+- 后续可继续调用“面试安排 Agent”“背景调查 Agent”，形成端到端招聘流程自动化。
 
 
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/aaecc9ee987f8b1840d5948d733f6434.jpg)
 
+**A2A的生态与未来**
 
+目前，Google Cloud 已联手 50 多家技术与服务伙伴（包括 Atlassian、Salesforce、MongoDB、Accenture、Deloitte 等），共建 A2A 生态。未来预计将在开源社区中逐步完善规范，并推出生产级实现，推动异构 Agent 在企业级场景中的深度互操作，助力跨系统、跨组织的智能协作大规模落地。
 
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/ecbcca6a677d0c99c07d8098a2352f50.png)
 
 
 
