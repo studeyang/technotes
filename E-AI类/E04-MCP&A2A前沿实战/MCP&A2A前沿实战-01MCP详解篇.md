@@ -356,13 +356,123 @@ A2A协议的典型工作流程如下：
 
 ![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/ecbcca6a677d0c99c07d8098a2352f50.png)
 
-
-
 # 快速实战篇 (3讲)
 
+# 03｜协议实战（上）：高德地图 + MiniMax语音开发私域旅游小助手
 
+**私域旅游小助手开发流程**
+
+1. 注册并配置高德地图 MCP 服务：获取城市与景点的推荐接口，实现地点信息检索。
+
+2. 注册并配置 Minimax 语音生成 MCP 服务：将文字转为语音，生成导览音频。
+
+3. 在 Cursor 中完成 MCP 服务的接入与调用配置：包括填写密钥、Model 兼容性设置、Agent 自动运行配置等。
+
+4. 编写 Prompt 驱动 Agent：自动获取西安各类景点介绍，并按类别分条整理。
+
+5. 调用 Minimax 生成语音导览：将生成的景点介绍文本自动转为语音文件。
+
+6. 生成并部署 HTML 页面：利用 Agent 将整理好的文本输出为一个静态网页，并部署到线上。
+
+**使用高德开放平台的地图MCP服务**
+
+1. 我们需要在 [这里](https://lbs.amap.com/) 登录高德开放平台，创建一个应用，并获取相应的key。
+2. 我们需要在 [这里](https://console.amap.com/dev/id/select) 注册自己为高德开放平台开发者。
+3. 获取高德服务密钥。
+4. 在Cursor中配置高德MCP。
+
+**使用MiniMax大模型的语音服务**
+
+1. 注册Minimax开放平台。[https://minimaxi.com](https://minimaxi.com) 是MiniMax境内的官网
+2. 登录MiniMax平台后进入 [账户管理](https://platform.minimaxi.com/user-center/basic-information/interface-key)，创建接口密钥。
+3. 在 [ModelScope](https://modelscope.cn/mcp/servers/@MiniMax-AI/MiniMax-MCP) 平台部署 Minimax sse。Minimax官方在 [ModelScope 平台](https://modelscope.cn/mcp/servers/@MiniMax-AI/MiniMax-MCP) 提供了在线部署服务。
+4. 在Cursor中配置Minimax MCP
+
+**在Cursor中使用MCP服务开发自己的应用**
+
+1. 选择对MCP兼容性好的模型。这里推荐Agent执行能力、对MCP反馈的整合能力都很强的模型：gemini-2.5-pro-exp-03-25。
+2. 允许自动流畅执行MCP工具调用
+
+3、获取城市景点的介绍
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122000916.png)
+
+4、按照类别整理景点介绍
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122001509.png)
+
+5、调用Minimax生成语音导览
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122002877.png)
+
+Agent会识别、嵌入成功调用MCP并正确返回的url，自动修改markdown文件。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122002177.png)
+
+6、网页制作和部署
+
+新建一个文件，叫 “prompt.md”，然后保存下面的内容。
+
+```markdown
+Markdown
+   #   页面提示词
+   ## 网页风格指南
+   你是一位国际顶尖的数字景区导览设计师和前端开发专家，擅长将传统景区介绍与现代网页设计完美融合，创造出令人身临其境的视觉体验。请设计高品质景区介绍手机h5网页，将景区信息以生动优雅的方式呈现，让用户在浏览前就能感受到景区魅力。
+   **可选设计风格：
+   **1. **文化复古风格**
+       适合历史文化类景区，使用仿古纸张纹理背景，搭配书法或篆刻风格的标题。色调以米黄、棕色等复古色系为主，点缀传统中国色。排版可参考古籍设计，正文使用简体宋体增强文化氛围。可加入水墨画元素作为分隔符或装饰。文案语调应庄重有文化底蕴，介绍中可穿插诗词或历史典故。
+   2. **现代简约风格**
+       采用极简设计理念，主色调限制在2-3种，确保视觉统一性。排版注重网格系统，所有元素严格对齐。字体选用无衬线体，增强现代感。景点信息使用卡片式设计，便于用户快速浏览。图标采用线性设计，保持风格一致性。动效应简洁克制，仅用于增强用户体验的关键环节。整体设计追求"少即是多"的理念，让内容成为主角。
+   **必要页面组件：**
+   1. **景区名称列表**：
+     1. 景区名称
+     2. 音频开始按钮：点击音频可以直接播放，播放时可以暂停，暂停的音频还可以继续播放
+   2. **景区介绍**：
+     1. 默认收缩，点击景区名称可弹出详细介绍
+   ## 技术规范
+   * 资源引用：
+     * Tailwind CSS:   `https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/tailwindcss/2.2.19/tailwind.min.css`
+     * Font Awesome:   `https://lf6-cdn-tos.bytecdntp.com/cdn/expire-100-M/font-awesome/6.0.0/css/all.min.css`
+     * 中文字体:   `https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap`
+     * Alpine.js:   `https://unpkg.com/alpinejs@3.10.5/dist/cdn.min.js`
+   * 音频处理：
+     * 使用HTML5   audio元素实现音频播放
+     * 实现自定义播放控制按钮
+     * 支持语音解说的暂停/继续功能，切换新音频直接打断正在播放的音频
+   ## 输出要求
+   * 提供一个完整的HTML文件，包含所有景区介绍内容
+   * 代码应当简洁高效，注释充分，易于维护
+   * 确保在不同尺寸的移动设备上都能良好展示
+   * 所有文字内容使用中文输出
+   * 确保文字的可读性，背景与文字有足够对比度
+```
+
+最后一步，准备好提示词和刚刚的景点介绍内容文件，交给Agent生成HTML页面。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122004917.png)
+
+**网页效果的呈现**
+
+下面，我们把这个页面上传到youware.com，进行部署和展示。
+
+你可以通过 [这个链接](https://www.youware.com/project/a87n5fcmtr) 来感受一下这个花费2个小时私人定制的旅游助理的效果。
+
+# 04
+
+# 05
 
 
 
 # MCP详解篇 (6讲)
 
+# 06
+
+# 07
+
+# 08
+
+# 09
+
+# 10
+
+# 11
