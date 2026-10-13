@@ -457,7 +457,28 @@ Markdown
 
 你可以通过 [这个链接](https://www.youware.com/project/a87n5fcmtr) 来感受一下这个花费2个小时私人定制的旅游助理的效果。
 
-# 04
+# 04｜协议实战（中）：从0到1，基于MCP快速搭建RAG“医疗健康“指北”
+
+我将带你开发一套基于 MCP + FAISS 的 RAG 框架，这个MCP服务将具备端到端的索引、检索和工具提供能力，是一个非常清晰的原型RAG系统。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610131556287.png)
+
+**整体思路**
+
+在我们这个 MCP 服务提供的 RAG 示例中，嵌入（Embedding）服务和检索（Retrieval）都以工具的形式通过 MCP 协议提供给 Client。
+
+整体设计思路如下图所示。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610131600089.png)
+
+其中，服务端（rag-server），将用 MCP 定义两个工具——index\_docs 和 retrieve\_docs，用于实现向量检索。
+
+- index\_docs 把新文档的向量添加到索引，并把文本保存在 \_docs 列表里；
+- retrieve\_docs 用查询向量在索引里做最近邻搜索，返回对应的文本片段。
+
+内存中用 FAISS 的 IndexFlatL2(1536) 存储向量索引，维度 1536 与 OpenAI 的嵌入模型 text-embedding-3-small 输出一致。通过 embed\_text 函数异步调用 OpenAI Embeddings API，批量生成文本向量并返回 float32 numpy 数组。
+
+客户端（rag-client） 将通过 StdioServerParameters 启动服务器进程（.venv/bin/python server.py），并用 MCP 的 stdio 通道建立双向通信。 
 
 # 05
 
