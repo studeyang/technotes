@@ -459,6 +459,8 @@ Markdown
 
 # 04｜协议实战（中）：从0到1，基于MCP快速搭建RAG“医疗健康“指北”
 
+> Demo 代码：https://github.com/huangjia2019/mcp-in-action
+
 我将带你开发一套基于 MCP + FAISS 的 RAG 框架，这个MCP服务将具备端到端的索引、检索和工具提供能力，是一个非常清晰的原型RAG系统。
 
 ![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610131556287.png)
@@ -480,7 +482,33 @@ Markdown
 
 客户端（rag-client） 将通过 StdioServerParameters 启动服务器进程（.venv/bin/python server.py），并用 MCP 的 stdio 通道建立双向通信。 
 
-# 05
+# 05｜协议实战（下）：通过 A2A，你的智能体不仅能对话还可以协作！
+
+> A2A Demo代码：https://github.com/huangjia2019/a2a-in-action
+
+上节课我们完成了快速搭建MCP RAG服务，这节课我们继续进行协议实战，感受一下A2A的协议用法。
+
+**A2A Demo的设计实现**
+
+从整体架构上看，一个A2A 系统由以下主要组件构成：
+
+- Agent Card: 代理的身份标识和能力声明。
+
+- Skill: 代理可执行的具体能力。
+
+- Task Manager: 处理任务流和状态管理。
+
+- Server: 提供HTTP接口让其他代理/客户端访问。
+
+在具体实现上：
+
+- 每个 Agent 启动时会生成自己的 AgentCard，内含名称、描述、服务 URL 以及所支持的能力和技能等关键信息；
+- 启动后，Agent 通过 A2A Server 将自己的 AgentCard 向注册中心登记；
+- Host 端则通过注册/发现机制（如调用 demo/ui/utils/agent\_card.py 中的 get\_agent\_card 接口）远程拉取所有 AgentCard，实现能力路由与展示，从而完成代理之间的能力发现与互操作。
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610141505259.jpg)
+
+
 
 
 

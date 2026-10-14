@@ -10,7 +10,7 @@ Spring AI 解决了 AI 集成的根本难题：`将企业数据和 API 与 AI �
 
 Spring AI 提供了以下功能：
 
-- 跨多家 AI 提供商的 Chat、文本转图像和嵌入模型的可移植 API 支持。支持同步和流式A PI 选项。还可访问特定于模型的功能。
+- 跨多家 AI 提供商的 Chat、文本转图像和嵌入模型的可移植 API 支持。支持同步和流式 API 选项。还可访问特定于模型的功能。
 
 - 支持所有主要的 AI 模型提供商，如 Anthropic、OpenAI、微软、亚马逊、谷歌和 Ollama。支持的模型类型包括：[对话补全](https://springdoc.cn/spring-ai/api/chatmodel.html)、[嵌入](https://springdoc.cn/spring-ai/api/embeddings.html)、[文生图](https://springdoc.cn/spring-ai/api/imageclient.html)、[音频转录](https://springdoc.cn/spring-ai/api/audio/transcriptions.html)、[文本转语音](https://springdoc.cn/spring-ai/api/audio/speech.html)、[内容审核](https://springdoc.cn/spring-ai/#api/moderation)。
 
@@ -176,7 +176,7 @@ Spring AI 默认自动配置单个 `ChatClient.Builder` Bean，但应用中可�
 
 所有场景均需通过设置属性 `spring.ai.chat.client.enabled=false` 来禁用 `ChatClient.Builder` 自动配置。该设置允许手动创建多个 `ChatClient` 实例。
 
-- 单一模型类型下的多ChatClient实例
+- 单一模型类型下的多 ChatClient 实例
 
 ```java
 // 以编程式创建 ChatClient实例
