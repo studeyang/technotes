@@ -763,7 +763,7 @@ skills:
 
 ## 输出格式
 
-​```markdown
+...markdown
 ## 影响分析报告
 
 ### 变更组件
@@ -787,7 +787,7 @@ skills:
 - [ ] 使用压测验证 SLA 余量
 - [ ] 通知下游团队 X：该接口发生变更
 - [ ] 为新增外部调用增加超时/熔断（timeout/circuit breaker）
-​```
+...
 
 ## 重要约束
 - 你是只读（READ-ONLY）。不要建议去运行任何修改操作。
@@ -925,11 +925,12 @@ You are a senior SRE (Site Reliability Engineer) specialized in log analysis and
 ## Analysis Approach
 
 ### Step 1: Quick Scan
-```bash
+...bash
 # Count errors by type
 grep -c "ERROR" *.log
 # Find unique error patterns
 grep "ERROR" *.log | cut -d']' -f2 | sort | uniq -c | sort -rn
+...
 
 ### Step 2: Timeline Analysis
 - When did issues start?
@@ -1098,7 +1099,7 @@ Focus ONLY on authentication-related concerns:
 
 ## Output Format
 
-```markdown
+...markdown
 ## Auth Module Analysis
 
 ### Overview
@@ -1107,7 +1108,6 @@ Focus ONLY on authentication-related concerns:
 ### Authentication Flow
 1. [Step 1]
 2. [Step 2]
-...
 
 ### Key Components
 | Component | File | Purpose |
@@ -1121,6 +1121,7 @@ Focus ONLY on authentication-related concerns:
 
 ### Security Notes
 - [Observations about security posture]
+...
 
 ## Guidelines
 - Stay within auth domain - don't analyze unrelated code
@@ -1229,7 +1230,7 @@ You are the FIRST step in the bug fix pipeline. Your job is to:
 
 ## Output Format
 
-```markdown
+...markdown
 ## Bug Location Report
 
 ### Symptoms
@@ -1256,6 +1257,7 @@ You are the FIRST step in the bug fix pipeline. Your job is to:
 - **Already excluded**: [搜索过但排除的位置及原因]
 - **Related files to check**: [可能受影响的其他文件]
 <!-- Handoff to Analyzer：为下一阶段准备信息 -->
+...
 
 ## Guidelines
 - Be thorough in searching - check multiple patterns
@@ -1311,7 +1313,7 @@ Your job is to:
 
 ## Output Format
 
-```markdown
+...markdown
 ## Bug Analysis Report
 
 ### Location Confirmed
@@ -1323,8 +1325,9 @@ Your job is to:
 [Clear explanation of WHY the bug occurs]
 
 ### Code Snippet
-```javascript
+...javascript
 // The problematic code
+...
 
 ### Bug Category
 - [ ] Logic Error
@@ -1346,6 +1349,7 @@ Your job is to:
 ### Handoff to Fixer
 **Recommended Approach**: [brief guidance]
 **Watch Out For**: [potential pitfalls]
+...
 
 ## Guidelines
 
@@ -1403,7 +1407,7 @@ Your job is to:
 
 ## Output Format
 
-```markdown
+...markdown
 ## Bug Fix Report
 
 ### Changes Made
@@ -1411,9 +1415,10 @@ Your job is to:
 **File**: [path]
 **Type**: Modified/Added/Removed
 
-```diff
+...diff
 - old code
 + new code
+...
 
 ### Fix Explanation
 [Why this fix works]
@@ -1424,6 +1429,7 @@ Your job is to:
 ### Rollback Plan
 [How to revert if needed]
 <!-- 考虑回滚方案 -->
+...
 
 ## Guidelines
 
@@ -1476,7 +1482,7 @@ Your job is to:
 
 ## Output Format
 
-```markdown
+...markdown
 ## Verification Report
 
 ### Test Results
@@ -1503,7 +1509,7 @@ Your job is to:
 
 ## Commands to Run
 
-```bash
+...bash
 # Check for syntax errors
 node --check [file]
 
@@ -1512,6 +1518,8 @@ npm test
 # or
 node tests/[test-file].js
 <!-- 运行测试验证修复 -->
+...
+...
 
 ## Guidelines
 

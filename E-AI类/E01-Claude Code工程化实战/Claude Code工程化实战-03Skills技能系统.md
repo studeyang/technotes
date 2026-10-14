@@ -19,7 +19,7 @@ Skills 解决的核心问题是，在有限的上下文窗口中，让 Agent 在
 | 用户显式触发 | 输入 `/skill-name`                          | `/review src/auth.ts`                                      |
 | 分层评审     | Claude 读取 description，语义匹配后自动加载 | 用户说"帮我审查这段代码"，Claude 激活 code-reviewing Skill |
 
-> 语义触发Skills的机制
+> 语义触发 Skills 的机制
 
 Claude 读取所有 Skills 的 description，通过语义理解判断当前对话是否匹配某个 Skill。当用户发送消息时，Claude 的处理流程如下图所示：
 
@@ -436,7 +436,7 @@ Target: $ARGUMENTS (or current git diff if not specified)
 
 ## Output Format
 
-```markdown
+...markdown
 ## Code Review
 
 ### Summary
@@ -459,6 +459,7 @@ Target: $ARGUMENTS (or current git diff if not specified)
 - [positive observation]
 
 <!-- 统一的反馈格式，便于团队理解 -->
+...
 
 ## Guidelines
 Be specific about locations (file:line if possible)
@@ -734,8 +735,10 @@ For specific formulas and calculations:
 - Profitability metrics → see `reference/profitability.md`
 
 To run calculations programmatically:
-```bash
+
+...bash
 python scripts/calculate_ratios.py <data_file>
+...
 
 ### Step 4: Generate Report
 Use the template in `templates/analysis_report.md` for structured output.
