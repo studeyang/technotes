@@ -510,14 +510,105 @@ Markdown
 
 # MCP详解篇 (6讲)
 
-# 06
+# 06｜底层架构（上）：MCP 协议层（Protocol layer）详解
+
+在传统的大模型应用中，模型本身只能被动地接收输入、产生输出，要让它调用外部工具或访问自定义的上下文，就需要在代码里逐条写好 API 调用、认证、错误处理的逻辑，既繁琐又难以维护。
+
+MCP（Model Context Protocol）的初衷，就是将这些“上下文管理”和“工具调用”能力抽象成一个标准化的通信协议，让大模型应用只需关注“我想用什么资源”，由专门的 MCP 服务端来真正执行调用、管理状态、返回结果。
+
+**MCP架构中的Host、Client和Server**
+
+在 MCP 架构中， “Host” 指的是最终承载大模型和用户界面的应用，比如桌面端的 Claude 客户端、IDE 插件或自研的聊天机器人后台。
+
+接入层面的 “Client” 正是这个 MCP 客户端，它把上层业务或大模型交互中产生的“请求”（例如“列出可用工具”“执行代码分析”）打包成符合 JSON-RPC 2.0 的消息，再通过底层传输通道发给 Server。
+
+而 MCP “Server” 则是真正提供上下文内容和工具执行能力的进程或服务。它在启动时会注册一系列接口（Resource 列表、工具调用、文件系统访问、外部 API 调用等），并监听来自 Client 的 JSON-RPC 消息。
+
+整个交互流程可以分为三个阶段。
+
+1. 握手初始化：Host 的 MCP Client 向 Server 发起 initialize 请求，双方交换协议版本与能力列表，并用 initialized 通知确认；
+2. 正常通信：Client/Server 可双向发起 Request–Response（同步调用）或单向 Notification（异步事件），大模型应用只需按需调用 Client 的接口；
+3. 优雅收尾：通信完成后，任意一端可调用 close() 或因底层通道断开而触发连接关闭。
+
+下面就请你跟随我的思路，一起来探讨协议层的核心实现——BaseSession、ClientSession 和 ServerSession 这三个基础类，看看它们如何携手将 JSON-RPC 2.0 打造成 MCP 的“通信引擎”。
+
+**通过BaseSession类实现底层协议层 (Protocol layer)**
+
+BaseSession 类承担了对所有 JSON-RPC 消息的统一管理与生命周期控制。它将“发送请求、等待响应”“发出单向通知”“接收并分发对端消息”这些通用逻辑全部封装，派生类（客户端或服务端的 Session）只需关注「收到请求／通知后如何处理」或「要发送哪些高层类型化消息」。
+
+BaseSession类的伪代码如下（这里的伪代码只是一个简单示意，完整代码可以参考mcp/shared/session.py或 [这里](https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/shared/session.py)）。
+
+```python
+class Session(BaseSession[RequestT, NotificationT, ResultT]):
+    async def send_request(
+        self,
+        request: RequestT,
+        result_type: type[Result]
+    ) -> Result:
+        """发送请求并等待响应。若响应包含错误，则抛出 McpError。"""
+        # 请求发送和响应处理逻辑
+
+    async def send_notification(
+        self,
+        notification: NotificationT
+    ) -> None:
+        """发送无需响应的单向通知。"""
+        # 通知发送逻辑
+
+    async def _received_request(
+        self,
+        responder: RequestResponder[ReceiveRequestT, ResultT]
+    ) -> None:
+        """处理对方发来的请求。"""
+        # 收到请求后的业务处理
+
+    async def _received_notification(
+        self,
+        notification: ReceiveNotificationT
+    ) -> None:
+        """处理对方发来的通知。"""
+        # 收到通知后的业务处理
+```
+
+**ClientSession，ServerSession类的上层实现**
+
+我们再来看 [client/session.py](https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/session.py) 和 [server/session.py](https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/server/session.py) 两个文件，是如何“填充”这一骨架，把 MCP 协议真正落地成可用的客户端与服务端逻辑的。
+
+- 客户端 (ClientSession) 如何“完成”协议设计
+
+在 ClientSession 中，初始化阶段通过构造函数将下游的读写流、超时设置以及各类回调（包括取样、列出根目录、日志和通用消息处理）注入会话实例。
+
+调用 initialize() 时，客户端首先向服务端发送一个 initialize 请求，并在收到 InitializeResult 后，再发出一条 InitializedNotification 通知，让握手完成。
+
+- 服务端 (ServerSession) 如何“完成”协议设计
+
+在 ServerSession 中，协议的握手逻辑被内嵌在 \_received\_request 和 \_received\_notification 两个钩子里：首次碰到来自客户端的 InitializeRequest，服务器会将请求参数保存到 self.\_client\_params，随即利用 responder.respond(…) 返回包含服务端能力集、版本号和说明文字的 InitializeResult。
+
+- 从“通用”到“可用”的核心流程
+
+
+
+
 
 # 07
 
+
+
+
+
 # 08
+
+
 
 # 09
 
+
+
 # 10
 
+
+
 # 11
+
+
+
