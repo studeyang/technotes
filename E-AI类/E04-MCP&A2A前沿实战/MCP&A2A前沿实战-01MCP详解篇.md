@@ -516,7 +516,7 @@ Markdown
 
 MCP（Model Context Protocol）的初衷，就是将这些“上下文管理”和“工具调用”能力抽象成一个标准化的通信协议，让大模型应用只需关注“我想用什么资源”，由专门的 MCP 服务端来真正执行调用、管理状态、返回结果。
 
-**MCP架构中的Host、Client和Server**
+**MCP 架构中的 Host、Client 和 Server**
 
 在 MCP 架构中， “Host” 指的是最终承载大模型和用户界面的应用，比如桌面端的 Claude 客户端、IDE 插件或自研的聊天机器人后台。
 
@@ -532,11 +532,11 @@ MCP（Model Context Protocol）的初衷，就是将这些“上下文管理”�
 
 下面就请你跟随我的思路，一起来探讨协议层的核心实现——BaseSession、ClientSession 和 ServerSession 这三个基础类，看看它们如何携手将 JSON-RPC 2.0 打造成 MCP 的“通信引擎”。
 
-**通过BaseSession类实现底层协议层 (Protocol layer)**
+**通过 BaseSession 类实现底层协议层 (Protocol layer)**
 
 BaseSession 类承担了对所有 JSON-RPC 消息的统一管理与生命周期控制。它将“发送请求、等待响应”“发出单向通知”“接收并分发对端消息”这些通用逻辑全部封装，派生类（客户端或服务端的 Session）只需关注「收到请求／通知后如何处理」或「要发送哪些高层类型化消息」。
 
-BaseSession类的伪代码如下（这里的伪代码只是一个简单示意，完整代码可以参考mcp/shared/session.py或 [这里](https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/shared/session.py)）。
+BaseSession 类的伪代码如下（这里的伪代码只是一个简单示意，完整代码可以参考mcp/shared/session.py或 [这里](https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/shared/session.py)）。
 
 ```python
 class Session(BaseSession[RequestT, NotificationT, ResultT]):
@@ -573,6 +573,8 @@ class Session(BaseSession[RequestT, NotificationT, ResultT]):
 **ClientSession，ServerSession类的上层实现**
 
 我们再来看 [client/session.py](https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/session.py) 和 [server/session.py](https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/server/session.py) 两个文件，是如何“填充”这一骨架，把 MCP 协议真正落地成可用的客户端与服务端逻辑的。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610201948414.png)
 
 - 客户端 (ClientSession) 如何“完成”协议设计
 
