@@ -508,10 +508,6 @@ Markdown
 
 ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610141505259.jpg)
 
-
-
-
-
 # MCP详解篇 (6讲)
 
 # 06

@@ -343,6 +343,13 @@ ReActAgent agent = ReActAgent.builder()
     .toolkit(toolkit)
     .skillBox(skillBox)
     .build();
+
+agent
+  |- toolkit
+  |- skillBox
+    |- toolkit
+    |- dataSkill
+    |- loadDataTool
 ```
 
 - 功能 2: Skill 持久化存储
@@ -415,7 +422,325 @@ try (NacosSkillRepository repository = new NacosSkillRepository(aiService, "name
 
 ## 2.5 RAG
 
+**概述**
 
+AgentScope 中的 RAG 模块由两个核心组件组成：
+
+- Reader（读取器）：负责读取和分块输入文档，将其转换为可处理的单元
+- Knowledge（知识库）：负责存储文档、生成嵌入向量以及检索相关信息
+
+AgentScope 支持两种 RAG 集成模式：
+
+| 模式         | 描述                                 | 优点                 | 缺点               |
+| :----------- | :----------------------------------- | :------------------- | :----------------- |
+| Generic 模式 | 在每个推理步骤之前自动检索和注入知识 | 简单，适用于任何 LLM | 即使不需要也会检索 |
+| Agentic 模式 | Agent 使用工具决定何时检索           | 灵活，只在需要时检索 | 需要强大的推理能力 |
+
+在 Generic 模式下，知识会自动检索并注入到用户的消息中：
+
+```java
+ReActAgent agent = ReActAgent.builder()
+    .name("助手")
+    .sysPrompt("你是一个可以访问知识库的有用助手。")
+    .model(chatModel)
+    .toolkit(new Toolkit())
+    // 启用 Generic RAG 模式
+    .knowledge(knowledge)
+    .ragMode(RAGMode.GENERIC)
+    .retrieveConfig(
+        RetrieveConfig.builder()
+            .limit(3)
+            .scoreThreshold(0.3)
+            .build())
+    .build();
+/*
+工作原理：
+1.用户发送查询
+2.知识库自动检索相关文档
+3.检索到的文档被添加到用户消息之前
+4.Agent 处理增强后的消息并响应
+*/
+```
+
+在 Agentic 模式下，Agent 拥有 `retrieve_knowledge` 工具并决定何时使用它：
+
+```java
+ReActAgent agent = ReActAgent.builder()
+    .name("智能体")
+    .sysPrompt("你是一个拥有知识检索工具的有用助手。" +
+               "需要信息时使用 retrieve_knowledge 工具。")
+    .model(chatModel)
+    .toolkit(new Toolkit())
+    // 启用 Agentic RAG 模式
+    .knowledge(knowledge)
+    .ragMode(RAGMode.AGENTIC)
+    .retrieveConfig(
+        RetrieveConfig.builder()
+            .limit(3)
+            .scoreThreshold(0.5)
+            .build())
+    .build();
+/*
+工作原理：
+1.用户发送查询
+2.Agent 推理并决定是否检索知识
+3.如果需要，Agent 调用 retrieve_knowledge(query="...")
+4.检索到的文档作为工具结果返回
+5.Agent 使用检索到的信息再次推理
+*/
+```
+
+**本地知识库**
+
+```java
+// 1. 创建知识库
+EmbeddingModel embeddingModel = DashScopeTextEmbedding.builder()
+    .apiKey(System.getenv("DASHSCOPE_API_KEY"))
+    .modelName("text-embedding-v3")
+    .dimensions(1024)
+    .build();
+
+Knowledge knowledge = SimpleKnowledge.builder()
+    .embeddingModel(embeddingModel)
+    .embeddingStore(InMemoryStore.builder().dimensions(1024).build())
+    .build();
+// ## 向量存储
+// 内存存储（开发测试）
+// InMemoryStore.builder().dimensions(1024).build();
+// Qdrant（生产环境）
+// QdrantStore.builder().location("localhost:6334").collectionName("my_collection").dimensions(1024).build();
+
+// 2. 添加文档
+// ## Reader 配置
+// 文本
+TextReader reader = new TextReader(512, SplitStrategy.PARAGRAPH, 50);
+// PDF
+// new PDFReader(512, SplitStrategy.PARAGRAPH, 50);
+// Word（支持图片和表格）
+// new WordReader(512, SplitStrategy.PARAGRAPH, 50, true, true, TableFormat.MARKDOWN);
+// 图像（需配合多模态嵌入模型）
+// new ImageReader(false);
+List<Document> docs = reader.read(ReaderInput.fromString("文本内容...")).block();
+knowledge.addDocuments(docs).block();
+
+// 3. 检索
+List<Document> results = knowledge.retrieve("查询内容",
+    RetrieveConfig.builder().limit(3).scoreThreshold(0.5).build()).block();
+```
+
+**云托管知识库**
+
+```java
+// 创建知识库
+BailianConfig config = BailianConfig.builder()
+    // === 连接配置（必填）===
+    .accessKeyId(System.getenv("ALIBABA_CLOUD_ACCESS_KEY_ID"))
+    .accessKeySecret(System.getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET"))
+    .workspaceId("llm-xxx")                    // 百炼工作空间 ID
+    .indexId("mymxbdxxxx")                     // 知识库索引 ID
+    
+    // === 端点配置（可选）===
+    .endpoint("bailian.cn-beijing.aliyuncs.com")  // 默认值
+    // 其他可用端点：
+    // - bailian.cn-shanghai-finance-1.aliyuncs.com (金融云)
+    // - bailian-vpc.cn-beijing.aliyuncs.com (VPC)
+    
+    // === 检索配置（可选）===
+    .denseSimilarityTopK(100)                  // 向量检索 Top K，范围 0-100，默认 100
+    .sparseSimilarityTopK(100)                 // 关键词检索 Top K，范围 0-100，默认 100
+    // 注意：denseSimilarityTopK + sparseSimilarityTopK <= 200
+    
+    // === 重排序配置（可选）===
+    .enableReranking(true)                     // 启用重排序，默认 true
+    .rerankConfig(RerankConfig.builder()
+        .modelName("gte-rerank-hybrid")        // 重排序模型
+        .rerankMinScore(0.3f)                  // 最小分数阈值
+        .rerankTopN(5)                         // 返回结果数量
+        .build())
+    
+    // === 查询重写配置（可选，用于多轮对话）===
+    .enableRewrite(true)                       // 启用查询重写，默认 false
+    .rewriteConfig(RewriteConfig.builder()
+        .modelName("conv-rewrite-qwen-1.8b")   // 重写模型
+        .build())
+    
+    // === 其他配置（可选）===
+    .searchFilters(List.of(Map.of("tag", "value")))  // 搜索过滤条件
+    .saveRetrieverHistory(false)               // 保存检索历史，默认 false
+    
+    .build();
+
+BailianKnowledge knowledge = BailianKnowledge.builder().config(config).build();
+
+// 检索
+List<Document> results = knowledge.retrieve("查询内容",
+    RetrieveConfig.builder().limit(5).scoreThreshold(0.3).build()).block();
+```
+
+**Dify知识库集成**
+
+```java
+DifyRAGConfig config = DifyRAGConfig.builder()
+    // === 连接配置（必填）===
+    .apiKey(System.getenv("DIFY_RAG_API_KEY"))  // Dataset API Key
+    .datasetId("your-dataset-uuid")             // 数据集 ID（UUID 格式）
+    
+    // === 端点配置（可选）===
+    .apiBaseUrl("https://api.dify.ai/v1")       // Dify Cloud（默认）
+    // .apiBaseUrl("https://your-dify.com/v1")  // 自托管实例
+    
+    // === 检索配置（可选）===
+    .retrievalMode(RetrievalMode.HYBRID_SEARCH) // 检索模式，默认 HYBRID_SEARCH
+    // 可选模式：KEYWORD（关键词）、SEMANTIC_SEARCH（语义）、HYBRID_SEARCH（混合）、FULLTEXT（全文）
+    .topK(10)                                   // 检索返回数量，范围 1-100，默认 10
+    .scoreThreshold(0.5)                        // 相似度阈值，范围 0.0-1.0，默认 0.0
+    .weights(0.6)                               // 混合搜索语义权重，范围 0.0-1.0
+    
+    // === 重排序配置（可选）===
+    .enableRerank(true)                         // 启用重排序，默认 false
+    .rerankConfig(RerankConfig.builder()
+        .providerName("cohere")                 // Rerank 模型提供商
+        .modelName("rerank-english-v2.0")       // Rerank 模型名称
+        .topN(5)                                // 重排序后返回数量
+        .build())
+    
+    // === 元数据过滤（可选）===
+    .metadataFilter(MetadataFilter.builder()
+        .logicalOperator("AND")                 // 逻辑运算符：AND 或 OR
+        .addCondition(MetadataFilterCondition.builder()
+            .name("category")                   // 元数据字段名
+            .comparisonOperator("=")            // 比较运算符
+            .value("documentation")             // 过滤值
+            .build())
+        .build())
+    
+    // === HTTP 配置（可选）===
+    .connectTimeout(Duration.ofSeconds(30))     // 连接超时，默认 30s
+    .readTimeout(Duration.ofSeconds(60))        // 读取超时，默认 60s
+    .maxRetries(3)                              // 最大重试次数，默认 3
+    .addCustomHeader("X-Custom-Header", "value") // 自定义请求头
+    
+    .build();
+```
+
+**RAGFlow知识库集成**
+
+开源 RAG 引擎，支持 Docker 部署、强大 OCR、知识图谱、多数据集检索。
+
+- 部署
+
+```shell
+git clone https://github.com/infiniflow/ragflow.git && cd ragflow
+docker compose up -d
+```
+
+- 完整配置示例
+
+```java
+RAGFlowConfig config = RAGFlowConfig.builder()
+    // === 连接配置（必填）===
+    .apiKey("ragflow-your-api-key")             // RAGFlow API Key
+    .baseUrl("http://address")           // RAGFlow 服务地址（必填）
+
+
+    // === 数据集/文档配置（至少设置一个）===
+    .addDatasetId("datasetId1")
+    .addDatasetId("datasetId2")  // 支持多数据集
+    // 或批量设置：.datasetIds(List.of("id1", "id2"))
+    
+    // === 文档过滤（可选，限定检索范围）===
+    .addDocumentId("documentId1")
+    .addDocumentId("documentId2")
+    // 或批量设置：.documentIds(List.of("doc1", "doc2"))
+    // 注意：如果只设置 document_ids，确保所有文档使用相同的嵌入模型
+    
+    // === 检索配置（可选）===
+    .topK(1024)                                 // 参与向量计算的 chunk 数量，默认 1024
+    .similarityThreshold(0.2)                   // 相似度阈值，范围 0.0-1.0，默认 0.2
+    .vectorSimilarityWeight(0.3)                // 向量相似度权重，范围 0.0-1.0，默认 0.3
+                                                // (1 - weight) 为词项相似度权重
+    //=== 分页参数 ===
+    .page(1)                                    // 页码，默认 1
+    .pageSize(30)                               // 每页数量，默认 30
+    
+    // === 高级检索功能（可选）===
+    .useKg(false)                               // 知识图谱多跳查询，默认 false
+    .tocEnhance(false)                          // 目录增强检索，默认 false
+    .rerankId("BAAI/bge-reranker-v2-m3@BAAI")   // 重排序模型 ID（模型名或 hex UUID）
+    .keyword(false)                             // 关键词匹配，默认 false
+    .highlight(false)                           // 高亮匹配结果，默认 false
+    .addCrossLanguage("en")                     // 添加目标语言
+    // 或批量设置：.crossLanguages(List.of("en", "zh", "ja"))
+    
+    // === 元数据过滤（可选）===
+    .metadataCondition(Map.of(
+        "logic", "and",                         // 逻辑运算符：and 或 or
+        "conditions", List.of(
+            Map.of(
+                "name", "author",               // 元数据字段名
+                "comparison_operator", "=",     // 比较运算符
+                "value", "Toby"                 // 过滤值
+            ),
+            Map.of(
+                "name", "date",
+                "comparison_operator", ">=",
+                "value", "2024-01-01"
+            )
+        )
+    ))
+    
+    // === HTTP 配置（可选）===
+    .timeout(Duration.ofSeconds(30))            // HTTP 超时，默认 30s
+    .maxRetries(3)                              // 最大重试次数，默认 3
+    .addCustomHeader("X-Custom-Header", "value") // 自定义请求头
+    
+    .build();
+```
+
+**自定义RAG组件**
+
+AgentScope 鼓励自定义 RAG 组件。你可以扩展以下基类：
+
+| 基类           | 描述           | 抽象方法                          |
+| :------------- | :------------- | :-------------------------------- |
+| `Reader`       | 文档读取器基类 | `read()`, `getSupportedFormats()` |
+| `VDBStoreBase` | 向量存储基类   | `add()`, `search()`               |
+| `Knowledge`    | 知识库实现基类 | `addDocuments()`, `retrieve()`    |
+
+示例：
+
+```java
+public class CustomReader implements Reader {
+    @Override
+    public Mono<List<Document>> read(ReaderInput input) throws ReaderException {
+        return Mono.fromCallable(() -> {
+            // 你的自定义读取逻辑
+            String content = processInput(input);
+            List<String> chunks = chunkContent(content);
+            return createDocuments(chunks);
+        });
+    }
+
+    @Override
+    public List<String> getSupportedFormats() {
+        return List.of("custom", "fmt");
+    }
+
+    private List<Document> createDocuments(List<String> chunks) {
+        // 创建带有元数据的 Document 对象
+        // ...
+    }
+}
+```
+
+**完整示例**
+
+- 本地知识库示例: [RAGExample.java](https://github.com/agentscope-ai/agentscope-java/blob/main/agentscope-examples/documentation/advanced/src/main/java/io/agentscope/examples/advanced/RAGExample.java)
+- 百炼知识库示例: [BailianRAGExample.java](https://github.com/agentscope-ai/agentscope-java/blob/main/agentscope-examples/documentation/advanced/src/main/java/io/agentscope/examples/advanced/BailianRAGExample.java)
+- Dify 知识库示例: [DifyRAGExample.java](https://github.com/agentscope-ai/agentscope-java/blob/main/agentscope-examples/documentation/quickstart/src/main/java/io/agentscope/examples/quickstart/DifyRAGExample.java)
+- RAGFlow 知识库示例: [RAGFlowRAGExample.java](https://github.com/agentscope-ai/agentscope-java/blob/main/agentscope-examples/documentation/quickstart/src/main/java/io/agentscope/examples/quickstart/RAGFlowRAGExample.java)
+- Elasticsearch 知识库实例: [ElasticsearchRAGExample.java](https://github.com/agentscope-ai/agentscope-java/blob/main/agentscope-examples/documentation/advanced/src/main/java/io/agentscope/examples/advanced/ElasticsearchRAGExample.java)
+- PgVector 知识库示例: [PgVectorRAGExample.java](https://github.com/agentscope-ai/agentscope-java/blob/main/agentscope-examples/documentation/quickstart/src/main/java/io/agentscope/examples/quickstart/PgVectorRAGExample.java)
 
 ## 2.9 Human-in-the-Loop
 
@@ -504,6 +829,49 @@ while (response.hasContentBlocks(ToolUseBlock.class)) {
 //response.getGenerateReason() 返回 REASONING_STOP_REQUESTED 或 ACTING_STOP_REQUESTED
 System.out.println(response.getTextContent());
 ```
+
+## 2.15 结构化输出
+
+结构化输出让 Agent 生成符合预定义 Schema 的类型化数据，实现从自然语言到结构化数据的可靠转换。
+
+```java
+/* 1.定义 Schema */
+public class ProductInfo {
+    public String name;
+    public Double price;
+    public List<String> features;
+
+    public ProductInfo() {}  // 必须有无参构造函数
+}
+
+/* 2.请求结构化输出 */
+
+// 发送查询，指定输出类型
+Msg response = agent.call(userMsg, ProductInfo.class).block();
+
+// 提取类型化数据
+ProductInfo data = response.getStructuredData(ProductInfo.class);
+
+System.out.println("产品: " + data.name);
+System.out.println("价格: $" + data.price);
+```
+
+两种模式：
+
+| 模式                  | 特点                        | 适用场景                                    |
+| :-------------------- | :-------------------------- | :------------------------------------------ |
+| `TOOL_CHOICE`（默认） | 强制调用工具，一次 API 调用 | 支持 tool_choice 的模型（qwen3-max, gpt-4） |
+| `PROMPT`              | 提示词引导，可能多次调用    | 兼容老模型                                  |
+
+```java
+ReActAgent agent = ReActAgent.builder()
+    .name("Agent")
+    .model(model)
+    .structuredOutputReminder(StructuredOutputReminder.TOOL_CHOICE)  // 或 PROMPT
+    .build();
+```
+
+
 
 ## 2.17 AG-UI 协议
 
