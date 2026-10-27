@@ -588,11 +588,125 @@ class Session(BaseSession[RequestT, NotificationT, ResultT]):
 
 - 从“通用”到“可用”的核心流程
 
+在交互过程中，任何一方都只需像调用本地函数一样发起高层 API 调用。
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/ae42e50c08b90095cc64c35c422d41b8.jpg)
+
+# 07｜底层架构（下）：MCP协议传输层（Transport layer）详解
+
+这一课，我们将目光从“消息如何被打包” 转向“消息如何被传输”。因为真正的通信管道，是由传输层（Transport layer）来承载这些帧化后的 SessionMessage，将它们在进程或网络之间来回搬运。
+
+**MCP的传输方式 (Transport layer)**
+
+MCP 支持多种传输方式以适配不同场景：
+
+- Stdio Transport：这是最轻量的 stdio 通道，借助标准输入/输出即可完成同机进程间的双向通信，适合本地进程间的通信。
+
+- HTTP + SSE Transport：基于 HTTP 的单向推流与单向发送组合（SSE + POST），适合浏览器前端与微服务后端的分离部署。服务器端使用 Server-Sent Events 推送消息给客户端。客户端通过 HTTP POST 发送请求。
+
+- Streamable HTTP Transport：HTTP  POST 请求能返回 JSON 或切换到 SSE 流，在同一路径上混合使用 HTTP POST（发送请求）和 SSE（接收流式响应），支持 mcp-session-id 会话管理、断点续传以及 JSON/SSE 混合响应。
+
+- WebSocket Transport：基于 WebSocket 全双工通道，建立后客户端和服务端都可以随时推送 JSON-RPC 消息。适合低延迟、高频率的实时双向交互，以及真正的全双工 WebSocket 通道，为低延迟、高频双向交互提供最佳性能。
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/8c7768043ac387f2649b8a34da83a537.jpg)
+
+接下来，我们将一一拆解这些传输实现，看看它们分别如何把 SessionMessage 从一端安全、高效地运抵另一端。
+
+**标准输入／输出（stdio）**
+
+在操作系统和 C 语言标准库的语境里，stdio（Standard I/O，标准输入／输出）指的是一组预定义的、用于进程与外界交换数据的“流”（stream）接口。每个运行中的进程在启动时都会自动打开三条标准流：
+
+- stdin（标准输入）：文件描述符 0，默认从键盘或上游程序的输出中读取数据。
+- stdout（标准输出）：文件描述符 1，默认将程序的正常输出写到终端或下游程序的输入中。
+- stderr（标准错误）：文件描述符 2，默认将错误信息写到终端，通常不与 stdout 混用，以便错误可以单独重定向或捕获。
+
+服务端的stdio实现
+
+```python
+# 服务端：stdio_server 的核心实现
+@asynccontextmanager
+async def stdio_server(stdin=None, stdout=None):
+    # 包装 stdin/stdout 为 UTF-8 文本异步流
+    if not stdin:
+        stdin = anyio.wrap_file(TextIOWrapper(sys.stdin.buffer, encoding="utf-8"))
+    if not stdout:
+        stdout = anyio.wrap_file(TextIOWrapper(sys.stdout.buffer, encoding="utf-8"))
+
+    # 创建读写内存流
+    read_w, read = anyio.create_memory_object_stream(0)
+    write, write_r = anyio.create_memory_object_stream(0)
+
+    async def reader():
+        async with read_w:
+            async for line in stdin:
+                try:
+                    msg = types.JSONRPCMessage.model_validate_json(line)
+                except Exception as e:
+                    await read_w.send(e)
+                    continue
+                await read_w.send(SessionMessage(msg))
+
+    async def writer():
+        async with write_r:
+            async for session_msg in write_r:
+                json_str = session_msg.message.model_dump_json(by_alias=True, exclude_none=True)
+                await stdout.write(json_str + "\n")
+                await stdout.flush()
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(reader)
+        tg.start_soon(writer)
+        yield read, write
+```
+
+客户端的stdio实现
+
+```python
+# 客户端：stdio_client 的核心实现
+@asynccontextmanager
+async def stdio_client(server_params, errlog=sys.stderr):
+    # 启动子进程并获取 stdin/stdout 句柄
+    process = await anyio.open_process(
+        [server_params.command, *server_params.args],
+        env=server_params.env or {},
+        stderr=errlog
+    )
+
+    # 创建读写内存流
+    read_w, read = anyio.create_memory_object_stream(0)
+    write, write_r = anyio.create_memory_object_stream(0)
+
+    async def stdout_reader():
+        async with read_w:
+            buffer = ""
+            async for chunk in TextReceiveStream(process.stdout, encoding=server_params.encoding):
+                lines = (buffer + chunk).split("\n")
+                buffer = lines.pop()
+                for line in lines:
+                    try:
+                        msg = types.JSONRPCMessage.model_validate_json(line)
+                        await read_w.send(SessionMessage(msg))
+                    except Exception as e:
+                        await read_w.send(e)
+
+    async def stdin_writer():
+        async with write_r:
+            async for session_msg in write_r:
+                json_str = session_msg.message.model_dump_json(by_alias=True, exclude_none=True)
+                await process.stdin.send((json_str + "\n").encode(server_params.encoding))
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(stdout_reader)
+        tg.start_soon(stdin_writer)
+        try:
+            yield read, write
+        finally:
+            process.terminate()
+```
+
+**SSE传输**
 
 
-
-
-# 07
 
 
 
