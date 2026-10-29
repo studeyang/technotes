@@ -620,7 +620,13 @@ MCP 支持多种传输方式以适配不同场景：
 - stdout（标准输出）：文件描述符 1，默认将程序的正常输出写到终端或下游程序的输入中。
 - stderr（标准错误）：文件描述符 2，默认将错误信息写到终端，通常不与 stdout 混用，以便错误可以单独重定向或捕获。
 
-服务端的stdio实现
+1、服务端的stdio实现
+
+在服务端里，stdio\_server() 作为一个异步上下文管理器，包装了系统的 sys.stdin 和 sys.stdout。
+
+进入上下文后，两个协程分别启动：一个不断从 stdin 读取整行文本、把每行当作 JSON 去反序列化成 JSONRPCMessage，再封装为 SessionMessage 发入 read\_stream；另一个从 write\_stream 中取出需要下发给客户端的 SessionMessage，序列化成 JSON 并逐行写到 stdout。
+
+只要把这对 read\_stream，write\_stream 传给 Server.run(…)，服务端的 MCP 会话就能自动接收客户端的请求、发送响应和通知。
 
 ```python
 # 服务端：stdio_server 的核心实现
@@ -659,7 +665,11 @@ async def stdio_server(stdin=None, stdout=None):
         yield read, write
 ```
 
-客户端的stdio实现
+2、客户端的stdio实现
+
+在客户端，stdio\_client() 则把被管理的工具进程作为子进程打开。
+
+它首先拼装好可执行命令和环境变量，然后用 AnyIO 的 open\_process 启动该进程。启动后同样创建了一对内存流：read\_stream 从子进程的 stdout 里读行、反序列化；write\_stream 往子进程的 stdin 写行、序列化。
 
 ```python
 # 客户端：stdio_client 的核心实现
@@ -706,9 +716,36 @@ async def stdio_client(server_params, errlog=sys.stderr):
 
 **SSE传输**
 
+Server-Sent Events（简称 SSE）是一种通过 HTTP 建立单向持久连接，让服务器可以不断地“推送”文本事件到浏览器或客户端的技术。
 
+1、SSE 客户端的实现（sse\_client）
 
+在 MCP 的 sse\_client 中，我们用 httpx.AsyncClient 搭配 httpx\_sse.aconnect\_sse 发起一个带有较长读超时（read=sse\_read\_timeout）的 GET 请求。一旦连接成功，就启动两个异步子任务：
 
+- sse\_reader 它通过 event\_source.aiter\_sse() 逐个读取服务器发过来的 SSE 事件。之后每收到一条 “message” 事件，就把事件体反序列化成 JSONRPCMessage 模型，封装为 SessionMessage 放入 read\_stream，供上层 BaseSession 解析和分发。
+- post\_writer 等待上层通过 write\_stream 写入要发送给服务端的 SessionMessage。每当拿到一条消息，就把它序列化为 JSON，通过 HTTP POST 发往 endpoint\_url。
+
+如此，客户端就实现了“SSE 读”＋“POST 写”的双通道通信。
+
+2、SSE 服务端的实现（SseServerTransport）
+
+在 MCP 的服务端，我们用 Starlette 框架来暴露两个路由：一个用于 SSE 连接（GET），一个用于接收客户端 POST（写消息）。我们挨个看一下。
+
+connect\_sse：
+
+- 当客户端发起 GET /sse?session\_id=…，我们为它创建一对 AnyIO 内存流 read\_stream、write\_stream，并生成一个新的 session\_id。
+- 首先发送一个 “endpoint“ 事件，告诉客户端接下来要往哪个 URL POST 消息。
+- 客户端在拿到 “endpoint” 事件后的 POST 请求中，然后不断把 write\_stream\_reader 里的 SessionMessage 发到 /messages/?session\_id=…。
+
+handle\_post\_message：
+
+- 这里我们从查询参数里取出 session\_id，校验后将请求体解析为 JSONRPCMessage，再封装到 SessionMessage，通过对应的 read\_stream\_writer 送入 read\_stream。
+
+SSE传输架构和异步通信流程如下图所示。
+
+![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/d6467ce82502a69619b16405d60e4c66.jpg)
+
+> 这里还是没讲清楚，让人看的云里雾里的。
 
 
 
