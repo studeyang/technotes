@@ -745,11 +745,23 @@ SSE传输架构和异步通信流程如下图所示。
 
 ![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/d6467ce82502a69619b16405d60e4c66.jpg)
 
-> 这里还是没讲清楚，让人看的云里雾里的。
+> 这里还是没讲清楚，看的云里雾里的。
 
+**StreamableHTTP**
 
+StreamableHTTP 在一个模块里集成了客户端–服务器双向通信。
 
-# 08
+- 客户端每次要发送 JSON-RPC 请求或通知时，通过 HTTP POST 将消息发到服务器。
+
+- 服务器要向客户端推送消息（包括响应、通知、甚至新的请求），就用 Server-Sent Events 在同一个 URL 上保持长连接，不断下发事件。
+
+**WebSocket 传输**
+
+WebSocket 传输则正好补足了 HTTP + SSE 的单向推送限制，为 MCP 提供了一个真正的双向、全双工的网络通道。
+
+WebSocket 在握手完成后，客户端与服务器之间会建立一条始终打开的 TCP 连接，双方都可以随时向对方发送文本帧——在 MCP 的场景下，这些文本帧承载的就是序列化后的 JSON-RPC 消息。
+
+# 08｜资源发现：为大模型提供服务器端的数据内容
 
 
 
