@@ -26,7 +26,7 @@ AI Agent 的兴起让“做事”的智能体成为可能，但不同框架（�
 
 它们解决了上述痛点，为大模型应用的工程化铺平了道路。
 
-![img](https://static001.geekbang.org/resource/image/b3/6e/b3291dc25d2306e891bd9cef6540066e.png?wh=1499x890)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031622579.png" alt="img" style="zoom: 50%;" />
 
 对于这两个新技术，我们可以先看看它们的核心理解，以及解决了什么问题，这样更容易抓住其本质。
 
@@ -36,7 +36,7 @@ Model Context Protocol（MCP） 翻译成中文是模型上下文协议。
 
 传统上，将 AI 系统连接到外部工具需要集成多个 API。每个 API 集成都意味着单独的代码、文档、身份验证方法、错误处理和维护。这些 API 就像一扇扇独立的门，每扇门都有自己的钥匙和规则。
 
-![img](https://static001.geekbang.org/resource/image/2b/50/2b9630abb81cbc2922f4fa419c6e9b50.png?wh=1920x1080)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031622356.png" alt="img" style="zoom: 33%;" />
 
 让我们举例子来说。在引入 MCP 之前，如果我要让一个 Agent 同时具备“网络搜索”“数据库查询”“文本翻译”三种能力，通常要写三套适配器：
 
@@ -67,13 +67,13 @@ MCP 则把这些繁琐细节都“藏”到服务器端：
 
 它是一个客户端 - 服务器的架构，其核心理念是“模型主控、客户端驱动服务器调用”——模型负责推理和决策，客户端则动态提供上下文、工具和资源，而这些工具和资源调用则由外部服务器来提供。
 
-![img](https://static001.geekbang.org/resource/image/f4/6c/f48d4f8a286d53c10c8d681b35f2496c.png?wh=1920x1080)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031622726.png" alt="img" style="zoom: 33%;" />
 
 你可以将其想象成一个专门为 AI 应用提供的 USB-C 端口，即插即用。所有繁琐的事情，都推给 MCP 服务器根据协议来提供。
 
 MCP 真正把“模型想用什么工具干啥”这件事变得极其简单——大模型专注决策，开发者专注业务逻辑，Agent 开发门槛被一举摁平。
 
-![img](https://static001.geekbang.org/resource/image/cc/ec/cc8429ebd851624b8ee76e28bd8cdcec.png?wh=1573x750)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031622091.png" alt="img" style="zoom: 50%;" />
 
 **A2A：Agent 间的“通用语言”**
 
@@ -87,7 +87,7 @@ Agent 与 Agent 之间的交互，和人类之间的沟通有点类似。但问�
 
 我们还是用一个简单的生活场景来说明 A2A 的运作机制吧。这里假设我们有三个 Agent，分别是旅行规划 Agent（Travel Planner），天气查询 Agent（Weather Checker），酒店预订 Agent（Hotel Booker）。
 
-![img](https://static001.geekbang.org/resource/image/c0/f1/c0231553bc245d0892f2c561b06e36f1.jpg?wh=6655x3583)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031622765.jpeg" alt="img" style="zoom: 13%;" />
 
 用户向旅行规划 Agent 发送“规划北京到上海 3 天行程”的请求，旅行 Agent 通过 A2A 协议依次发出两次标准化能力调用：
 
@@ -101,15 +101,15 @@ Agent 与 Agent 之间的交互，和人类之间的沟通有点类似。但问�
 
 相同点：
 
-![img](https://static001.geekbang.org/resource/image/9d/36/9dyy24532301dfeef5dbd62b5e142836.jpg?wh=2426x1359)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031623795.jpeg" alt="img" style="zoom: 33%;" />
 
 不同点：
 
-![img](https://static001.geekbang.org/resource/image/6c/6e/6c88486a1695ffa5279e7571360bf66e.jpg?wh=1920x869)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031623815.jpeg" alt="img" style="zoom: 50%;" />
 
 简而言之。二者尽管相似，但是彼此并非竞争，而是互补的关系，且刚好形成了一个完整的 AI 时代的通信协议方案。
 
-![img](https://static001.geekbang.org/resource/image/b8/yy/b83d289f3f6297cc765681b5b4efc2yy.jpg?wh=1920x1270)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031623696.jpeg" alt="img" style="zoom: 33%;" />
 
 **课程设计架构**
 
@@ -122,7 +122,7 @@ Agent 与 Agent 之间的交互，和人类之间的沟通有点类似。但问�
 
 这门课程涉及到的编程语言和技术栈：
 
-![img](https://static001.geekbang.org/resource/image/76/ec/7605de495fb9b5c87e7a008d510ca6ec.jpg?wh=2749x1657)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031623631.jpeg" alt="img" style="zoom: 33%;" />
 
 # 协议综述篇 (2讲)
 
@@ -140,7 +140,7 @@ RAG 这种 LLM 应用开发范式背后的基本思想，就是通过将 LLM 与
 2. 增强：将检索到的信息作为上下文提供给大模型；
 3. 生成：大模型基于这些额外信息生成回答。
 
-![img](https://static001.geekbang.org/resource/image/f4/53/f4347e68188a8834965932fd2f602a53.jpg)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031624007.jpeg" alt="img" style="zoom: 25%;" />
 
 举例来说，我们需要编写 SQL 查询来检索过去 10 天内最畅销的产品。由于 LLM 不知道表模式或列名，因此直接询问 LLM 可能会导致无法使用的 SQL 查询。为了改进这一点，可以通过 RAG 来获取模式和列，以便 LLM 可以更准确地生成查询。
 
@@ -156,13 +156,13 @@ RAG 解决的是让 LLM 使用内部知识，同时减少幻觉的问题，但�
 4. 反思与调整：评估进展，必要时调整计划。
 5. 输出结果：向用户呈现最终结果。
 
-![img](https://static001.geekbang.org/resource/image/74/75/74795f1839ca9df24bd35a596007ef75.jpg?wh=3536x2172)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031624363.jpeg" alt="img" style="zoom: 25%;" />
 
 **大模型应用开发的两个范式**
 
 以上所说的 RAG 和 Agent，就是大模型应用开发的目前最常用，也最通用的两个范式。
 
-![img](https://static001.geekbang.org/resource/image/a3/85/a3dyyc6b092bcef2yy139623c5382a85.png?wh=1084x496)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031624228.png" alt="img" style="zoom: 50%;" />
 
 **MCP 增强了 RAG 和 Agent**
 
@@ -202,11 +202,11 @@ RAG 解决的是让 LLM 使用内部知识，同时减少幻觉的问题，但�
 请调用mother duck工具帮我做数据分析
 ```
 
-![img](https://static001.geekbang.org/resource/image/8f/2d/8f0ec49f4f1fcccf7a455fac9d89162d.png?wh=1237x302)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031625752.png)
 
 Cursor 回答我说当然可以，但是你需要提交一个数据表。在 MotherDuck 网页版进行了几个简单操作，就把我的数据文件上载到了云端数据库。
 
-![img](https://static001.geekbang.org/resource/image/56/94/5602b35ac30f717a2cf9c9e3d58d6c94.png?wh=600x1069)
+![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031625129.png)
 
 # 02｜来而有往：A2A 协议是 Agent 之间的桥梁
 
@@ -220,7 +220,7 @@ A2A 与 MCP 各有专长，再加上 LLM，它们共同构成了一个完整的�
 - MCP：负责模型与工具/资源的连接，是 Agent 的“手”，让 Agent 能够获取信息和执行操作。
 - A2A：负责 Agent 之间的通信，是 Agent 的“嘴”，让 Agent 能够相互交流、协作完成任务。
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/73d76434f9f324846aed5c35449f746c.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031625504.png" style="zoom: 67%;" />
 
 “Local Agents”（本地智能体）是在主智能体生态系统内工作的较小的子智能体。
 
@@ -228,7 +228,7 @@ A2A 与 MCP 各有专长，再加上 LLM，它们共同构成了一个完整的�
 
 A2A 协议设计有5个核心设计原则。
 
-![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/192367eb31ce092fc53e8d1552476d1e.jpg)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/192367eb31ce092fc53e8d1552476d1e.jpg" alt="图片" style="zoom: 33%;" />
 
 第一是拥抱 Agent 能力：Agent 无需共享内部思考、计划或工具，因此 Agent 相互之间成为黑盒，无需向对方暴露任何不想暴露的隐私。
 
@@ -347,8 +347,7 @@ A2A协议的典型工作流程如下：
 
 - 后续可继续调用“面试安排 Agent”“背景调查 Agent”，形成端到端招聘流程自动化。
 
-
-![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/aaecc9ee987f8b1840d5948d733f6434.jpg)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/aaecc9ee987f8b1840d5948d733f6434.jpg" alt="图片" style="zoom: 50%;" />
 
 **A2A的生态与未来**
 
@@ -399,11 +398,11 @@ A2A协议的典型工作流程如下：
 
 4、按照类别整理景点介绍
 
-![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122001509.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122001509.png" alt="图片" style="zoom:67%;" />
 
 5、调用Minimax生成语音导览
 
-![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122002877.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122002877.png" alt="图片" style="zoom: 50%;" />
 
 Agent会识别、嵌入成功调用MCP并正确返回的url，自动修改markdown文件。
 
@@ -449,7 +448,7 @@ Markdown
 
 最后一步，准备好提示词和刚刚的景点介绍内容文件，交给Agent生成HTML页面。
 
-![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122004917.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122004917.png" alt="图片" style="zoom:67%;" />
 
 **网页效果的呈现**
 
@@ -463,7 +462,7 @@ Markdown
 
 我将带你开发一套基于 MCP + FAISS 的 RAG 框架，这个MCP服务将具备端到端的索引、检索和工具提供能力，是一个非常清晰的原型RAG系统。
 
-![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610131556287.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610131556287.png" alt="图片" style="zoom:67%;" />
 
 **整体思路**
 
@@ -471,7 +470,7 @@ Markdown
 
 整体设计思路如下图所示。
 
-![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610131600089.png)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610131600089.png" alt="图片" style="zoom:67%;" />
 
 其中，服务端（rag-server），将用 MCP 定义两个工具——index\_docs 和 retrieve\_docs，用于实现向量检索。
 
@@ -506,7 +505,7 @@ Markdown
 - 启动后，Agent 通过 A2A Server 将自己的 AgentCard 向注册中心登记；
 - Host 端则通过注册/发现机制（如调用 demo/ui/utils/agent\_card.py 中的 get\_agent\_card 接口）远程拉取所有 AgentCard，实现能力路由与展示，从而完成代理之间的能力发现与互操作。
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610141505259.jpg)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610141505259.jpg" style="zoom: 25%;" />
 
 # MCP详解篇 (6讲)
 
@@ -590,7 +589,7 @@ class Session(BaseSession[RequestT, NotificationT, ResultT]):
 
 在交互过程中，任何一方都只需像调用本地函数一样发起高层 API 调用。
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/ae42e50c08b90095cc64c35c422d41b8.jpg)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/ae42e50c08b90095cc64c35c422d41b8.jpg" style="zoom: 25%;" />
 
 # 07｜底层架构（下）：MCP协议传输层（Transport layer）详解
 
@@ -608,7 +607,7 @@ MCP 支持多种传输方式以适配不同场景：
 
 - WebSocket Transport：基于 WebSocket 全双工通道，建立后客户端和服务端都可以随时推送 JSON-RPC 消息。适合低延迟、高频率的实时双向交互，以及真正的全双工 WebSocket 通道，为低延迟、高频双向交互提供最佳性能。
 
-![](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/8c7768043ac387f2649b8a34da83a537.jpg)
+<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/8c7768043ac387f2649b8a34da83a537.jpg" style="zoom: 50%;" />
 
 接下来，我们将一一拆解这些传输实现，看看它们分别如何把 SessionMessage 从一端安全、高效地运抵另一端。
 
@@ -717,6 +716,39 @@ async def stdio_client(server_params, errlog=sys.stderr):
 **SSE传输**
 
 Server-Sent Events（简称 SSE）是一种通过 HTTP 建立单向持久连接，让服务器可以不断地“推送”文本事件到浏览器或客户端的技术。
+
+SSE 使用方式：
+
+```java
+public void buildMcpClients() {
+    HttpClientSseClientTransport transport = HttpClientSseClientTransport.builder(clientSpec.url())
+        .sseEndpoint(endpointPath)
+        .customizeRequest(applyHeaders(clientSpec.headers()))
+        .build();
+    McpSchema.Implementation clientInfo = new McpSchema.Implementation("fc-ops-agent", "FC Ops Agent", "1.0.0");
+    McpSchema.ClientCapabilities capabilities = McpSchema.ClientCapabilities.builder().build();
+    
+    McpSyncClient syncClient = McpClient.sync(transport)
+        .requestTimeout(Duration.ofSeconds(readTimeout))  //请求数据超时
+        .initializationTimeout(initTimeout)               //初始化超时
+        .clientInfo(clientInfo)
+        .capabilities(capabilities)
+        .build();
+    
+    McpSchema.InitializeResult result = client.initialize();
+    log.info("MCP client '{}' initialized: {}", name, result.serverInfo().name());
+    McpSchema.ListToolsResult tools = client.listTools();
+    log.info("MCP client '{}' discovered {} tools", name, tools.tools().size());
+}
+
+private Consumer<java.net.http.HttpRequest.Builder> applyHeaders(Map<String, String> headers) {
+    return rb -> {
+        if (headers != null) {
+            headers.forEach(rb::header);
+        }
+    };
+}
+```
 
 1、SSE 客户端的实现（sse\_client）
 
