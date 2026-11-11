@@ -551,11 +551,386 @@ npx @modelcontextprotocol/inspector node build/index.js
 
 ## 3.2 第一个客户端
 
+> 完整示例：https://github.com/microsoft/mcp-for-beginners/blob/main/03-GettingStarted/02-client/client_example_java.java
 
+1、实例化客户端和传输
+
+```java
+import java.util.Map;
+import org.springframework.web.reactive.function.client.WebClient;
+import io.modelcontextprotocol.client.McpClient;
+import io.modelcontextprotocol.client.transport.WebFluxSseClientTransport;
+import io.modelcontextprotocol.spec.McpClientTransport;
+import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
+import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
+import io.modelcontextprotocol.spec.McpSchema.ListToolsResult;
+
+public class SDKClient {
+    
+    public static void main(String[] args) {
+        var transport = new WebFluxSseClientTransport(WebClient.builder().baseUrl("http://localhost:8080"));
+        new SDKClient(transport).run();
+    }
+    
+    private final McpClientTransport transport;
+
+    public SDKClient(McpClientTransport transport) {
+        this.transport = transport;
+    }
+
+    public void run() {
+        var client = McpClient.sync(this.transport).build();
+        client.initialize();
+        
+        // 你的客户端逻辑写在这里
+    }
+}
+```
+
+2、列出服务器功能
+
+```java
+// 列出并演示工具
+ListToolsResult toolsList = client.listTools();
+System.out.println("Available Tools = " + toolsList);
+
+// 您还可以通过ping服务器来验证连接
+client.ping();
+```
+
+3、调用功能
+
+```java
+// 调用各种计算器工具
+CallToolResult resultAdd = client.callTool(new CallToolRequest("add", Map.of("a", 5.0, "b", 3.0)));
+System.out.println("Add Result = " + resultAdd);
+
+CallToolResult resultSubtract = client.callTool(new CallToolRequest("subtract", Map.of("a", 10.0, "b", 4.0)));
+System.out.println("Subtract Result = " + resultSubtract);
+
+CallToolResult resultMultiply = client.callTool(new CallToolRequest("multiply", Map.of("a", 6.0, "b", 7.0)));
+System.out.println("Multiply Result = " + resultMultiply);
+
+CallToolResult resultDivide = client.callTool(new CallToolRequest("divide", Map.of("a", 20.0, "b", 4.0)));
+System.out.println("Divide Result = " + resultDivide);
+
+CallToolResult resultHelp = client.callTool(new CallToolRequest("help", Map.of()));
+System.out.println("Help = " + resultHelp);
+```
+
+4、运行客户端
+
+```bash
+# 构建您的项目
+./mvnw clean compile
+
+# 运行客户端
+./mvnw exec:java -Dexec.mainClass="com.microsoft.mcp.sample.client.SDKClient"
+```
 
 ## 3.3 搭载 LLM 的客户端
 
+1、添加 pom 依赖
+
+首先，你需要在`pom.xml`文件中添加LangChain4j依赖。加入这些依赖以启用MCP集成和OpenAI兼容的MiniMax API：
+
+```xml
+<properties>
+    <langchain4j.version>1.0.0-beta3</langchain4j.version>
+</properties>
+
+<dependencies>
+    <!-- LangChain4j MCP Integration -->
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-mcp</artifactId>
+        <version>${langchain4j.version}</version>
+    </dependency>
+    
+    <!-- OpenAI Official API Client -->
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-open-ai-official</artifactId>
+        <version>${langchain4j.version}</version>
+    </dependency>
+    
+    <!-- Spring Boot Starter (optional, for production apps) -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+</dependencies>
+```
+
+设置你的MiniMax API密钥，并可选配置终端地址和模型。
+`MINIMAX_MODEL_ID`支持`MiniMax-M3`和`MiniMax-M2.7`。
+如果没有设置`OPENAI_BASE_URL`，`MINIMAX_REGION`支持`global_en`和`cn_zh`。
+
+```bash
+export OPENAI_API_KEY=your_minimax_api_key_here
+export OPENAI_BASE_URL=https://api.minimax.io/v1
+export MINIMAX_MODEL_ID=MiniMax-M3
+```
+
+若想通过区域选择终端，请省略`OPENAI_BASE_URL`：
+
+```bash
+unset OPENAI_BASE_URL
+export MINIMAX_REGION=cn_zh
+```
+
+2、创建Java客户端类
+
+```java
+import dev.langchain4j.mcp.McpToolProvider;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.transport.McpTransport;
+import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.openaiofficial.OpenAiOfficialChatModel;
+import dev.langchain4j.service.AiServices;
+import dev.langchain4j.service.tool.ToolProvider;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+
+public class LangChain4jClient {
+
+    private static final String DEFAULT_BASE_URL = "https://api.minimax.io/v1";
+    private static final String DEFAULT_MODEL_ID = "MiniMax-M3";
+    private static final Map<String, String> REGIONAL_BASE_URLS = Map.of(
+            "global_en", "https://api.minimax.io/v1",
+            "cn_zh", "https://api.minimaxi.com/v1");
+    private static final Set<String> SUPPORTED_MODEL_IDS = Set.of("MiniMax-M3", "MiniMax-M2.7");
+
+    public static void main(String[] args) throws Exception {
+        ChatLanguageModel model = OpenAiOfficialChatModel.builder()
+                .baseUrl(resolveBaseUrl())
+                .apiKey(requireEnv("OPENAI_API_KEY"))
+                .timeout(Duration.ofSeconds(60))
+                .modelName(resolveModelName())
+                .build();
+
+        // 创建用于连接到服务器的MCP传输
+        McpTransport transport = new HttpMcpTransport.Builder()
+                .sseUrl("http://localhost:8080/sse")
+                .timeout(Duration.ofSeconds(60))
+                .logRequests(true)
+                .logResponses(true)
+                .build();
+
+        // 创建MCP客户端
+        McpClient mcpClient = new DefaultMcpClient.Builder()
+                .transport(transport)
+                .build();
+    }
+
+    private static String resolveBaseUrl() {
+        String baseUrl = System.getenv("OPENAI_BASE_URL");
+        if (baseUrl != null && !baseUrl.isBlank()) {
+            return baseUrl;
+        }
+
+        String region = System.getenv("MINIMAX_REGION");
+        if (region == null || region.isBlank()) {
+            return DEFAULT_BASE_URL;
+        }
+
+        String regionalBaseUrl = REGIONAL_BASE_URLS.get(region);
+        if (regionalBaseUrl == null) {
+            throw new IllegalArgumentException("Unsupported MINIMAX_REGION value: " + region
+                    + ". Supported values: " + new TreeSet<>(REGIONAL_BASE_URLS.keySet()));
+        }
+        return regionalBaseUrl;
+    }
+
+    private static String resolveModelName() {
+        String modelId = System.getenv("MINIMAX_MODEL_ID");
+        if (modelId == null || modelId.isBlank()) {
+            return DEFAULT_MODEL_ID;
+        }
+        if (!SUPPORTED_MODEL_IDS.contains(modelId)) {
+            throw new IllegalArgumentException("Unsupported MINIMAX_MODEL_ID value: " + modelId
+                    + ". Supported values: " + new TreeSet<>(SUPPORTED_MODEL_IDS));
+        }
+        return modelId;
+    }
+
+    private static String requireEnv(String name) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(name + " environment variable is not set");
+        }
+        return value;
+    }
+}
+```
+
+3、列出服务器能力
+
+```java
+// 创建一个自动发现MCP工具的工具提供者
+ToolProvider toolProvider = McpToolProvider.builder()
+        .mcpClients(List.of(mcpClient))
+        .build();
+
+// MCP工具提供者自动处理：
+// - 列出MCP服务器上的可用工具
+// - 将MCP工具模式转换为LangChain4j格式
+// - 管理工具执行和响应
+```
+
+4、将服务器能力转换为LLM工具
+
+```java
+// 创建用于自然语言交互的机器人接口
+public interface Bot {
+    String chat(String prompt);
+}
+
+// 使用LLM和MCP工具配置AI服务
+Bot bot = AiServices.builder(Bot.class)
+        .chatLanguageModel(model)
+        .toolProvider(toolProvider)
+        .build();
+```
+
+5、处理用户提示请求
+
+```java
+try {
+    // 执行自动使用MCP工具的自然语言请求
+    String response = bot.chat("Calculate the sum of 24.5 and 17.3 using the calculator service");
+    System.out.println(response);
+
+    response = bot.chat("What's the square root of 144?");
+    System.out.println(response);
+
+    response = bot.chat("Show me the help for the calculator service");
+    System.out.println(response);
+} finally {
+    mcpClient.close();
+}
+```
+
+**完整代码示例**
+
+```java
+import dev.langchain4j.mcp.McpToolProvider;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.transport.McpTransport;
+import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.openaiofficial.OpenAiOfficialChatModel;
+import dev.langchain4j.service.AiServices;
+import dev.langchain4j.service.tool.ToolProvider;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+
+public class LangChain4jClient {
+
+    private static final String DEFAULT_BASE_URL = "https://api.minimax.io/v1";
+    private static final String DEFAULT_MODEL_ID = "MiniMax-M3";
+    private static final Map<String, String> REGIONAL_BASE_URLS = Map.of(
+            "global_en", "https://api.minimax.io/v1",
+            "cn_zh", "https://api.minimaxi.com/v1");
+    private static final Set<String> SUPPORTED_MODEL_IDS = Set.of("MiniMax-M3", "MiniMax-M2.7");
+
+    public static void main(String[] args) throws Exception {
+        ChatLanguageModel model = OpenAiOfficialChatModel.builder()
+                .baseUrl(resolveBaseUrl())
+                .apiKey(requireEnv("OPENAI_API_KEY"))
+                .timeout(Duration.ofSeconds(60))
+                .modelName(resolveModelName())
+                .build();
+
+        McpTransport transport = new HttpMcpTransport.Builder()
+                .sseUrl("http://localhost:8080/sse")
+                .timeout(Duration.ofSeconds(60))
+                .logRequests(true)
+                .logResponses(true)
+                .build();
+
+        McpClient mcpClient = new DefaultMcpClient.Builder()
+                .transport(transport)
+                .build();
+
+        ToolProvider toolProvider = McpToolProvider.builder()
+                .mcpClients(List.of(mcpClient))
+                .build();
+
+        Bot bot = AiServices.builder(Bot.class)
+                .chatLanguageModel(model)
+                .toolProvider(toolProvider)
+                .build();
+
+        try {
+            String response = bot.chat("Calculate the sum of 24.5 and 17.3 using the calculator service");
+            System.out.println(response);
+
+            response = bot.chat("What's the square root of 144?");
+            System.out.println(response);
+
+            response = bot.chat("Show me the help for the calculator service");
+            System.out.println(response);
+        } finally {
+            mcpClient.close();
+        }
+    }
+
+    private static String resolveBaseUrl() {
+        String baseUrl = System.getenv("OPENAI_BASE_URL");
+        if (baseUrl != null && !baseUrl.isBlank()) {
+            return baseUrl;
+        }
+
+        String region = System.getenv("MINIMAX_REGION");
+        if (region == null || region.isBlank()) {
+            return DEFAULT_BASE_URL;
+        }
+
+        String regionalBaseUrl = REGIONAL_BASE_URLS.get(region);
+        if (regionalBaseUrl == null) {
+            throw new IllegalArgumentException("Unsupported MINIMAX_REGION value: " + region
+                    + ". Supported values: " + new TreeSet<>(REGIONAL_BASE_URLS.keySet()));
+        }
+        return regionalBaseUrl;
+    }
+
+    private static String resolveModelName() {
+        String modelId = System.getenv("MINIMAX_MODEL_ID");
+        if (modelId == null || modelId.isBlank()) {
+            return DEFAULT_MODEL_ID;
+        }
+        if (!SUPPORTED_MODEL_IDS.contains(modelId)) {
+            throw new IllegalArgumentException("Unsupported MINIMAX_MODEL_ID value: " + modelId
+                    + ". Supported values: " + new TreeSet<>(SUPPORTED_MODEL_IDS));
+        }
+        return modelId;
+    }
+
+    private static String requireEnv(String name) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(name + " environment variable is not set");
+        }
+        return value;
+    }
+}
+```
+
 ## 3.4 VS Code 集成
+
+略
 
 ## 3.5 stdio 服务器
 
