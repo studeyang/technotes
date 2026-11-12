@@ -538,9 +538,35 @@ MCP 提供一些工具，帮助您测试和调试服务器：
 2. 测试工具执行：尝试不同参数并实时查看响应
 3. 查看服务器元数据：检查服务器信息、模式和配置
 
+本机安装：
+
 ```bash
-# 例如 TypeScript，安装和运行 MCP Inspector
-npx @modelcontextprotocol/inspector node build/index.js
+# web UI (default)
+npx @modelcontextprotocol/inspector
+```
+
+服务器安装：
+
+```bash
+#/etc/systemd/system/mcp-inspector.service
+[Unit]
+Description=MCP Inspector
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Environment=MCP_AUTO_OPEN_ENABLED=false
+Environment=MCP_INSPECTOR_API_TOKEN=5afbxxx
+Environment=DANGEROUSLY_BIND_ALL_INTERFACES=true
+Environment=HOST=0.0.0.0
+Environment=ALLOWED_ORIGINS=http://localhost:6274,http://127.0.0.1:6274,http://10.204.51.111:6274
+ExecStart=/usr/bin/npx @modelcontextprotocol/inspector
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
 ```
 
 运行上述命令后，MCP Inspector 会在您的浏览器中启动一个本地 Web 界面。您将看到一个仪表盘，展示您注册的 MCP 服务器及其可用的工具、资源和提示。此界面允许您交互式测试工具执行，检查服务器元数据，并查看实时响应，方便验证和调试 MCP 服务器实现。
