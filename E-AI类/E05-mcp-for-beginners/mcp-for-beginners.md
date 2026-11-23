@@ -960,6 +960,103 @@ public class LangChain4jClient {
 
 ## 3.5 stdio 服务器
 
+stdio 传输允许 MCP 服务器通过标准输入和输出流与客户端通信。
+
+> 自 MCP 规范 2025-06-18 起，独立的 SSE（Server-Sent Events）传输已被<strong>弃用</strong>，并由“可流式 HTTP”传输取代。
+
+**工作原理**
+
+- <strong>简单通信</strong>：服务器从标准输入（`stdin`）读取 JSON-RPC 消息，并向标准输出（`stdout`）发送消息。
+- <strong>基于进程</strong>：客户端将 MCP 服务器作为子进程启动。
+- <strong>消息格式</strong>：消息是单独的 JSON-RPC 请求、通知或响应，以换行符分隔。
+- <strong>日志记录</strong>：服务器可向标准错误（`stderr`）写入 UTF-8 字符串以进行日志记录。
+
+**实验：创建一个简单的 MCP stdio 服务器**
+
+第 1 步：创建基础 stdio 服务器
+
+```python
+import asyncio
+import logging
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+
+# 配置日志记录
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# 创建服务器
+server = Server("example-stdio-server")
+
+@server.tool()
+def get_greeting(name: str) -> str:
+    """Generate a personalized greeting"""
+    return f"Hello, {name}! Welcome to MCP stdio server."
+
+async def main():
+    async with stdio_server(server) as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options()
+        )
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+第 2 步：添加更多工具
+
+```python
+@server.tool()
+def calculate_sum(a: int, b: int) -> int:
+    """Calculate the sum of two numbers"""
+    return a + b
+
+@server.tool()
+def calculate_product(a: int, b: int) -> int:
+    """Calculate the product of two numbers"""
+    return a * b
+
+@server.tool()
+def get_server_info() -> dict:
+    """Get information about this MCP server"""
+    return {
+        "server_name": "example-stdio-server",
+        "version": "1.0.0",
+        "transport": "stdio",
+        "capabilities": ["tools"]
+    }
+```
+
+第 3 步：运行服务器
+
+将代码保存为 `server.py`，然后从命令行运行：
+
+```bash
+python server.py
+```
+
+服务器将启动并等待来自 stdin 的输入。
+
+第 4 步：使用 Inspector 测试
+
+您可以使用 MCP Inspector 测试您的服务器：
+
+1. 安装 Inspector：`npx @modelcontextprotocol/inspector`
+2. 运行 Inspector 并指向您的服务器
+3. 测试您创建的工具
+
+
+
+
+
+
+
+
+
+
+
 ## 3.6 HTTP 流
 
 ## 3.7 Microsoft Foundry 工具包
