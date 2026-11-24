@@ -71,10 +71,6 @@ MCP 则把这些繁琐细节都“藏”到服务器端：
 
 你可以将其想象成一个专门为 AI 应用提供的 USB-C 端口，即插即用。所有繁琐的事情，都推给 MCP 服务器根据协议来提供。
 
-MCP 真正把“模型想用什么工具干啥”这件事变得极其简单——大模型专注决策，开发者专注业务逻辑，Agent 开发门槛被一举摁平。
-
-<img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031622091.png" alt="img" style="zoom: 50%;" />
-
 **A2A：Agent 间的“通用语言”**
 
 Agent-to-Agent，翻译过来就是“智能代理之间的协议”。本质上讲，它其实就是让不同的智能代理（Agent）能够无障碍地沟通和协作的标准语言。可以把它理解成大模型 Agent 们用来“聊天”的“通用语言”。
@@ -132,7 +128,9 @@ Agent 与 Agent 之间的交互，和人类之间的沟通有点类似。但问�
 
 我们不妨先来回顾一下这两三年来，也就是 MCP 出现之前，我们是如何使用大模型的。
 
-**从提示工程到 RAG**
+**大模型应用开发的两个范式**
+
+1、从提示工程到 RAG
 
 RAG 这种 LLM 应用开发范式背后的基本思想，就是通过将 LLM 与外部数据源相结合来提高其准确性和相关性。
 
@@ -144,7 +142,7 @@ RAG 这种 LLM 应用开发范式背后的基本思想，就是通过将 LLM 与
 
 举例来说，我们需要编写 SQL 查询来检索过去 10 天内最畅销的产品。由于 LLM 不知道表模式或列名，因此直接询问 LLM 可能会导致无法使用的 SQL 查询。为了改进这一点，可以通过 RAG 来获取模式和列，以便 LLM 可以更准确地生成查询。
 
-**从 RAG 到 Agent 和工具调用**
+2、从 RAG 到 Agent 和工具调用
 
 RAG 解决的是让 LLM 使用内部知识，同时减少幻觉的问题，但是它并没有增强大模型的行动能力。
 
@@ -158,8 +156,6 @@ RAG 解决的是让 LLM 使用内部知识，同时减少幻觉的问题，但�
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031624363.jpeg" alt="img" style="zoom: 25%;" />
 
-**大模型应用开发的两个范式**
-
 以上所说的 RAG 和 Agent，就是大模型应用开发的目前最常用，也最通用的两个范式。
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031624228.png" alt="img" style="zoom: 50%;" />
@@ -169,44 +165,6 @@ RAG 解决的是让 LLM 使用内部知识，同时减少幻觉的问题，但�
 对于 RAG 来说，MCP 通过定义统一的 SessionMessage 协议和工具发现机制，使 RAG 能够无缝接入多源数据检索，只需一次集成即可动态检索并注入上下文，大幅提高了检索增强生成的准确性和可维护性。
 
 同时，MCP 为 Agent 提供了标准化的工具调用接口和结果回传格式，让大模型可以自主选择、分步调度各类工具执行复杂任务，无需手动注册或编码集成。这将显著提升 Agent 应用的开发效率和扩展能力。
-
-**MCP 实战：Cursor（或 Copilot）+ DuckDB**
-
-下面，我们正式开始一次通过 MCP 进行工具调用的实战。这个实战案例中，我要在我的代码编辑器中用一个叫做 DuckDB 的数据分析工具来帮我自动分析我的图书销售情况。
-
-> 如果你也像我一样，对 [MotherDuck](https://motherduck.com/docs/getting-started/) 完全不了解。那么正合适，MCP 简单到什么程度呢？你在完全不懂的情况下，也可以快速展开对该服务的使用。 所有细节都封装在 MCP 协议内部，我们只要知道它大概可以做数据分析就可以开始用了。
-
-把下面这段配置给复制并粘贴到你的 mcp.json 文件中。
-
-```json
-{
-  "mcpServers": {
-    "mcp-server-motherduck": {
-      "command": "uvx",
-      "args": [
-        "mcp-server-motherduck",
-        "--db-path",
-        "md:",
-        "--motherduck-token",
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRvaHVhbmdqaWFAZ21haWwuY29tIiwic2Vzc2lvbiI6InRvaHVhbmdqaWEuZ21haWwuY29tIiwicGF0IjoiLUFvRmlRcE9xREZNb05sVFdwZzJha28yMDNnc0tkM3VyMXhBeHRKS3phZyIsInVzZXJJZCI6ImU0ZmUwZTYxLTgxMDEtNDdlZC05OGNhLTJmNGQ2MjZkYTUxYyIsImlzcyI6Im1kX3BhdCIsInJlYWRPbmx5IjpmYWxzZSwidG9rZW5UeXBlIjoicmVhZF93cml0ZSIsImlhdCI6MTc0Nzc0MTUxOX0.kmAvQ2AllpYo9UdotsqaysLHfe_yU51EeOpXYd85bkc"
-      ]
-    }
-  }
-}
-
-```
-
-接下来，我们利用 Cursor 这个 MCP Client 来调用 Mother Duck 的工具服务了！我在 Cursor 的对话界面中输入下面的话：
-
-```
-请调用mother duck工具帮我做数据分析
-```
-
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031625752.png)
-
-Cursor 回答我说当然可以，但是你需要提交一个数据表。在 MotherDuck 网页版进行了几个简单操作，就把我的数据文件上载到了云端数据库。
-
-![img](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202611031625129.png)
 
 # 02｜来而有往：A2A 协议是 Agent 之间的桥梁
 
