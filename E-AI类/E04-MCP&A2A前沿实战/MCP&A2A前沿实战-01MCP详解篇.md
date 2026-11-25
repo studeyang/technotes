@@ -170,7 +170,7 @@ RAG 解决的是让 LLM 使用内部知识，同时减少幻觉的问题，但�
 
 在大规模部署自主 AI Agent 的时代，不同供应商和框架下的 Agent 往往各自为政，难以互通协作。在多 Agent 协作的场景下，我们需要一种全新的协议来实现 Agent 之间的无缝对话。这就是 Google 在 2025年4月 发布的 Agent-to-Agent 协议（简称 A2A）。
 
-**A2A和MCP是互补而非互斥关系**
+**A2A 和 MCP 是互补而非互斥关系** 
 
 A2A 与 MCP 各有专长，再加上 LLM，它们共同构成了一个完整的智能代理生态系统。正如下图所示，两者的关系可以这样理解：
 
@@ -182,7 +182,7 @@ A2A 与 MCP 各有专长，再加上 LLM，它们共同构成了一个完整的�
 
 “Local Agents”（本地智能体）是在主智能体生态系统内工作的较小的子智能体。
 
-**A2A的5大核心设计原则**
+**A2A 的5大核心设计原则**
 
 A2A 协议设计有5个核心设计原则。
 
@@ -198,25 +198,25 @@ A2A 协议设计有5个核心设计原则。
 
 第五是多模态无差别：不仅限于文本，还原生支持音频、视频、富表单、嵌入式 iframe 等多种交互形式。
 
-**A2A协议的角色**
+**A2A 协议的角色**
 
 我们接下来来看一下协议中定义的三个关键角色，看看它们如何各司其职、协同配合，共同支撑多 Agent 生态的运行。
 
-如下图所示，A2A协议定义了三个角色。
+如下图所示，A2A 协议定义了三个角色。
 
-1. 用户（User）：最终用户（人类或服务），使用Agent系统完成任务。
+1. 用户（User）：最终用户（人类或服务），使用 Agent 系统完成任务。
 
-2. 客户端（Client）：代表用户向远程Agent请求行动的实体。
+2. 客户端（Client）：代表用户向远程 Agent 请求行动的实体。
 
-3. 远程Agent（Remote Agent）：作为A2A服务器的“黑盒”Agent。
+3. 远程Agent（Remote Agent）：作为 A2A 服务器的“黑盒” Agent。
 
 ![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/79a01b084bfda6bdab450f87bd922ac0.png)
 
-**A2A协议的核心对象**
+**A2A 协议的核心对象**
 
-A2A 协议设计了一套完整的对象体系，包括 Agent Card、Task、Artifact 和Message。它们用于实现不同 Agent 之间的高效协作，这些核心对象相互配合，共同构成了 A2A 的通信框架。
+A2A 协议设计了一套完整的对象体系，包括 Agent Card、Task、Artifact 和 Message。它们用于实现不同 Agent 之间的高效协作，这些核心对象相互配合，共同构成了 A2A 的通信框架。
 
-1、Agent Card（Agent名片）
+1、Agent Card（Agent 名片）
 
 每个支持 A2A 的远程 Agent 需要发布一个 JSON 格式的 “Agent Card”，描述该 Agent 的能力和认证机制。Client 可以通过这些信息选择最适合的 Agent 来完成任务。
 
@@ -286,7 +286,7 @@ Artifact 是 Remote Agent 生成的任务结果。Artifact 可以有多个部分
 
 Message 用于 Client 和 Remote Agent 之间的通信，可以包含指令、状态更新等内容。一个 Message 可以包含多个 parts，用于传递不同类型的内容。
 
-**A2A协议工作流程**
+**A2A 协议工作流程**
 
 A2A协议的典型工作流程如下：
 
@@ -307,7 +307,7 @@ A2A协议的典型工作流程如下：
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/aaecc9ee987f8b1840d5948d733f6434.jpg" alt="图片" style="zoom: 50%;" />
 
-**A2A的生态与未来**
+**A2A 的生态与未来**
 
 目前，Google Cloud 已联手 50 多家技术与服务伙伴（包括 Atlassian、Salesforce、MongoDB、Accenture、Deloitte 等），共建 A2A 生态。未来预计将在开源社区中逐步完善规范，并推出生产级实现，推动异构 Agent 在企业级场景中的深度互操作，助力跨系统、跨组织的智能协作大规模落地。
 
@@ -331,42 +331,44 @@ A2A协议的典型工作流程如下：
 
 6. 生成并部署 HTML 页面：利用 Agent 将整理好的文本输出为一个静态网页，并部署到线上。
 
-**使用高德开放平台的地图MCP服务**
+具体步骤如下。
 
-1. 我们需要在 [这里](https://lbs.amap.com/) 登录高德开放平台，创建一个应用，并获取相应的key。
+第一步：使用高德开放平台的地图 MCP 服务
+
+1. 我们需要在 [这里](https://lbs.amap.com/) 登录高德开放平台，创建一个应用，并获取相应的 key。
 2. 我们需要在 [这里](https://console.amap.com/dev/id/select) 注册自己为高德开放平台开发者。
 3. 获取高德服务密钥。
-4. 在Cursor中配置高德MCP。
+4. 在 Cursor 中配置高德 MCP。
 
-**使用MiniMax大模型的语音服务**
+第二步：使用 MiniMax 大模型的语音服务
 
-1. 注册Minimax开放平台。[https://minimaxi.com](https://minimaxi.com) 是MiniMax境内的官网
-2. 登录MiniMax平台后进入 [账户管理](https://platform.minimaxi.com/user-center/basic-information/interface-key)，创建接口密钥。
-3. 在 [ModelScope](https://modelscope.cn/mcp/servers/@MiniMax-AI/MiniMax-MCP) 平台部署 Minimax sse。Minimax官方在 [ModelScope 平台](https://modelscope.cn/mcp/servers/@MiniMax-AI/MiniMax-MCP) 提供了在线部署服务。
-4. 在Cursor中配置Minimax MCP
+1. 注册 Minimax 开放平台。[https://minimaxi.com](https://minimaxi.com) 是 MiniMax 境内的官网
+2. 登录 MiniMax 平台后进入 [账户管理](https://platform.minimaxi.com/user-center/basic-information/interface-key)，创建接口密钥。
+3. 在 [ModelScope](https://modelscope.cn/mcp/servers/@MiniMax-AI/MiniMax-MCP) 平台部署 Minimax sse。Minimax 官方在 [ModelScope 平台](https://modelscope.cn/mcp/servers/@MiniMax-AI/MiniMax-MCP) 提供了在线部署服务。
+4. 在 Cursor 中配置 Minimax MCP
 
-**在Cursor中使用MCP服务开发自己的应用**
+第三步：在 Cursor 中使用 MCP 服务开发自己的应用
 
-1. 选择对MCP兼容性好的模型。这里推荐Agent执行能力、对MCP反馈的整合能力都很强的模型：gemini-2.5-pro-exp-03-25。
-2. 允许自动流畅执行MCP工具调用
+1. 选择对 MCP 兼容性好的模型。这里推荐 Agent 执行能力、对 MCP 反馈的整合能力都很强的模型：gemini-2.5-pro-exp-03-25。
+2. 允许自动流畅执行 MCP 工具调用
 
-3、获取城市景点的介绍
+第四步：获取城市景点的介绍
 
 ![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122000916.png)
 
-4、按照类别整理景点介绍
+按照类别整理景点介绍
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122001509.png" alt="图片" style="zoom:67%;" />
 
-5、调用Minimax生成语音导览
+第五步：调用 Minimax 生成语音导览
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122002877.png" alt="图片" style="zoom: 50%;" />
 
-Agent会识别、嵌入成功调用MCP并正确返回的url，自动修改markdown文件。
+Agent 会识别、嵌入成功调用 MCP 并正确返回的 url，自动修改 markdown 文件。
 
 ![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610122002177.png)
 
-6、网页制作和部署
+第六步：网页制作和部署
 
 新建一个文件，叫 “prompt.md”，然后保存下面的内容。
 
@@ -410,15 +412,15 @@ Markdown
 
 **网页效果的呈现**
 
-下面，我们把这个页面上传到youware.com，进行部署和展示。
+下面，我们把这个页面上传到 youware.com，进行部署和展示。
 
 你可以通过 [这个链接](https://www.youware.com/project/a87n5fcmtr) 来感受一下这个花费2个小时私人定制的旅游助理的效果。
 
-# 04｜协议实战（中）：从0到1，基于MCP快速搭建RAG“医疗健康“指北”
+# 04｜协议实战（中）：从0到1，基于MCP快速搭建RAG“医疗健康指北”
 
 > Demo 代码：https://github.com/huangjia2019/mcp-in-action
 
-我将带你开发一套基于 MCP + FAISS 的 RAG 框架，这个MCP服务将具备端到端的索引、检索和工具提供能力，是一个非常清晰的原型RAG系统。
+我将带你开发一套基于 MCP + FAISS 的 RAG 框架，这个 MCP 服务将具备端到端的索引、检索和工具提供能力，是一个非常清晰的原型 RAG 系统。
 
 <img src="https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/202610131556287.png" alt="图片" style="zoom:67%;" />
 
@@ -435,9 +437,43 @@ Markdown
 - index\_docs 把新文档的向量添加到索引，并把文本保存在 \_docs 列表里；
 - retrieve\_docs 用查询向量在索引里做最近邻搜索，返回对应的文本片段。
 
-内存中用 FAISS 的 IndexFlatL2(1536) 存储向量索引，维度 1536 与 OpenAI 的嵌入模型 text-embedding-3-small 输出一致。通过 embed\_text 函数异步调用 OpenAI Embeddings API，批量生成文本向量并返回 float32 numpy 数组。
-
 客户端（rag-client） 将通过 StdioServerParameters 启动服务器进程（.venv/bin/python server.py），并用 MCP 的 stdio 通道建立双向通信。 
+
+**实战演示**
+
+第一步：在 GitHub 上面 Clone 下来我的代码： [mcp-in-action](https://github.com/huangjia2019/mcp-in-action)。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/7bd45425f1d4375027c4a9de36e193dc.png)
+
+第二步：启动 MCP 服务
+
+```bash
+cd 02-mcp-rag/server
+
+# 设置环境变量
+vim .env
+
+# 启动 MCP 服务
+uv run rag-server.py
+```
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/f36650057644456eb565a87ffd173d59.png)
+
+第三步：启动 MCP 客户端
+
+现在我们再开一个新终端，通过“cd 02-mcp-rag/client”命令进入 client 目录。运行 `uv run rag-client.py ../server/rag-server.py`，就可以调用 MCP 服务，运行这个极简版的医疗 RAG 系统了！
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/2f0331e2e085c8c681a1f70b85564f16.png)
+
+第四步：询问高血压相关问题
+
+Client 把我们的内部资料文档传给 MCP 服务器，并调用服务器端的 MCP 工具来进行嵌入、检索，并把检索结果返回给 Client 生成最后的回答。
+
+![图片](https://technotes.oss-cn-shenzhen.aliyuncs.com/2026/5d2cda2cd51973d7be4809c52089dec9.png)
+
+
+
+
 
 # 05｜协议实战（下）：通过 A2A，你的智能体不仅能对话还可以协作！
 
